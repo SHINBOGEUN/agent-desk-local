@@ -207,7 +207,14 @@ function drawFlowLines() {
       const dir=dy>=0?1:-1; x1=ax; y1=ay+dir*a.height/2; x2=bx; y2=by-dir*b.height/2;
       const bend=Math.max(22,Math.abs(y2-y1)*.4); d=`M ${x1} ${y1} C ${x1} ${y1+dir*bend}, ${x2} ${y2-dir*bend}, ${x2} ${y2}`;
     }
-    if (bypass) { const top=Math.max(5,Math.min(y1,y2)-65); d=`M ${x1} ${y1} C ${x1+42} ${top}, ${x2-42} ${top}, ${x2} ${y2}`; }
+    if (bypass) {
+      const skipped = $('#flow-refiner').getBoundingClientRect();
+      if (skipped.top >= a.bottom - 1 && skipped.bottom <= b.top + 1) {
+        const rail = Math.max(8, Math.min(a.left,b.left,skipped.left) - bounds.left - 16);
+        x1 = a.left - bounds.left; y1 = ay; x2 = b.left - bounds.left; y2 = by;
+        d = `M ${x1} ${y1} H ${rail + 10} Q ${rail} ${y1} ${rail} ${y1 + 10} V ${y2 - 10} Q ${rail} ${y2} ${rail + 10} ${y2} H ${x2}`;
+      }
+    }
     return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>`;
   };
   svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${trunk}${branchPaths}${links.map(pathFor).join('')}`;
