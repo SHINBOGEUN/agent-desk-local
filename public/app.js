@@ -30,6 +30,8 @@ const labels = { idle:'대기 중', working:'작업 중', running:'진행 중', 
 const badge = status => `<span class="status ${esc(status)}"><i></i>${labels[status] || esc(status)}</span>`;
 let state, csrf, selectedProject = localStorage.getItem('agent-desk-project') || '', view = 'overview', editorType, editorId, selectedRunId;
 let chatSignature = '', lastActivitySignature = '', lastApprovalSignature = '', settingsPopulated = false;
+let flowReturnTimer;
+const FLOW_REPORT_MS = 6000;
 const agentIcon = agent => agent.id === 'main' ? 'spark' : agent.id === 'researcher' ? 'search' : agent.id === 'verifier' ? 'shield' : 'build';
 const avatar = agent => `<span class="agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span>`;
 function paintIcons(root = document) { root.querySelectorAll('[data-icon]').forEach(node => { node.innerHTML = icon(node.dataset.icon); node.removeAttribute('data-icon'); }); }
@@ -51,6 +53,7 @@ const refinementSummary = run => {
   return `<div class="prompt-refinement"><strong>요청 정리 AI ${refinement.status === 'completed' ? '완료' : refinement.status === 'failed' ? '실패' : '작업 중'}</strong>${detail}</div>`;
 };
 const runtime = id => state.runtime.find(item => item.id === id) || { status:'idle' };
+const recentFlowReports = run => (run?.tasks || []).filter(task => !['main','prompt_refiner'].includes(task.agentId) && task.status === 'completed' && task.finishedAt && Date.now() - Date.parse(task.finishedAt) < FLOW_REPORT_MS);
 const effortNames = { low:'Low', medium:'Medium', high:'High', xhigh:'XHigh', max:'Max', ultra:'Ultra' };
 const effortOrder = Object.keys(effortNames);
 const effortName = effort => effortNames[effort] || effortNames.low;
@@ -112,6 +115,8 @@ function render() {
 function renderFlow() {
   const busy = !!state.activeRunId;
   const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  const reports = recentFlowReports(activeRun || projectRuns()[0]);
+  const reportingAgents = new Set(reports.map(task => task.agentId));
   const refining = activeRun?.promptRefinement?.status === 'working';
   const mainAgent = state.agents.find(agent => agent.id === 'main') || { name:'메인 AI' };
   const mainRuntime = runtime('main');
@@ -131,13 +136,13 @@ function renderFlow() {
   $('#flow-main').querySelector('.flow-node-status').textContent = mainLabel;
   const agents = state.agents.filter(agent => !['main', 'prompt_refiner'].includes(agent.id));
   $('#flow-agents').innerHTML = agents.length ? agents.map((agent,index) => {
-    const rt = runtime(agent.id); const active = activeStatuses.includes(rt.status);
-    return `<article class="flow-node flow-agent ${active ? 'is-active' : ''} ${rt.status === 'waiting' || rt.status === 'queued' ? 'is-waiting' : ''}" id="flow-agent-${index}" data-flow-status="${esc(rt.status)}"><span class="flow-agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span><div class="flow-agent-copy"><b>${esc(agent.name)}</b><small title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</small></div>${badge(rt.status)}</article>`;
+    const rt = runtime(agent.id); const active = activeStatuses.includes(rt.status); const reporting = rt.status === 'idle' && reportingAgents.has(agent.id);
+    return `<article class="flow-node flow-agent ${active ? 'is-active' : ''} ${rt.status === 'waiting' || rt.status === 'queued' ? 'is-waiting' : ''} ${reporting ? 'is-reporting' : ''}" id="flow-agent-${index}" data-flow-status="${esc(rt.status)}"><span class="flow-agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span><div class="flow-agent-copy"><b>${esc(agent.name)}</b><small title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</small></div>${reporting ? '<span class="status completed"><i></i>보고 완료</span>' : badge(rt.status)}</article>`;
   }).join('') : '<div class="flow-empty">등록된 에이전트가 없습니다.</div>';
   const activeAgents = agents.filter(agent => activeStatuses.includes(runtime(agent.id).status));
-  const caption = busy ? `${activeAgents.length + (activeStatuses.includes(mainRuntime.status) ? 1 : 0) + (refining ? 1 : 0)}명 작업 중 · 흐름이 실시간으로 표시됩니다` : '요청을 보내면 담당 흐름이 표시됩니다';
+  const caption = busy ? `${activeAgents.length + (activeStatuses.includes(mainRuntime.status) ? 1 : 0) + (refining ? 1 : 0)}명 작업 중 · 흐름이 실시간으로 표시됩니다` : reports.length ? '완료 보고가 메인 AI로 돌아오는 중입니다' : '요청을 보내면 담당 흐름이 표시됩니다';
   if ($('#flow-caption').textContent !== caption) $('#flow-caption').textContent = caption;
-  const taskSummary = activeAgents.length ? `<span class="flow-summary-label">현재 배정</span>${activeAgents.map(agent => { const rt = runtime(agent.id); return `<span class="flow-task-chip"><i></i><b>${esc(agent.name)}</b><span>${esc(rt.task || labels[rt.status] || '작업 중')}</span>${badge(rt.status)}</span>`; }).join('')}` : `<span class="flow-summary-idle"><i></i>${refining ? '요청 정리 AI가 원문을 정리하고 있습니다.' : busy ? `메인 AI ${esc(mainLabel)}` : '모든 팀원이 대기 중입니다. 요청을 보내면 작업 경로가 움직입니다.'}</span>`;
+  const taskSummary = activeAgents.length ? `<span class="flow-summary-label">현재 배정</span>${activeAgents.map(agent => { const rt = runtime(agent.id); return `<span class="flow-task-chip"><i></i><b>${esc(agent.name)}</b><span>${esc(rt.task || labels[rt.status] || '작업 중')}</span>${badge(rt.status)}</span>`; }).join('')}` : `<span class="flow-summary-idle"><i></i>${refining ? '요청 정리 AI가 원문을 정리하고 있습니다.' : reports.length ? '완료된 팀원 보고가 메인 AI에 전달되었습니다.' : busy ? `메인 AI ${esc(mainLabel)}` : '모든 팀원이 대기 중입니다. 요청을 보내면 작업 경로가 움직입니다.'}</span>`;
   if ($('#flow-task-summary').innerHTML !== taskSummary) $('#flow-task-summary').innerHTML = taskSummary;
   requestAnimationFrame(drawFlowLines);
 }
@@ -145,11 +150,17 @@ function renderFlow() {
 function drawFlowLines() {
   const canvas = $('#team-flow-graph'), svg = $('#flow-lines');
   if (!canvas || !svg || !state) return;
+  clearTimeout(flowReturnTimer);
   const bounds = canvas.getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
   svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
   svg.setAttribute('width', bounds.width); svg.setAttribute('height', bounds.height);
   const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  const reports = recentFlowReports(activeRun || projectRuns()[0]);
+  if (reports.length) {
+    const nextExpiry = Math.min(...reports.map(task => FLOW_REPORT_MS - (Date.now() - Date.parse(task.finishedAt))));
+    flowReturnTimer = setTimeout(() => renderFlow(), Math.max(50, nextExpiry + 40));
+  }
   const refining = activeRun?.promptRefinement?.status === 'working';
   const usingRefiner = activeRun?.promptRefinement?.enabled;
   const links = usingRefiner ? [
@@ -162,27 +173,38 @@ function drawFlowLines() {
   const mainRect = $('#flow-main').getBoundingClientRect();
   const rootX = mainRect.left + mainRect.width / 2 - bounds.left;
   const rootY = mainRect.bottom - bounds.top;
-  const columns = agentNodes.length > 1 && Math.abs(agentNodes[0].node.getBoundingClientRect().top - agentNodes[1].node.getBoundingClientRect().top) < 4;
+  const columns = getComputedStyle($('#flow-agents')).gridTemplateColumns.split(' ').length > 1;
   const firstRect = agentNodes[0]?.node.getBoundingClientRect();
   const spineX = columns ? rootX : firstRect ? Math.max(9, firstRect.left - bounds.left - 13) : rootX;
-  const branches = agentNodes.map(({node,status}) => {
+  const reportedAgents = new Set(reports.map(task => task.agentId));
+  const branches = agentNodes.map(({agent,node,status}) => {
     const rect = node.getBoundingClientRect();
     const y = rect.top + rect.height / 2 - bounds.top;
     const left = rect.left - bounds.left, right = rect.right - bounds.left;
     const edge = columns ? (left < spineX ? right : left) : left;
-    return { y, edge, status };
+    return { y, edge, status, reporting:status === 'idle' && reportedAgents.has(agent.id) };
   });
   const lastY = Math.max(rootY, ...branches.map(branch => branch.y));
-  const activeBranches = branches.filter(branch => ['working','waiting','queued'].includes(branch.status));
+  const activeBranches = branches.filter(branch => branch.status === 'working');
   const activeY = Math.max(rootY, ...activeBranches.map(branch => branch.y));
   const trunkPath = y => `M ${rootX} ${rootY} V ${rootY + 9} H ${spineX} V ${y}`;
   const trunk = branches.length ? `<path class="flow-spine" d="${trunkPath(lastY)}"/>${activeBranches.length ? `<path class="flow-spine is-active" d="${trunkPath(activeY)}"/>` : ''}` : '';
-  const branchPaths = branches.map(({y,edge,status}) => {
+  const branchPaths = branches.map(({y,edge,status,reporting}) => {
     const working = status === 'working', waiting = status === 'waiting' || status === 'queued';
     const bend = Math.min(22, Math.abs(edge - spineX) / 3);
     const direction = Math.sign(edge - spineX) || 1;
     const d = `M ${spineX} ${y} C ${spineX + direction * bend} ${y}, ${edge - direction * bend} ${y}, ${edge} ${y}`;
-    return `<path class="flow-branch${status === 'disabled' ? ' is-disabled' : ''}" d="${d}"/>${working || waiting ? `<path class="flow-branch ${working ? 'is-active' : 'is-waiting'}" d="${d}"/>` : ''}<circle class="flow-junction${working ? ' is-active' : waiting ? ' is-waiting' : ''}" cx="${spineX}" cy="${y}" r="3"/>`;
+    return `<path class="flow-branch${status === 'disabled' ? ' is-disabled' : ''}" d="${d}"/>${working || waiting || reporting ? `<path class="flow-branch ${working ? 'is-active' : waiting ? 'is-waiting' : 'is-reporting'}" d="${d}"/>` : ''}<circle class="flow-junction${working ? ' is-active' : waiting ? ' is-waiting' : reporting ? ' is-reporting' : ''}" cx="${spineX}" cy="${y}" r="3"/>`;
+  }).join('');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motionPaths = branches.map(({y,edge,status,reporting}) => {
+    if (status !== 'working' && !reporting) return '';
+    const returning = reporting;
+    const d = returning
+      ? `M ${edge} ${y} H ${spineX} V ${rootY + 9} H ${rootX} V ${rootY}`
+      : `M ${rootX} ${rootY} V ${rootY + 9} H ${spineX} V ${y} H ${edge}`;
+    const kind = returning ? 'is-returning' : 'is-outbound';
+    return `<path class="flow-route ${kind}" d="${d}"/>${reduceMotion ? '' : `<circle class="flow-light ${kind}" r="3.5"><animateMotion path="${d}" dur="2.4s" repeatCount="indefinite"/></circle>`}`;
   }).join('');
   const agentIndexes = new Map(agents.map((agent,index) => [agent.id,index]));
   for (const task of activeRun?.tasks || []) {
@@ -215,9 +237,11 @@ function drawFlowLines() {
         d = `M ${x1} ${y1} H ${rail + 10} Q ${rail} ${y1} ${rail} ${y1 + 10} V ${y2 - 10} Q ${rail} ${y2} ${rail + 10} ${y2} H ${x2}`;
       }
     }
-    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>`;
+    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>${handoff && !reduceMotion ? `<circle class="flow-light is-returning" r="3.5"><animateMotion path="${d}" dur="2.4s" repeatCount="indefinite"/></circle>` : ''}`;
   };
-  svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${trunk}${branchPaths}${links.map(pathFor).join('')}`;
+  const markup = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${trunk}${branchPaths}${motionPaths}${links.map(pathFor).join('')}`;
+  // Keep live SVG nodes in place between state events so the moving lights do not restart.
+  if (svg._flowMarkup !== markup) { svg.innerHTML = markup; svg._flowMarkup = markup; }
 }
 window.addEventListener('resize', () => requestAnimationFrame(drawFlowLines));
 

@@ -82,3 +82,20 @@
   .flow-refiner{grid-row:2}
   .flow-main{grid-row:3}
 }
+
+/* Compact staggered branches leave room for the direction of each live route. */
+.flow-agents{box-sizing:border-box;width:min(100%,600px);column-gap:110px;row-gap:12px}
+.flow-agent{box-sizing:border-box;min-height:0;height:55px;padding:6px 9px}
+.flow-agent:nth-child(even){top:22px}
+.flow-node.is-reporting{border-color:#547a9c;box-shadow:0 0 0 1px #6c9ac044,0 5px 20px #08131e}
+.flow-branch.is-reporting{stroke:#8abdf2;stroke-width:2.3;opacity:1}
+.flow-junction.is-reporting{fill:#a8d4ff;stroke:#d1eaff;filter:drop-shadow(0 0 4px #85bfff)}
+.flow-route{fill:none;stroke:#90dca2;stroke-width:2.4;stroke-linecap:round;opacity:.7;filter:drop-shadow(0 0 3px #96e8a7aa)}
+.flow-route.is-returning{stroke:#91c7ff;filter:drop-shadow(0 0 4px #85bfffbb)}
+.flow-light{fill:#d3ffdc;filter:drop-shadow(0 0 5px #a7ffba)}
+.flow-light.is-returning{fill:#d4eaff;filter:drop-shadow(0 0 5px #9bd0ff)}
+@media(max-width:620px){
+  .flow-agents{width:100%;column-gap:0}
+  .flow-agent{width:min(100%,280px)}
+  .flow-agent:nth-child(even){top:0;justify-self:end}
+}
