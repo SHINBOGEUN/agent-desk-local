@@ -15,8 +15,9 @@ class FakeClient extends EventEmitter {
       const id = `turn-${params.threadId}`;
       this.emit('notification', { method:'turn/started', params:{ threadId:params.threadId, turn:{ id } } });
       if (this.mode === 'complete' || this.mode === 'hold-main' && params.threadId !== 'thread-1') setTimeout(() => {
+        const answer = params.threadId === 'thread-1' && this.refinerAnswer !== undefined ? this.refinerAnswer : '실행 결과';
         this.emit('notification', { method:'thread/tokenUsage/updated', params:{ threadId:params.threadId, tokenUsage:{ total:{ totalTokens:30,inputTokens:20,outputTokens:10,cachedInputTokens:5 } } } });
-        this.emit('notification', { method:'item/completed', params:{ threadId:params.threadId, item:{ id:'answer',type:'agentMessage',phase:'final_answer',text:'실행 결과' } } });
+        this.emit('notification', { method:'item/completed', params:{ threadId:params.threadId, item:{ id:'answer',type:'agentMessage',phase:'final_answer',text:answer } } });
         this.emit('notification', { method:'turn/completed', params:{ threadId:params.threadId, turn:{ id,status:'completed' } } });
       },5);
       return { turn:{ id } };
@@ -69,6 +70,51 @@ test('real event lifecycle yields completed report and counts usage once', async
   const thread = client.calls.find(item => item.method === 'thread/start').params;
   assert.equal(thread.sandbox,'read-only'); assert.equal(thread.config['features.shell_tool'],false);
   assert.equal(thread.dynamicTools[0].name,'agent_desk_run');
+});
+
+test('prompt refinement runs first only when enabled and preserves the original request', async t => {
+  const { hub,client } = fixture(t);
+  client.refinerAnswer = '목표: 화면 수정. 제약: 파일 삭제 금지.';
+  const run = await hub.start({ projectId:'default',message:'화면 좀 수정해줘. 파일은 지우지 마.',refinePrompt:true });
+  await settle(() => !hub.active);
+  assert.equal(run.status,'completed');
+  assert.equal(run.message,'화면 좀 수정해줘. 파일은 지우지 마.');
+  assert.equal(run.promptRefinement.status,'completed');
+  assert.equal(run.promptRefinement.text,client.refinerAnswer);
+  assert.deepEqual(run.tasks.map(task => task.agentId),['prompt_refiner','main']);
+  assert.equal(run.usage.totalTokens,60);
+  const threads = client.calls.filter(call => call.method === 'thread/start');
+  assert.equal(threads.length,2);
+  assert.equal(threads[0].params.sandbox,'read-only');
+  assert.equal(threads[0].params.config['features.shell_tool'],false);
+  const turns = client.calls.filter(call => call.method === 'turn/start');
+  assert.equal(turns[0].params.input[0].text,run.message);
+  assert.match(turns[1].params.input[0].text,/사용자 원문 \(최우선\):/);
+  assert.match(turns[1].params.input[0].text,/파일은 지우지 마/);
+  assert.match(turns[1].params.input[0].text,/목표: 화면 수정/);
+});
+
+test('empty refinement falls back to the untouched original request', async t => {
+  const { hub,client } = fixture(t);
+  client.refinerAnswer = '';
+  const run = await hub.start({ projectId:'default',message:'원문 그대로 처리',refinePrompt:true });
+  await settle(() => !hub.active);
+  assert.equal(run.status,'completed');
+  assert.equal(run.promptRefinement.status,'failed');
+  assert.equal(run.promptRefinement.text,'');
+  const turns = client.calls.filter(call => call.method === 'turn/start');
+  assert.equal(turns[1].params.input[0].text,'원문 그대로 처리');
+});
+
+test('stopping during refinement does not start the main AI', async t => {
+  const { hub,client } = fixture(t,'hold');
+  const run = await hub.start({ projectId:'default',message:'중단할 요청',refinePrompt:true });
+  await settle(() => hub.contexts.size === 1);
+  await hub.cancel(run.id);
+  await settle(() => !hub.active);
+  assert.equal(run.status,'interrupted');
+  assert.deepEqual(run.tasks.map(task => task.agentId),['prompt_refiner']);
+  assert.equal(client.calls.filter(call => call.method === 'thread/start').length,1);
 });
 
 test('cancellation interrupts every active context and returns agents to idle', async t => {
@@ -175,14 +221,15 @@ test('persisted in-flight runs are marked interrupted on restart', t => {
   assert.equal(reopened.state.runs[0].status,'interrupted'); assert.equal(reopened.state.runs[0].tasks[0].status,'interrupted');
 });
 
-test('legacy team gains the monitor once and can later remove it', t => {
+test('legacy team gains the monitor and prompt refiner once', t => {
   const { store } = fixture(t);
   store.state.version = 1;
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,2);
+  assert.equal(migrated.state.version,3);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
+  assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');
   migrated.save();
   assert.equal(new Store(store.directory,process.cwd()).state.agents.some(agent => agent.id === 'monitor'),false);

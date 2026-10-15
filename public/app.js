@@ -34,6 +34,7 @@ const agentIcon = agent => agent.id === 'main' ? 'spark' : agent.id === 'researc
 const avatar = agent => `<span class="agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span>`;
 function paintIcons(root = document) { root.querySelectorAll('[data-icon]').forEach(node => { node.innerHTML = icon(node.dataset.icon); node.removeAttribute('data-icon'); }); }
 paintIcons();
+$('#refine-prompt').checked = localStorage.getItem('agent-desk-refine') === 'true';
 
 function toast(message, error = false) { const element = $('#toast'); element.textContent = message; element.className = `toast${error ? ' error' : ''}`; clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.add('hidden'), 4500); }
 async function api(route, payload) {
@@ -42,6 +43,13 @@ async function api(route, payload) {
 }
 const project = () => state?.projects.find(item => item.id === selectedProject);
 const projectRuns = () => (state?.runs || []).filter(item => item.projectId === selectedProject);
+const delegatedCount = run => run.tasks.filter(task => !['main', 'prompt_refiner'].includes(task.agentId)).length;
+const refinementSummary = run => {
+  const refinement = run.promptRefinement;
+  if (!refinement?.enabled) return '';
+  const detail = refinement.status === 'completed' ? `<div class="refinement-text">${esc(refinement.text)}</div>` : refinement.status === 'failed' ? `<p>정리에 실패해 원문을 메인 AI에 전달했습니다. ${esc(refinement.error || '')}</p>` : '<p>요청을 정리하고 있어요.</p>';
+  return `<div class="prompt-refinement"><strong>요청 정리 AI ${refinement.status === 'completed' ? '완료' : refinement.status === 'failed' ? '실패' : '작업 중'}</strong>${detail}</div>`;
+};
 const runtime = id => state.runtime.find(item => item.id === id) || { status:'idle' };
 const effortNames = { low:'Low', medium:'Medium', high:'High', xhigh:'XHigh', max:'Max', ultra:'Ultra' };
 const effortOrder = Object.keys(effortNames);
@@ -81,6 +89,7 @@ function render() {
   $('#send').classList.toggle('hidden', busy); $('#stop').classList.toggle('hidden', !busy);
   $('#send').disabled = state.connection.status !== 'connected';
   $('#message').disabled = busy;
+  $('#refine-prompt').disabled = busy;
   const mainAgent = state.agents.find(agent => agent.id === 'main');
   $('#main-model').innerHTML = `<strong>${esc(effortName(mainAgent?.effort))}</strong><span>${esc(modelName(mainAgent))} ›</span>`;
   const runs = projectRuns(); const active = state.runtime.filter(item => ['working','waiting','queued'].includes(item.status));
@@ -102,13 +111,15 @@ function render() {
 
 function renderFlow() {
   const busy = !!state.activeRunId;
+  const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  const refining = activeRun?.promptRefinement?.status === 'working';
   const mainAgent = state.agents.find(agent => agent.id === 'main') || { name:'메인 AI' };
   const mainRuntime = runtime('main');
   const activeStatuses = ['working','waiting','queued'];
-  const mainLabel = mainRuntime.status === 'waiting' ? '팀원 보고 대기 중' : mainRuntime.status === 'queued' ? '배정 대기 중' : busy ? (mainRuntime.task || '요청 분석 중') : '대기 중';
+  const mainLabel = mainRuntime.status === 'waiting' ? '팀원 보고 대기 중' : mainRuntime.status === 'queued' ? '배정 대기 중' : refining ? '정리 결과 대기 중' : busy ? (mainRuntime.task || '요청 분석 중') : '대기 중';
   $('#flow-user').classList.toggle('is-active', busy);
-  $('#flow-user').querySelector('.flow-node-status').textContent = busy ? '요청 전달됨' : '대기 중';
-  $('#flow-main').classList.toggle('is-active', busy);
+  $('#flow-user').querySelector('.flow-node-status').textContent = refining ? '정리 AI에게 전달됨' : busy ? '요청 전달됨' : '대기 중';
+  $('#flow-main').classList.toggle('is-active', busy && !refining);
   $('#flow-main').querySelector('.flow-main-avatar').innerHTML = icon('spark');
   $('#flow-main').querySelector('b').textContent = mainAgent.name;
   $('#flow-main').querySelector('.flow-node-status').textContent = mainLabel;
@@ -132,13 +143,21 @@ function drawFlowLines() {
   if (!bounds.width || !bounds.height) return;
   svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
   svg.setAttribute('width', bounds.width); svg.setAttribute('height', bounds.height);
-  const links = [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false }];
+  const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  const refining = activeRun?.promptRefinement?.status === 'working';
+  const links = [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId && !refining,waiting:refining }];
   for (const [index,agent] of state.agents.filter(item => item.id !== 'main').entries()) {
     const rt = runtime(agent.id); if (rt.status === 'disabled') continue;
+    if (agent.id === 'prompt_refiner') continue;
     links.push({ from:$('#flow-main'),to:document.getElementById(`flow-agent-${index}`),active:rt.status === 'working',waiting:['waiting','queued'].includes(rt.status) });
   }
   const agentIndexes = new Map(state.agents.filter(item => item.id !== 'main').map((agent,index) => [agent.id,index]));
-  const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  const refinerIndex = agentIndexes.get('prompt_refiner');
+  if (refinerIndex !== undefined && activeRun?.promptRefinement?.enabled) {
+    const refinerNode = document.getElementById(`flow-agent-${refinerIndex}`);
+    links.push({ from:$('#flow-user'),to:refinerNode,active:refining,waiting:false });
+    links.push({ from:refinerNode,to:$('#flow-main'),active:activeRun.promptRefinement.status === 'completed',waiting:refining,handoff:true });
+  }
   for (const task of activeRun?.tasks || []) {
     if (!['queued','working','waiting'].includes(task.status)) continue;
     for (const source of task.handoffFrom || []) {
@@ -171,7 +190,7 @@ function renderChat() {
   const runs = projectRuns().slice(0,10).reverse();
   const latest = runs.at(-1);
   const mainTask = latest?.tasks.find(item => item.agentId === 'main');
-  const signature = JSON.stringify([selectedProject, runs.map(item => [item.id,item.answer,item.error,item.status,item.tasks.length,item.tasks.find(task => task.agentId === 'main')?.liveText])]);
+  const signature = JSON.stringify([selectedProject, runs.map(item => [item.id,item.answer,item.error,item.status,item.tasks.length,item.tasks.find(task => task.agentId === 'main')?.liveText,item.promptRefinement?.status,item.promptRefinement?.text])]);
   if (signature === chatSignature) return;
   chatSignature = signature;
   const container = $('#chat-messages'); const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
@@ -183,7 +202,7 @@ function renderChat() {
     const task = run.tasks.find(item => item.agentId === 'main');
     const ongoing = ['running','stopping'].includes(run.status);
     const text = run.answer || (ongoing ? task?.liveText : '') || '';
-    return `<article class="message user"><span class="message-avatar">ME</span><div class="message-content"><div class="message-header">나<time>${date(run.startedAt)}</time></div><div class="message-body">${esc(run.message)}</div></div></article><article class="message"><span class="message-avatar">${icon('spark')}</span><div class="message-content"><div class="message-header">메인 AI ${badge(run.status)}</div><div class="message-body">${markdown(text)}</div>${ongoing ? `<div class="thinking"><span><i></i> <i></i> <i></i></span> ${task?.status === 'waiting' ? '팀원의 보고를 기다리고 있어요' : '요청을 처리하고 있어요'}</div>` : ''}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}<div class="run-meta"><span>${Math.max(0,run.tasks.length - 1)}개 위임 · ${format(run.usage.totalTokens)} tokens</span><button class="text-button" data-detail="${esc(run.id)}">작업 상세</button></div></div></article>`;
+    return `<article class="message user"><span class="message-avatar">ME</span><div class="message-content"><div class="message-header">나<time>${date(run.startedAt)}</time></div><div class="message-body">${esc(run.message)}</div>${refinementSummary(run)}</div></article><article class="message"><span class="message-avatar">${icon('spark')}</span><div class="message-content"><div class="message-header">메인 AI ${badge(run.status)}</div><div class="message-body">${markdown(text)}</div>${ongoing ? `<div class="thinking"><span><i></i> <i></i> <i></i></span> ${task?.status === 'waiting' ? '팀원의 보고를 기다리고 있어요' : '요청을 처리하고 있어요'}</div>` : ''}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}<div class="run-meta"><span>${delegatedCount(run)}개 위임 · ${format(run.usage.totalTokens)} tokens</span><button class="text-button" data-detail="${esc(run.id)}">작업 상세</button></div></div></article>`;
   }).join('');
   if (atBottom || latest?.status === 'running' && !mainTask?.liveText) container.scrollTop = container.scrollHeight;
 }
@@ -215,7 +234,7 @@ function renderAgents() {
 function renderHistory() {
   const filter = $('#history-filter').value;
   const runs = projectRuns().filter(run => filter === 'all' || filter === 'failed' && ['failed','interrupted'].includes(run.status) || filter === 'running' && ['running','stopping'].includes(run.status) || run.status === filter);
-  $('#history-list').innerHTML = runs.length ? runs.map(run => `<button class="panel history-card" data-detail="${esc(run.id)}"><span class="folder-box">${icon('history')}</span><div class="history-text"><h3>${esc(run.message)}</h3><p>${date(run.startedAt)} · ${Math.max(0,run.tasks.length - 1)}개 위임 · ${format(run.usage.totalTokens)} tokens</p></div>${badge(run.status)}${icon('arrow-right')}</button>`).join('') : `<div class="panel empty-panel">${icon('history')}<h3>아직 작업 기록이 없어요</h3><p>대시보드에서 메인 AI에게 요청을 보내 보세요.</p></div>`;
+  $('#history-list').innerHTML = runs.length ? runs.map(run => `<button class="panel history-card" data-detail="${esc(run.id)}"><span class="folder-box">${icon('history')}</span><div class="history-text"><h3>${esc(run.message)}</h3><p>${date(run.startedAt)} · ${delegatedCount(run)}개 위임 · ${format(run.usage.totalTokens)} tokens${run.promptRefinement?.enabled ? ' · 요청 정리 사용' : ''}</p></div>${badge(run.status)}${icon('arrow-right')}</button>`).join('') : `<div class="panel empty-panel">${icon('history')}<h3>아직 작업 기록이 없어요</h3><p>대시보드에서 메인 AI에게 요청을 보내 보세요.</p></div>`;
 }
 function renderProjects() {
   $('#projects-grid').innerHTML = state.projects.map(item => `<article class="panel project-large"><span class="folder-box">${icon('folder')}</span><h3>${esc(item.name)}</h3><p>${esc(item.path)}</p><div class="project-actions"><span class="status ${item.allowWrites ? 'queued' : 'idle'}">${icon(item.allowWrites ? 'edit' : 'lock')}${item.allowWrites ? '파일 수정 허용' : '읽기 전용'}</span><div><button class="button secondary" data-edit-project="${esc(item.id)}">설정</button> <button class="button primary" data-project="${esc(item.id)}">열기 ${icon('arrow-right')}</button></div></div></article>`).join('');
@@ -283,11 +302,11 @@ function openEditor(type, id) {
   editorType = type; editorId = id;
   $('#editor-error').textContent = '';
   const isAgent = type === 'agent';
-  $('#delete-agent').classList.toggle('hidden', !isAgent || !id || id === 'main');
+  $('#delete-agent').classList.toggle('hidden', !isAgent || !id || ['main', 'prompt_refiner'].includes(id));
   if (isAgent) {
     const agent = state.agents.find(item => item.id === id) || { name:'',role:'',description:'',model:'gpt-6-luna',effort:'high',access:'read-only',instructions:'',optimizationGuidance:'',enabled:true };
     $('#editor-title').textContent = id ? '에이전트 설정' : '새로운 팀원 만들기';
-    $('#editor-fields').innerHTML = `${id ? '' : `<label>역할 템플릿<select id="agent-preset"><option value="">직접 설정</option><option value="backend">백엔드</option><option value="frontend">프론트엔드</option><option value="design">웹디자인 · UX</option><option value="server">서버 · 인프라</option><option value="database">DB · 데이터</option><option value="qa">QA · 테스트</option><option value="security">보안 리뷰</option></select><small>템플릿은 이름·소개·권한·작업 지침을 채웁니다. 저장 전에 모두 수정할 수 있어요.</small></label>`}${modelControl(agent)}<div class="form-row"><label>이름<input name="name" value="${esc(agent.name)}" maxlength="50" placeholder="예: 문서 에디터" required></label><label>역할<input name="role" value="${esc(agent.role)}" maxlength="80" placeholder="예: 문서 · 편집" required></label></div><label>한 줄 소개<input name="description" value="${esc(agent.description)}" maxlength="300" required></label><label>작업 권한<select name="access" ${id === 'main' ? 'disabled' : ''}><option value="read-only" ${agent.access === 'read-only' ? 'selected' : ''}>읽기 전용</option><option value="workspace-write" ${agent.access === 'workspace-write' ? 'selected' : ''}>프로젝트 내 파일 수정</option></select><small>수정 권한은 여기와 프로젝트 설정이 모두 허용해야 합니다. 조사·QA·보안 리뷰는 읽기 전용으로 두는 편이 안전합니다.</small></label><label>작업 지침<textarea name="instructions" maxlength="8000" required placeholder="이 팀원이 맡을 일과 보고 기준을 적어 주세요.">${esc(agent.instructions)}</textarea></label><label class="check-label"><input type="checkbox" name="enabled" ${agent.enabled ? 'checked' : ''} ${id === 'main' ? 'disabled' : ''}>팀원 활성화</label>`;
+    $('#editor-fields').innerHTML = `${id ? '' : `<label>역할 템플릿<select id="agent-preset"><option value="">직접 설정</option><option value="backend">백엔드</option><option value="frontend">프론트엔드</option><option value="design">웹디자인 · UX</option><option value="server">서버 · 인프라</option><option value="database">DB · 데이터</option><option value="qa">QA · 테스트</option><option value="security">보안 리뷰</option></select><small>템플릿은 이름·소개·권한·작업 지침을 채웁니다. 저장 전에 모두 수정할 수 있어요.</small></label>`}${modelControl(agent)}<div class="form-row"><label>이름<input name="name" value="${esc(agent.name)}" maxlength="50" placeholder="예: 문서 에디터" required></label><label>역할<input name="role" value="${esc(agent.role)}" maxlength="80" placeholder="예: 문서 · 편집" required></label></div><label>한 줄 소개<input name="description" value="${esc(agent.description)}" maxlength="300" required></label><label>작업 권한<select name="access" ${['main', 'prompt_refiner'].includes(id) ? 'disabled' : ''}><option value="read-only" ${agent.access === 'read-only' ? 'selected' : ''}>읽기 전용</option><option value="workspace-write" ${agent.access === 'workspace-write' ? 'selected' : ''}>프로젝트 내 파일 수정</option></select><small>수정 권한은 여기와 프로젝트 설정이 모두 허용해야 합니다. 요청 정리 AI는 항상 읽기 전용입니다.</small></label><label>작업 지침<textarea name="instructions" maxlength="8000" required placeholder="이 팀원이 맡을 일과 보고 기준을 적어 주세요.">${esc(agent.instructions)}</textarea></label><label class="check-label"><input type="checkbox" name="enabled" ${agent.enabled ? 'checked' : ''} ${['main', 'prompt_refiner'].includes(id) ? 'disabled' : ''}>팀원 활성화</label>`;
     $('#editor-fields').querySelector('label.check-label').insertAdjacentHTML('beforebegin', `<label>AI 모니터가 추가한 운영 지침<textarea name="optimizationGuidance" maxlength="400" placeholder="운영 점검 후 필요한 경우에만 저장됩니다.">${esc(agent.optimizationGuidance || '')}</textarea><small>기본 작업 지침과 별도로 저장됩니다. 여기서 수정하거나 지울 수 있습니다.</small></label>`);
     $('#agent-preset')?.addEventListener('change', event => applyRolePreset(event.target.value));
     $('#agent-model').addEventListener('change', syncEffortControl);
@@ -306,10 +325,10 @@ function renderDetail() {
   const gate = run.qualityGate || { required:false,status:'not_required',reason:'이전 실행에는 검증 게이트 기록이 없습니다.' };
   const gateLabel = { pending:'검증 대기',passed:'검증 통과',failed:'검증 실패',needs_review:'검토 필요',not_required:'변경 검증 불필요' }[gate.status] || '확인 필요';
   const gateTone = gate.status === 'passed' ? 'passed' : ['failed','needs_review'].includes(gate.status) ? 'needs-review' : 'pending';
-  const nonMain = run.tasks.filter(task => task.agentId !== 'main');
+  const nonMain = run.tasks.filter(task => !['main', 'prompt_refiner'].includes(task.agentId));
   const workStatus = nonMain.some(task => ['queued','working','waiting'].includes(task.status)) ? '진행 중' : nonMain.some(task => task.status === 'failed') ? '실패 확인' : nonMain.length ? '완료' : '필요 없음';
   const reportStatus = ['running','stopping'].includes(run.status) ? '작성 중' : run.answer ? '완료' : '확인 필요';
-  $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt">${esc(run.message)}</div>${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
+  $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt"><strong>사용자 원문</strong><p>${esc(run.message)}</p></div>${refinementSummary(run)}${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
   $('#detail-content').querySelectorAll('.detail-task-header').forEach((header,index) => {
     const handoffs = run.tasks[index]?.handoffFrom || [];
     if (handoffs.length) header.insertAdjacentHTML('afterend', `<div class="detail-handoff">인계받음: ${handoffs.map(source => esc(source.agentName)).join(', ')} · 선행 보고 ${handoffs.length}개</div>`);
@@ -336,17 +355,18 @@ for (const selector of ['#close-editor','#cancel-editor']) $(selector).addEventL
 $('#close-detail').addEventListener('click',() => $('#detail').close());
 $('#history-filter').addEventListener('change',renderHistory);
 $('#message').addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!state?.activeRunId) $('#chat-form').requestSubmit(); } });
+$('#refine-prompt').addEventListener('change', event => localStorage.setItem('agent-desk-refine', String(event.target.checked)));
 $('#chat-form').addEventListener('submit',async event => {
   event.preventDefault(); const message = $('#message').value.trim(); if (!message || state.activeRunId) return;
   $('#send').disabled = true;
-  try { await api('runs',{ projectId:selectedProject, message }); $('#message').value = ''; await refresh(); }
+  try { await api('runs',{ projectId:selectedProject, message, refinePrompt:$('#refine-prompt').checked }); $('#message').value = ''; await refresh(); }
   catch(error) { toast(error.message,true); } finally { render(); }
 });
 $('#stop').addEventListener('click',async () => { try { $('#stop').disabled = true; await api('cancel',{ id:state.activeRunId }); toast('중단을 요청했습니다.'); } catch(error) { toast(error.message,true); } finally { $('#stop').disabled = false; } });
 $('#editor-form').addEventListener('submit',async event => {
   event.preventDefault(); const form = event.currentTarget; const input = Object.fromEntries(new FormData(form));
   if (editorId) input.id = editorId;
-  if (editorType === 'agent') { input.enabled = editorId === 'main' || form.elements.enabled.checked; input.access = editorId === 'main' ? 'read-only' : form.elements.access.value; }
+  if (editorType === 'agent') { input.enabled = ['main', 'prompt_refiner'].includes(editorId) || form.elements.enabled.checked; input.access = ['main', 'prompt_refiner'].includes(editorId) ? 'read-only' : form.elements.access.value; }
   else input.allowWrites = form.elements.allowWrites.checked;
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
   try { const result = await api(editorType === 'agent' ? 'agents' : 'projects',input); if (editorType === 'project') selectedProject = result.id; $('#editor').close(); await refresh(); toast('저장했습니다.'); }
