@@ -158,11 +158,32 @@ function drawFlowLines() {
   ] : [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false,bypass:true }];
   if (activeRun?.promptRefinement?.status === 'failed') links.push({ from:$('#flow-user'),to:$('#flow-main'),active:true,waiting:false,bypass:true });
   const agents = state.agents.filter(item => !['main', 'prompt_refiner'].includes(item.id));
-  for (const [index,agent] of agents.entries()) {
-    const rt = runtime(agent.id); if (rt.status === 'disabled') continue;
-    if (!['working','waiting','queued'].includes(rt.status)) continue;
-    links.push({ from:$('#flow-main'),to:document.getElementById(`flow-agent-${index}`),active:rt.status === 'working',waiting:['waiting','queued'].includes(rt.status) });
-  }
+  const agentNodes = agents.map((agent,index) => ({ agent, node:document.getElementById(`flow-agent-${index}`), status:runtime(agent.id).status })).filter(item => item.node);
+  const mainRect = $('#flow-main').getBoundingClientRect();
+  const rootX = mainRect.left + mainRect.width / 2 - bounds.left;
+  const rootY = mainRect.bottom - bounds.top;
+  const columns = agentNodes.length > 1 && Math.abs(agentNodes[0].node.getBoundingClientRect().top - agentNodes[1].node.getBoundingClientRect().top) < 4;
+  const firstRect = agentNodes[0]?.node.getBoundingClientRect();
+  const spineX = columns ? rootX : firstRect ? Math.max(9, firstRect.left - bounds.left - 13) : rootX;
+  const branches = agentNodes.map(({node,status}) => {
+    const rect = node.getBoundingClientRect();
+    const y = rect.top + rect.height / 2 - bounds.top;
+    const left = rect.left - bounds.left, right = rect.right - bounds.left;
+    const edge = columns ? (left < spineX ? right : left) : left;
+    return { y, edge, status };
+  });
+  const lastY = Math.max(rootY, ...branches.map(branch => branch.y));
+  const activeBranches = branches.filter(branch => ['working','waiting','queued'].includes(branch.status));
+  const activeY = Math.max(rootY, ...activeBranches.map(branch => branch.y));
+  const trunkPath = y => `M ${rootX} ${rootY} V ${rootY + 9} H ${spineX} V ${y}`;
+  const trunk = branches.length ? `<path class="flow-spine" d="${trunkPath(lastY)}"/>${activeBranches.length ? `<path class="flow-spine is-active" d="${trunkPath(activeY)}"/>` : ''}` : '';
+  const branchPaths = branches.map(({y,edge,status}) => {
+    const working = status === 'working', waiting = status === 'waiting' || status === 'queued';
+    const bend = Math.min(22, Math.abs(edge - spineX) / 3);
+    const direction = Math.sign(edge - spineX) || 1;
+    const d = `M ${spineX} ${y} C ${spineX + direction * bend} ${y}, ${edge - direction * bend} ${y}, ${edge} ${y}`;
+    return `<path class="flow-branch${status === 'disabled' ? ' is-disabled' : ''}" d="${d}"/>${working || waiting ? `<path class="flow-branch ${working ? 'is-active' : 'is-waiting'}" d="${d}"/>` : ''}<circle class="flow-junction${working ? ' is-active' : waiting ? ' is-waiting' : ''}" cx="${spineX}" cy="${y}" r="3"/>`;
+  }).join('');
   const agentIndexes = new Map(agents.map((agent,index) => [agent.id,index]));
   for (const task of activeRun?.tasks || []) {
     if (!['queued','working','waiting'].includes(task.status)) continue;
@@ -189,7 +210,7 @@ function drawFlowLines() {
     if (bypass) { const top=Math.max(5,Math.min(y1,y2)-65); d=`M ${x1} ${y1} C ${x1+42} ${top}, ${x2-42} ${top}, ${x2} ${y2}`; }
     return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>`;
   };
-  svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${links.map(pathFor).join('')}`;
+  svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${trunk}${branchPaths}${links.map(pathFor).join('')}`;
 }
 window.addEventListener('resize', () => requestAnimationFrame(drawFlowLines));
 
