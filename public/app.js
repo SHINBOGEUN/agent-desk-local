@@ -117,21 +117,27 @@ function renderFlow() {
   const mainRuntime = runtime('main');
   const activeStatuses = ['working','waiting','queued'];
   const mainLabel = mainRuntime.status === 'waiting' ? '팀원 보고 대기 중' : mainRuntime.status === 'queued' ? '배정 대기 중' : refining ? '정리 결과 대기 중' : busy ? (mainRuntime.task || '요청 분석 중') : '대기 중';
+  const refinement = activeRun?.promptRefinement;
+  const refinerLabel = refinement?.status === 'working' ? '요청 정리 중' : refinement?.status === 'completed' ? '정리 완료 · 메인에게 전달' : refinement?.status === 'failed' ? '원문으로 전달' : refinement?.enabled ? '정리 대기' : $('#refine-prompt').checked ? '다음 요청에서 사용' : '꺼짐 · 바로 메인으로';
   $('#flow-user').classList.toggle('is-active', busy);
   $('#flow-user').querySelector('.flow-node-status').textContent = refining ? '정리 AI에게 전달됨' : busy ? '요청 전달됨' : '대기 중';
+  $('#flow-refiner').classList.toggle('is-active', refining);
+  $('#flow-refiner').classList.toggle('is-waiting', refinement?.status === 'pending');
+  $('#flow-refiner').classList.toggle('is-skipped', !refinement?.enabled);
+  $('#flow-refiner').querySelector('.flow-node-status').textContent = refinerLabel;
   $('#flow-main').classList.toggle('is-active', busy && !refining);
   $('#flow-main').querySelector('.flow-main-avatar').innerHTML = icon('spark');
   $('#flow-main').querySelector('b').textContent = mainAgent.name;
   $('#flow-main').querySelector('.flow-node-status').textContent = mainLabel;
-  const agents = state.agents.filter(agent => agent.id !== 'main');
+  const agents = state.agents.filter(agent => !['main', 'prompt_refiner'].includes(agent.id));
   $('#flow-agents').innerHTML = agents.length ? agents.map((agent,index) => {
     const rt = runtime(agent.id); const active = activeStatuses.includes(rt.status);
     return `<article class="flow-node flow-agent ${active ? 'is-active' : ''} ${rt.status === 'waiting' || rt.status === 'queued' ? 'is-waiting' : ''}" id="flow-agent-${index}" data-flow-status="${esc(rt.status)}"><span class="flow-agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span><div class="flow-agent-copy"><b>${esc(agent.name)}</b><small title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</small></div>${badge(rt.status)}</article>`;
   }).join('') : '<div class="flow-empty">등록된 에이전트가 없습니다.</div>';
   const activeAgents = agents.filter(agent => activeStatuses.includes(runtime(agent.id).status));
-  const caption = busy ? `${activeAgents.length + (activeStatuses.includes(mainRuntime.status) ? 1 : 0)}명 작업 중 · 흐름이 실시간으로 표시됩니다` : '요청을 보내면 담당 흐름이 표시됩니다';
+  const caption = busy ? `${activeAgents.length + (activeStatuses.includes(mainRuntime.status) ? 1 : 0) + (refining ? 1 : 0)}명 작업 중 · 흐름이 실시간으로 표시됩니다` : '요청을 보내면 담당 흐름이 표시됩니다';
   if ($('#flow-caption').textContent !== caption) $('#flow-caption').textContent = caption;
-  const taskSummary = activeAgents.length ? `<span class="flow-summary-label">현재 배정</span>${activeAgents.map(agent => { const rt = runtime(agent.id); return `<span class="flow-task-chip"><i></i><b>${esc(agent.name)}</b><span>${esc(rt.task || labels[rt.status] || '작업 중')}</span>${badge(rt.status)}</span>`; }).join('')}` : `<span class="flow-summary-idle"><i></i>${busy ? `메인 AI ${esc(mainLabel)}` : '모든 팀원이 대기 중입니다. 요청을 보내면 작업 경로가 움직입니다.'}</span>`;
+  const taskSummary = activeAgents.length ? `<span class="flow-summary-label">현재 배정</span>${activeAgents.map(agent => { const rt = runtime(agent.id); return `<span class="flow-task-chip"><i></i><b>${esc(agent.name)}</b><span>${esc(rt.task || labels[rt.status] || '작업 중')}</span>${badge(rt.status)}</span>`; }).join('')}` : `<span class="flow-summary-idle"><i></i>${refining ? '요청 정리 AI가 원문을 정리하고 있습니다.' : busy ? `메인 AI ${esc(mainLabel)}` : '모든 팀원이 대기 중입니다. 요청을 보내면 작업 경로가 움직입니다.'}</span>`;
   if ($('#flow-task-summary').innerHTML !== taskSummary) $('#flow-task-summary').innerHTML = taskSummary;
   requestAnimationFrame(drawFlowLines);
 }
@@ -145,19 +151,19 @@ function drawFlowLines() {
   svg.setAttribute('width', bounds.width); svg.setAttribute('height', bounds.height);
   const activeRun = state.runs.find(run => run.id === state.activeRunId);
   const refining = activeRun?.promptRefinement?.status === 'working';
-  const links = activeRun?.promptRefinement?.enabled ? [] : [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false }];
-  for (const [index,agent] of state.agents.filter(item => item.id !== 'main').entries()) {
+  const usingRefiner = activeRun?.promptRefinement?.enabled;
+  const links = usingRefiner ? [
+    { from:$('#flow-user'),to:$('#flow-refiner'),active:refining || activeRun.promptRefinement.status === 'completed',waiting:false },
+    { from:$('#flow-refiner'),to:$('#flow-main'),active:activeRun.promptRefinement.status === 'completed',waiting:refining,handoff:activeRun.promptRefinement.status === 'completed' },
+  ] : [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false,bypass:true }];
+  if (activeRun?.promptRefinement?.status === 'failed') links.push({ from:$('#flow-user'),to:$('#flow-main'),active:true,waiting:false,bypass:true });
+  const agents = state.agents.filter(item => !['main', 'prompt_refiner'].includes(item.id));
+  for (const [index,agent] of agents.entries()) {
     const rt = runtime(agent.id); if (rt.status === 'disabled') continue;
-    if (agent.id === 'prompt_refiner') continue;
+    if (!['working','waiting','queued'].includes(rt.status)) continue;
     links.push({ from:$('#flow-main'),to:document.getElementById(`flow-agent-${index}`),active:rt.status === 'working',waiting:['waiting','queued'].includes(rt.status) });
   }
-  const agentIndexes = new Map(state.agents.filter(item => item.id !== 'main').map((agent,index) => [agent.id,index]));
-  const refinerIndex = agentIndexes.get('prompt_refiner');
-  if (refinerIndex !== undefined && activeRun?.promptRefinement?.enabled) {
-    const refinerNode = document.getElementById(`flow-agent-${refinerIndex}`);
-    links.push({ from:$('#flow-user'),to:refinerNode,active:refining,waiting:false });
-    links.push({ from:refinerNode,to:$('#flow-main'),active:activeRun.promptRefinement.status === 'completed',waiting:refining,handoff:true });
-  }
+  const agentIndexes = new Map(agents.map((agent,index) => [agent.id,index]));
   for (const task of activeRun?.tasks || []) {
     if (!['queued','working','waiting'].includes(task.status)) continue;
     for (const source of task.handoffFrom || []) {
@@ -166,7 +172,7 @@ function drawFlowLines() {
       links.push({ from:document.getElementById(`flow-agent-${fromIndex}`),to:document.getElementById(`flow-agent-${toIndex}`),active:true,waiting:false,handoff:true });
     }
   }
-  const pathFor = ({from,to,active,waiting,handoff}) => {
+  const pathFor = ({from,to,active,waiting,handoff,bypass}) => {
     if (!from || !to) return '';
     const a=from.getBoundingClientRect(), b=to.getBoundingClientRect();
     const ax=a.left+a.width/2-bounds.left, ay=a.top+a.height/2-bounds.top;
@@ -180,7 +186,8 @@ function drawFlowLines() {
       const dir=dy>=0?1:-1; x1=ax; y1=ay+dir*a.height/2; x2=bx; y2=by-dir*b.height/2;
       const bend=Math.max(22,Math.abs(y2-y1)*.4); d=`M ${x1} ${y1} C ${x1} ${y1+dir*bend}, ${x2} ${y2-dir*bend}, ${x2} ${y2}`;
     }
-    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}" d="${d}"/>`;
+    if (bypass) { const top=Math.max(5,Math.min(y1,y2)-65); d=`M ${x1} ${y1} C ${x1+42} ${top}, ${x2-42} ${top}, ${x2} ${y2}`; }
+    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>`;
   };
   svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${links.map(pathFor).join('')}`;
 }
@@ -355,7 +362,7 @@ for (const selector of ['#close-editor','#cancel-editor']) $(selector).addEventL
 $('#close-detail').addEventListener('click',() => $('#detail').close());
 $('#history-filter').addEventListener('change',renderHistory);
 $('#message').addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!state?.activeRunId) $('#chat-form').requestSubmit(); } });
-$('#refine-prompt').addEventListener('change', event => localStorage.setItem('agent-desk-refine', String(event.target.checked)));
+$('#refine-prompt').addEventListener('change', event => { localStorage.setItem('agent-desk-refine', String(event.target.checked)); if (state) renderFlow(); });
 $('#chat-form').addEventListener('submit',async event => {
   event.preventDefault(); const message = $('#message').value.trim(); if (!message || state.activeRunId) return;
   $('#send').disabled = true;
