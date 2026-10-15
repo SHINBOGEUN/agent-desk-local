@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101312">
+  <meta name="description" content="내 PC에서 일하는 AI 팀, Agent Desk. 메인 AI와 대화하고 에이전트의 작업과 검증 결과를 확인하세요.">
+  <title>Agent Desk — 나의 AI 워크스페이스</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Agent Desk 홈"><span class="brand-mark">a<span>·</span></span><span>agent desk<small>PERSONAL WORKSPACE</small></span></a>
+    <div class="workspace-label">워크스페이스 <span>LOCAL</span></div>
+    <nav aria-label="주요 메뉴">
+      <button class="nav-item active" data-view="overview"><span data-icon="grid"></span>대시보드<span class="nav-shortcut">01</span></button>
+      <button class="nav-item" data-view="agents"><span data-icon="team"></span>에이전트<span id="agent-count" class="nav-count">4</span></button>
+      <button class="nav-item" data-view="history"><span data-icon="history"></span>작업 기록</button>
+      <button class="nav-item" data-view="projects"><span data-icon="folder"></span>프로젝트</button>
+    </nav>
+    <div class="sidebar-note"><span class="tiny-label">YOUR TEAM, YOUR PACE</span><p>아이디어를 말하면,<br>팀이 함께 움직입니다.</p><div class="orbit-art" aria-hidden="true"><span></span><i></i><b></b></div></div>
+    <div class="sidebar-bottom">
+      <button class="nav-item" data-view="settings"><span data-icon="settings"></span>환경 설정</button>
+      <div class="local-info"><span class="local-dot"></span><div>이 PC에서 실행 중<small>127.0.0.1 · LOCAL ONLY</small></div><span data-icon="lock"></span></div>
+    </div>
+  </aside>
+  <div class="shell">
+    <header class="topbar"><div class="breadcrumb">워크스페이스<span>/</span><b id="page-label">대시보드</b></div><div class="topbar-right"><span id="connection" class="connection"><i></i>연결 확인 중</span><span class="topbar-divider"></span><span class="user-avatar">ME</span></div></header>
+    <main id="main">
+      <div class="page-heading"><div><div class="eyebrow">YOUR AI OPERATIONS, IN ONE PLACE</div><h1 id="page-title">나의 AI 팀, 한눈에<span class="accent">.</span></h1><p id="page-description">메인 AI에게 맡기고, 팀이 일하는 과정을 확인하세요.</p></div><button class="button secondary" id="add-project"><span data-icon="plus"></span>프로젝트 연결</button></div>
+      <div class="workspace-strip"><span class="folder-box" data-icon="folder"></span><div><label for="project-select">현재 프로젝트</label><select id="project-select" aria-label="현재 프로젝트"></select></div><span id="project-path" class="project-path"></span><button id="project-permission" class="permission-pill" title="프로젝트 권한 설정"></button></div>
+      <section id="overview-view">
+        <div class="stats" id="stats"></div>
+        <div class="panel monitoring-panel"><div><strong>AI 운영 점검</strong><p>최근 작업 흐름에서 중복 작업과 불필요한 위임을 찾아 팀원별 지침을 개선합니다.</p></div><button class="button secondary" type="button" data-monitor-request>운영 점검 요청</button></div>
+        <section class="panel orchestration-panel" aria-labelledby="flow-title"><div class="panel-header"><div class="panel-title"><h2 id="flow-title">AI 팀 작업 흐름</h2><span class="subtle-badge">LIVE MAP</span></div><span id="flow-caption" class="muted" aria-live="polite">요청을 보내면 담당 흐름이 표시됩니다</span></div><div id="team-flow-graph" class="flow-canvas" aria-label="나와 메인 AI, 에이전트 간 작업 연결도"><svg id="flow-lines" class="flow-lines" aria-hidden="true"></svg><article id="flow-user" class="flow-node flow-user"><span class="flow-user-avatar">ME</span><div><b>나</b><small>요청자</small><span class="flow-node-status">대기 중</span></div></article><article id="flow-main" class="flow-node flow-main"><span class="flow-main-avatar"></span><div><b>메인 AI</b><small>분석 · 배정 · 최종 보고</small><span class="flow-node-status">대기 중</span></div></article><div id="flow-agents" class="flow-agents"></div></div><div id="flow-task-summary" class="flow-task-summary" aria-live="polite"></div></section>
+        <div class="work-grid">
+          <section class="panel chat-panel"><div class="panel-header"><div class="panel-title"><span class="live-indicator"></span><h2>메인 AI</h2><span class="subtle-badge">TEAM LEAD</span></div><button id="main-model" class="main-model-button muted mono" type="button" data-edit-agent="main" title="눌러서 메인 AI 모델 변경" aria-label="메인 AI 모델 변경"></button></div><div id="chat-messages" class="chat-messages" aria-live="polite"></div><div id="approval-list"></div><div class="composer-wrap"><form id="chat-form"><label class="sr-only" for="message">메인 AI에게 요청</label><textarea id="message" rows="2" maxlength="20000" placeholder="어떤 일을 함께 해볼까요?" required></textarea><div class="composer-bottom"><span><span data-icon="spark"></span>필요한 팀원은 메인 AI가 배정해요</span><button class="send-button" id="send" type="submit" aria-label="요청 보내기"><span data-icon="arrow-up"></span></button><button class="button danger hidden" id="stop" type="button">작업 중단</button></div></form><div class="composer-hint">Enter로 전송 · Shift + Enter로 줄바꿈<span>대화와 기록은 이 PC에 저장됩니다</span></div></div></section>
+          <section class="panel team-panel"><div class="panel-header"><div class="panel-title"><h2>나의 에이전트</h2><span id="team-total" class="count-badge">04</span></div><button class="icon-button" id="add-agent" aria-label="에이전트 추가"><span data-icon="plus"></span></button></div><div class="team-caption">필요할 때 함께하는 나의 팀원들</div><div id="team-list"></div><button class="team-manage" data-view="agents">에이전트 관리<span data-icon="arrow-right"></span></button></section>
+        </div>
+        <section class="panel activity-panel"><div class="panel-header"><div class="panel-title"><h2>실시간 활동</h2><span class="live-label"><i></i>LIVE</span></div><span id="activity-caption" class="muted">실제 실행 이벤트가 표시됩니다</span></div><div id="activity-list"></div></section>
+      </section>
+      <section id="agents-view" class="hidden"><div class="section-toolbar"><div><h2>함께 일하는 에이전트</h2><p>역할, 모델, 작업 지침을 자유롭게 구성하세요.</p></div><button class="button primary" id="new-agent"><span data-icon="plus"></span>에이전트 만들기</button></div><div class="panel monitoring-panel"><div><strong>AI 모니터링</strong><p>최근 작업의 중복·실패·사용량을 점검하고 필요한 팀원 지침만 갱신합니다. 요청할 때만 실행됩니다.</p></div><button class="button secondary" type="button" data-monitor-request>운영 점검 요청</button></div><div id="agents-grid" class="agents-grid"></div></section>
+      <section id="history-view" class="hidden"><div class="section-toolbar"><div><h2>프로젝트 작업 기록</h2><p>각 요청의 담당자, 실행 결과와 최종 보고를 확인하세요.</p></div><select id="history-filter" aria-label="작업 상태 필터"><option value="all">모든 상태</option><option value="completed">완료</option><option value="needs_review">검토 필요</option><option value="running">진행 중</option><option value="failed">실패 · 중단</option></select></div><div id="history-list"></div></section>
+      <section id="projects-view" class="hidden"><div class="section-toolbar"><div><h2>연결된 프로젝트</h2><p>팀은 그대로, 작업할 프로젝트만 바꿔 보세요.</p></div><button class="button primary" id="new-project"><span data-icon="plus"></span>프로젝트 연결</button></div><div id="projects-grid" class="agents-grid"></div></section>
+      <section id="settings-view" class="hidden"><div class="panel settings-panel"><div class="panel-header"><h2>실행과 사용량 설정</h2></div><form id="settings-form"><label>동시에 일할 수 있는 팀원 수<input name="concurrency" type="number" min="1" max="3" required><small>메인 AI를 제외한 동시 실행 수 · 1~3명</small></label><label>요청 하나당 최대 위임 수<input name="maxDelegations" type="number" min="1" max="12" required><small>불필요한 재시도와 반복을 줄입니다 · 1~12회</small></label><label>요청 하나당 실행 시간 (분)<input name="timeoutMinutes" type="number" min="1" max="60" required></label><label>요청 하나당 토큰 예산<input name="tokenBudget" type="number" min="1000" max="2000000" step="1000" required><small>메인과 팀원의 합계입니다. 사용량 이벤트가 도착한 시점에 중단하므로 일부 초과할 수 있습니다.</small></label><button class="button primary" type="submit">설정 저장</button></form></div><div class="panel settings-about"><span data-icon="terminal"></span><div><h3>Codex에 연결된 나의 작업 공간</h3><p>기존 Codex 로그인을 사용합니다. 이 대시보드에서 시작한 작업을 표시하며, Codex 앱의 다른 대화는 자동으로 가져오지 않습니다. AI 요청에는 인터넷이 필요합니다.</p><button class="button secondary" id="reconnect">연결 다시 확인</button></div></div></section>
+      <footer class="page-footer"><span>AGENT DESK <b>LOCAL</b></span><span>작은 팀으로, 더 큰 일을.</span></footer>
+    </main>
+  </div>
+  <dialog id="editor"><form id="editor-form"><div class="dialog-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2 id="editor-title"></h2></div><button type="button" class="icon-button" id="close-editor" aria-label="닫기"><span data-icon="close"></span></button></div><div id="editor-fields"></div><p id="editor-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button danger hidden" id="delete-agent">삭제</button><button type="button" class="button secondary" id="cancel-editor">취소</button><button type="submit" class="button primary">저장하기</button></div></form></dialog>
+  <dialog id="detail"><div class="dialog-heading"><h2>작업 상세</h2><button type="button" class="icon-button" id="close-detail" aria-label="닫기"><span data-icon="close"></span></button></div><div id="detail-content"></div></dialog>
+  <div id="toast" role="status" class="toast hidden"></div>
+</body>
+</html>

@@ -1,0 +1,369 @@
+const icons = {
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+ team:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>',
+ history:'<path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/>',
+ folder:'<path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+ settings:'<path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3z"/><circle cx="12" cy="12" r="3"/>',
+ lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ spark:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',
+ 'arrow-up':'<path d="M12 19V5m-6 6 6-6 6 6"/>',
+ 'arrow-right':'<path d="M5 12h14m-6-6 6 6-6 6"/>',
+ activity:'<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+ search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>',
+ build:'<path d="m14 4 6 6M3 21l5-1L20 8l-4-4L4 16zM5 15l4 4"/>',
+ shield:'<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/>',
+ close:'<path d="m6 6 12 12M18 6 6 18"/>',
+ terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/>',
+ edit:'<path d="m14 4 6 6M4 16l-1 5 5-1L20 8l-4-4z"/>',
+ check:'<path d="m5 12 4 4L19 6"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+ token:'<path d="m12 3 8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10"/>',
+};
+const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.spark}</svg>`;
+const $ = selector => document.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
+const format = value => Number(value || 0).toLocaleString('ko-KR');
+const clock = date => new Date(date).toLocaleTimeString('ko-KR', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+const date = value => new Date(value).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+const labels = { idle:'대기 중', working:'작업 중', running:'진행 중', waiting:'응답 대기', queued:'배정 대기', completed:'완료', needs_review:'검토 필요', failed:'실패', interrupted:'중단', stopping:'중단 중', disabled:'비활성' };
+const badge = status => `<span class="status ${esc(status)}"><i></i>${labels[status] || esc(status)}</span>`;
+let state, csrf, selectedProject = localStorage.getItem('agent-desk-project') || '', view = 'overview', editorType, editorId, selectedRunId;
+let chatSignature = '', lastActivitySignature = '', lastApprovalSignature = '', settingsPopulated = false;
+const agentIcon = agent => agent.id === 'main' ? 'spark' : agent.id === 'researcher' ? 'search' : agent.id === 'verifier' ? 'shield' : 'build';
+const avatar = agent => `<span class="agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span>`;
+function paintIcons(root = document) { root.querySelectorAll('[data-icon]').forEach(node => { node.innerHTML = icon(node.dataset.icon); node.removeAttribute('data-icon'); }); }
+paintIcons();
+
+function toast(message, error = false) { const element = $('#toast'); element.textContent = message; element.className = `toast${error ? ' error' : ''}`; clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.add('hidden'), 4500); }
+async function api(route, payload) {
+  const response = await fetch(`/api/${route}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Agent-Desk-Token':csrf }, body:JSON.stringify(payload) });
+  const result = await response.json(); if (!response.ok) throw new Error(result.error || '요청에 실패했습니다.'); return result;
+}
+const project = () => state?.projects.find(item => item.id === selectedProject);
+const projectRuns = () => (state?.runs || []).filter(item => item.projectId === selectedProject);
+const runtime = id => state.runtime.find(item => item.id === id) || { status:'idle' };
+const effortNames = { low:'Low', medium:'Medium', high:'High', xhigh:'XHigh', max:'Max', ultra:'Ultra' };
+const effortOrder = Object.keys(effortNames);
+const effortName = effort => effortNames[effort] || effortNames.low;
+const modelName = agent => {
+  const model = state.models.find(item => item.id === agent?.model) || state.models.find(item => item.isDefault);
+  return (model?.name || agent?.model || 'Codex 기본 모델').replace(/^(GPT-\d+(?:\.\d+)?)-/, '$1 ');
+};
+
+// Escape first; only a small safe Markdown subset is rendered. Raw HTML never executes.
+function markdown(text) {
+  const pieces = String(text || '').split(/(```[\s\S]*?```)/g);
+  return pieces.map(piece => {
+    if (piece.startsWith('```')) return `<pre><code>${esc(piece.replace(/^```[^\n]*\n?/, '').replace(/```$/, ''))}</code></pre>`;
+    return esc(piece).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  }).join('');
+}
+
+function render() {
+  if (!state) return;
+  if (!project()) selectedProject = state.projects[0]?.id || '';
+  localStorage.setItem('agent-desk-project', selectedProject);
+  const projectOptions = state.projects.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+  if ($('#project-select').innerHTML !== projectOptions) $('#project-select').innerHTML = projectOptions;
+  $('#project-select').value = selectedProject;
+  $('#project-select').disabled = !!state.activeRunId;
+  $('#project-path').textContent = project()?.path || '';
+  $('#project-path').title = project()?.path || '';
+  $('#project-permission').className = `permission-pill${project()?.allowWrites ? ' write' : ''}`;
+  $('#project-permission').innerHTML = `${icon(project()?.allowWrites ? 'edit' : 'lock')}${project()?.allowWrites ? '파일 수정 허용' : '읽기 전용'}`;
+  const connection = $('#connection'); connection.className = `connection ${state.connection.status === 'connected' ? '' : state.connection.status === 'connecting' ? 'connecting' : 'error'}`;
+  connection.innerHTML = `<i></i>${esc(state.connection.status === 'connected' ? 'Codex 연결됨' : state.connection.status === 'connecting' ? '연결 중' : '연결 확인 필요')}`;
+  connection.title = state.connection.message;
+  $('#agent-count').textContent = state.agents.length;
+  $('#team-total').textContent = String(state.agents.length).padStart(2,'0');
+  const busy = !!state.activeRunId;
+  $('#send').classList.toggle('hidden', busy); $('#stop').classList.toggle('hidden', !busy);
+  $('#send').disabled = state.connection.status !== 'connected';
+  $('#message').disabled = busy;
+  const mainAgent = state.agents.find(agent => agent.id === 'main');
+  $('#main-model').innerHTML = `<strong>${esc(effortName(mainAgent?.effort))}</strong><span>${esc(modelName(mainAgent))} ›</span>`;
+  const runs = projectRuns(); const active = state.runtime.filter(item => ['working','waiting','queued'].includes(item.status));
+  const usage = runs.reduce((total, run) => total + run.usage.totalTokens, 0);
+  const stats = [
+    ['지금 일하는 에이전트',active.length,'명',busy ? '팀이 요청을 처리하고 있어요' : '새로운 요청을 기다리고 있어요','activity'],
+    ['나의 에이전트',state.agents.filter(item => item.enabled).length,'명',`전체 ${state.agents.length}명 · 메인 AI 포함`,'team'],
+    ['완료한 요청',runs.filter(run => run.status === 'completed').length,'건','현재 프로젝트에 저장된 기록','check'],
+    ['사용한 토큰',format(usage),'',usage ? '메인 AI + 모든 팀원의 사용량' : '첫 요청부터 사용량을 기록해요','token'],
+  ];
+  $('#stats').innerHTML = stats.map(([title,value,unit,note,i]) => `<article class="stat"><div class="stat-top">${title}${icon(i)}</div><div class="stat-number">${value}<span>${unit}</span></div><div class="stat-note">${note}</div></article>`).join('');
+  $('#team-list').innerHTML = state.agents.map(agent => { const rt = runtime(agent.id); return `<button class="team-card" data-edit-agent="${esc(agent.id)}">${avatar(agent)}<div class="agent-details"><div class="agent-name">${esc(agent.name)}</div><div class="agent-role" title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</div></div>${badge(rt.status)}</button>`; }).join('');
+  renderFlow();
+  renderChat(); renderActivity(); renderApprovals();
+  if (view === 'agents') renderAgents(); if (view === 'history') renderHistory(); if (view === 'projects') renderProjects();
+  if (view === 'settings' && !settingsPopulated) { for (const [key,value] of Object.entries(state.settings)) if ($('#settings-form').elements[key]) $('#settings-form').elements[key].value = value; settingsPopulated = true; }
+  if ($('#detail').open) renderDetail();
+}
+
+function renderFlow() {
+  const busy = !!state.activeRunId;
+  const mainAgent = state.agents.find(agent => agent.id === 'main') || { name:'메인 AI' };
+  const mainRuntime = runtime('main');
+  const activeStatuses = ['working','waiting','queued'];
+  const mainLabel = mainRuntime.status === 'waiting' ? '팀원 보고 대기 중' : mainRuntime.status === 'queued' ? '배정 대기 중' : busy ? (mainRuntime.task || '요청 분석 중') : '대기 중';
+  $('#flow-user').classList.toggle('is-active', busy);
+  $('#flow-user').querySelector('.flow-node-status').textContent = busy ? '요청 전달됨' : '대기 중';
+  $('#flow-main').classList.toggle('is-active', busy);
+  $('#flow-main').querySelector('.flow-main-avatar').innerHTML = icon('spark');
+  $('#flow-main').querySelector('b').textContent = mainAgent.name;
+  $('#flow-main').querySelector('.flow-node-status').textContent = mainLabel;
+  const agents = state.agents.filter(agent => agent.id !== 'main');
+  $('#flow-agents').innerHTML = agents.length ? agents.map((agent,index) => {
+    const rt = runtime(agent.id); const active = activeStatuses.includes(rt.status);
+    return `<article class="flow-node flow-agent ${active ? 'is-active' : ''} ${rt.status === 'waiting' || rt.status === 'queued' ? 'is-waiting' : ''}" id="flow-agent-${index}" data-flow-status="${esc(rt.status)}"><span class="flow-agent-avatar ${esc(agent.color)}">${icon(agentIcon(agent))}</span><div class="flow-agent-copy"><b>${esc(agent.name)}</b><small title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</small></div>${badge(rt.status)}</article>`;
+  }).join('') : '<div class="flow-empty">등록된 에이전트가 없습니다.</div>';
+  const activeAgents = agents.filter(agent => activeStatuses.includes(runtime(agent.id).status));
+  const caption = busy ? `${activeAgents.length + (activeStatuses.includes(mainRuntime.status) ? 1 : 0)}명 작업 중 · 흐름이 실시간으로 표시됩니다` : '요청을 보내면 담당 흐름이 표시됩니다';
+  if ($('#flow-caption').textContent !== caption) $('#flow-caption').textContent = caption;
+  const taskSummary = activeAgents.length ? `<span class="flow-summary-label">현재 배정</span>${activeAgents.map(agent => { const rt = runtime(agent.id); return `<span class="flow-task-chip"><i></i><b>${esc(agent.name)}</b><span>${esc(rt.task || labels[rt.status] || '작업 중')}</span>${badge(rt.status)}</span>`; }).join('')}` : `<span class="flow-summary-idle"><i></i>${busy ? `메인 AI ${esc(mainLabel)}` : '모든 팀원이 대기 중입니다. 요청을 보내면 작업 경로가 움직입니다.'}</span>`;
+  if ($('#flow-task-summary').innerHTML !== taskSummary) $('#flow-task-summary').innerHTML = taskSummary;
+  requestAnimationFrame(drawFlowLines);
+}
+
+function drawFlowLines() {
+  const canvas = $('#team-flow-graph'), svg = $('#flow-lines');
+  if (!canvas || !svg || !state) return;
+  const bounds = canvas.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
+  svg.setAttribute('width', bounds.width); svg.setAttribute('height', bounds.height);
+  const links = [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false }];
+  for (const [index,agent] of state.agents.filter(item => item.id !== 'main').entries()) {
+    const rt = runtime(agent.id); if (rt.status === 'disabled') continue;
+    links.push({ from:$('#flow-main'),to:document.getElementById(`flow-agent-${index}`),active:rt.status === 'working',waiting:['waiting','queued'].includes(rt.status) });
+  }
+  const agentIndexes = new Map(state.agents.filter(item => item.id !== 'main').map((agent,index) => [agent.id,index]));
+  const activeRun = state.runs.find(run => run.id === state.activeRunId);
+  for (const task of activeRun?.tasks || []) {
+    if (!['queued','working','waiting'].includes(task.status)) continue;
+    for (const source of task.handoffFrom || []) {
+      const fromIndex = agentIndexes.get(source.agentId), toIndex = agentIndexes.get(task.agentId);
+      if (fromIndex === undefined || toIndex === undefined) continue;
+      links.push({ from:document.getElementById(`flow-agent-${fromIndex}`),to:document.getElementById(`flow-agent-${toIndex}`),active:true,waiting:false,handoff:true });
+    }
+  }
+  const pathFor = ({from,to,active,waiting,handoff}) => {
+    if (!from || !to) return '';
+    const a=from.getBoundingClientRect(), b=to.getBoundingClientRect();
+    const ax=a.left+a.width/2-bounds.left, ay=a.top+a.height/2-bounds.top;
+    const bx=b.left+b.width/2-bounds.left, by=b.top+b.height/2-bounds.top;
+    const dx=bx-ax,dy=by-ay;
+    let x1,y1,x2,y2,d;
+    if (Math.abs(dx)>Math.abs(dy)) {
+      const dir=dx>=0?1:-1; x1=ax+dir*a.width/2; y1=ay; x2=bx-dir*b.width/2; y2=by;
+      const bend=Math.max(22,Math.abs(x2-x1)*.4); d=`M ${x1} ${y1} C ${x1+dir*bend} ${y1}, ${x2-dir*bend} ${y2}, ${x2} ${y2}`;
+    } else {
+      const dir=dy>=0?1:-1; x1=ax; y1=ay+dir*a.height/2; x2=bx; y2=by-dir*b.height/2;
+      const bend=Math.max(22,Math.abs(y2-y1)*.4); d=`M ${x1} ${y1} C ${x1} ${y1+dir*bend}, ${x2} ${y2-dir*bend}, ${x2} ${y2}`;
+    }
+    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}" d="${d}"/>`;
+  };
+  svg.innerHTML = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${links.map(pathFor).join('')}`;
+}
+window.addEventListener('resize', () => requestAnimationFrame(drawFlowLines));
+
+function renderChat() {
+  const runs = projectRuns().slice(0,10).reverse();
+  const latest = runs.at(-1);
+  const mainTask = latest?.tasks.find(item => item.agentId === 'main');
+  const signature = JSON.stringify([selectedProject, runs.map(item => [item.id,item.answer,item.error,item.status,item.tasks.length,item.tasks.find(task => task.agentId === 'main')?.liveText])]);
+  if (signature === chatSignature) return;
+  chatSignature = signature;
+  const container = $('#chat-messages'); const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+  if (!runs.length) {
+    container.innerHTML = `<div class="chat-welcome"><span class="welcome-mark">${icon('spark')}</span><h3>혼자 시작해도, 팀으로 완성해요.</h3><p>하고 싶은 일을 편하게 말해 주세요.<br>필요한 팀원에게 맡기고, 확인한 결과를 모아 드릴게요.</p><div class="suggestions"><button class="suggestion" data-prompt="현재 프로젝트의 구조를 리서처에게 조사시키고, 체커에게 결과를 검증시킨 다음 핵심을 정리해 줘. 파일은 수정하지 마.">프로젝트 살펴보기 ${icon('arrow-right')}</button><button class="suggestion" data-prompt="우리 팀의 역할과 이 프로젝트에서 할 수 있는 일을 간단히 설명해 줘.">우리 팀 알아보기 ${icon('arrow-right')}</button></div></div>`;
+    return;
+  }
+  container.innerHTML = runs.map(run => {
+    const task = run.tasks.find(item => item.agentId === 'main');
+    const ongoing = ['running','stopping'].includes(run.status);
+    const text = run.answer || (ongoing ? task?.liveText : '') || '';
+    return `<article class="message user"><span class="message-avatar">ME</span><div class="message-content"><div class="message-header">나<time>${date(run.startedAt)}</time></div><div class="message-body">${esc(run.message)}</div></div></article><article class="message"><span class="message-avatar">${icon('spark')}</span><div class="message-content"><div class="message-header">메인 AI ${badge(run.status)}</div><div class="message-body">${markdown(text)}</div>${ongoing ? `<div class="thinking"><span><i></i> <i></i> <i></i></span> ${task?.status === 'waiting' ? '팀원의 보고를 기다리고 있어요' : '요청을 처리하고 있어요'}</div>` : ''}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}<div class="run-meta"><span>${Math.max(0,run.tasks.length - 1)}개 위임 · ${format(run.usage.totalTokens)} tokens</span><button class="text-button" data-detail="${esc(run.id)}">작업 상세</button></div></div></article>`;
+  }).join('');
+  if (atBottom || latest?.status === 'running' && !mainTask?.liveText) container.scrollTop = container.scrollHeight;
+}
+
+function renderActivity() {
+  const run = projectRuns()[0];
+  const signature = JSON.stringify([selectedProject,run?.events]);
+  if (signature === lastActivitySignature) return;
+  lastActivitySignature = signature;
+  $('#activity-caption').textContent = run ? `${run.events.length}개 이벤트 · ${date(run.startedAt)}` : '실제 실행 이벤트가 표시됩니다';
+  $('#activity-list').innerHTML = run?.events.length ? run.events.slice(-35).reverse().map(event => `<div class="activity-row ${esc(event.kind)}"><time>${clock(event.at)}</time><span class="event-symbol">${event.kind === 'success' ? '✓' : event.kind === 'error' ? '!' : '↳'}</span><span class="event-agent">${esc(state.agents.find(item => item.id === event.agentId)?.name || '팀원')}</span><span class="event-message">${esc(event.message)}</span></div>`).join('') : `<div class="empty-activity">${icon('activity')}<span>아직 진행 중인 작업이 없어요.<small>메인 AI에게 첫 요청을 보내면 팀의 활동이 여기에 나타납니다.</small></span></div>`;
+}
+
+function renderApprovals() {
+  const signature = JSON.stringify(state.approvals);
+  if (signature === lastApprovalSignature) return;
+  lastApprovalSignature = signature;
+  $('#approval-list').innerHTML = state.approvals.map(approval => {
+    const p = approval.params;
+    const question = approval.method.includes('requestUserInput');
+    const unsupported = approval.method === 'mcpServer/elicitation/request';
+    return `<form class="approval-card" data-approval="${esc(approval.id)}"><h3>${esc(approval.agentName)} · ${question ? '답변이 필요해요' : '실행 확인이 필요해요'}</h3>${question ? (p.questions || []).map(q => `<label>${esc(q.question)}${q.options?.length ? `<small>${esc(q.options.map(option => `${option.label}: ${option.description || ''}`).join(' / '))}</small>` : ''}<input name="${esc(q.id)}" placeholder="답변 입력" maxlength="10000"></label>`).join('') : `<pre>${esc(p.command || p.reason || p.message || JSON.stringify(p.permissions || p, null, 2))}</pre>`}${unsupported ? '<p>외부 앱의 양식 확인은 현재 지원하지 않습니다. 거절하고 계속할 수 있습니다.</p>' : ''}<div class="approval-actions">${!unsupported ? `<button class="button primary" type="submit">${question ? '답변 보내기' : '이번 실행 허용'}</button>` : ''}<button type="button" class="button secondary" data-decline="${esc(approval.id)}">${question ? '건너뛰기' : '거절'}</button></div></form>`;
+  }).join('');
+}
+
+function renderAgents() {
+  $('#agents-grid').innerHTML = state.agents.map(agent => `<article class="panel agent-large"><div class="card-head">${avatar(agent)}<div><h3>${esc(agent.name)}</h3><span class="agent-role">${esc(agent.role)}</span></div><button class="icon-button" data-edit-agent="${esc(agent.id)}" aria-label="${esc(agent.name)} 설정">${icon('edit')}</button></div><p>${esc(agent.description)}</p><div class="agent-card-footer"><div><button type="button" class="agent-model-button" data-edit-agent="${esc(agent.id)}" aria-label="${esc(agent.name)} 모델과 추론 수준 변경"><strong>${esc(effortName(agent.effort))}</strong><span>${esc(modelName(agent))} ›</span></button><br><small>${agent.access === 'workspace-write' ? '프로젝트 권한에 따라 파일 수정' : '읽기 전용'}${agent.optimizationGuidance ? ' · 운영 지침 적용됨' : ''}</small></div>${badge(runtime(agent.id).status)}</div></article>`).join('');
+}
+function renderHistory() {
+  const filter = $('#history-filter').value;
+  const runs = projectRuns().filter(run => filter === 'all' || filter === 'failed' && ['failed','interrupted'].includes(run.status) || filter === 'running' && ['running','stopping'].includes(run.status) || run.status === filter);
+  $('#history-list').innerHTML = runs.length ? runs.map(run => `<button class="panel history-card" data-detail="${esc(run.id)}"><span class="folder-box">${icon('history')}</span><div class="history-text"><h3>${esc(run.message)}</h3><p>${date(run.startedAt)} · ${Math.max(0,run.tasks.length - 1)}개 위임 · ${format(run.usage.totalTokens)} tokens</p></div>${badge(run.status)}${icon('arrow-right')}</button>`).join('') : `<div class="panel empty-panel">${icon('history')}<h3>아직 작업 기록이 없어요</h3><p>대시보드에서 메인 AI에게 요청을 보내 보세요.</p></div>`;
+}
+function renderProjects() {
+  $('#projects-grid').innerHTML = state.projects.map(item => `<article class="panel project-large"><span class="folder-box">${icon('folder')}</span><h3>${esc(item.name)}</h3><p>${esc(item.path)}</p><div class="project-actions"><span class="status ${item.allowWrites ? 'queued' : 'idle'}">${icon(item.allowWrites ? 'edit' : 'lock')}${item.allowWrites ? '파일 수정 허용' : '읽기 전용'}</span><div><button class="button secondary" data-edit-project="${esc(item.id)}">설정</button> <button class="button primary" data-project="${esc(item.id)}">열기 ${icon('arrow-right')}</button></div></div></article>`).join('');
+}
+
+const viewInfo = { overview:['대시보드','나의 AI 팀, 한눈에','메인 AI에게 맡기고, 팀이 일하는 과정을 확인하세요.'], agents:['에이전트','나만의 AI 팀을 구성하세요','프로젝트가 바뀌어도, 함께 일할 팀은 그대로.'], history:['작업 기록','팀이 해온 일을 돌아보세요','담당자부터 검증 결과까지, 요청 하나의 모든 기록.'], projects:['프로젝트','어떤 프로젝트든, 같은 팀으로','내 PC의 작업 폴더를 연결하고 바로 시작하세요.'], settings:['환경 설정','나에게 맞는 작업 방식','실행 범위와 사용량을 직접 조절하세요.'] };
+function changeView(next) {
+  view = next;
+  document.querySelectorAll('section[id$="-view"]').forEach(element => element.classList.toggle('hidden', element.id !== `${view}-view`));
+  document.querySelectorAll('.nav-item').forEach(element => element.classList.toggle('active', element.dataset.view === view));
+  $('#page-label').textContent = viewInfo[view][0]; $('#page-title').innerHTML = `${esc(viewInfo[view][1])}<span class="accent">.</span>`; $('#page-description').textContent = viewInfo[view][2];
+  settingsPopulated = false; render();
+}
+function selectProject(id) {
+  if (state.activeRunId) { toast('진행 중인 요청이 끝난 뒤 프로젝트를 바꿔 주세요.', true); render(); return; }
+  selectedProject = id; chatSignature = ''; lastActivitySignature = ''; render();
+}
+
+function modelOptions(value = '') { return `<option value="">Codex 기본 모델 (계정 기본값)</option>${state.models.map(model => `<option value="${esc(model.id)}" ${value === model.id ? 'selected' : ''}>${esc((model.name || model.id).replace(/^(GPT-\d+(?:\.\d+)?)-/, '$1 '))}${model.isDefault ? ' · 기본' : ''}</option>`).join('')}`; }
+function modelControl(agent) {
+  return `<div class="model-control"><div class="model-control-head"><span class="model-bolt" aria-hidden="true">ϟ</span><div class="model-control-choice"><strong id="effort-value">${esc(effortName(agent.effort))}</strong><label class="model-select-shell"><span class="sr-only">사용할 모델</span><span id="model-selected">${esc(modelName(agent))}</span><span aria-hidden="true">›</span><select name="model" id="agent-model" aria-label="사용할 모델">${modelOptions(agent.model)}</select></label></div><button type="button" id="reset-effort" class="reset-effort" title="추론 수준을 High로 설정" aria-label="추론 수준을 High로 설정">↶</button></div><input type="hidden" name="effort" value="${esc(agent.effort)}"><div class="effort-control"><div class="effort-track" id="effort-track"><div id="effort-ticks" class="effort-ticks"></div></div><input id="effort-range" class="effort-range" type="range" min="0" max="4" step="1" aria-label="추론 수준"></div><div class="effort-endpoints"><span>빠름 · 적은 사용량</span><span>깊은 추론</span></div><small>모델과 추론 수준은 이 팀원의 다음 작업부터 적용됩니다.</small></div>`;
+}
+function syncEffortControl() {
+  const form = $('#editor-form');
+  const modelId = form.elements.model.value || state.models.find(item => item.isDefault)?.id;
+  const model = state.models.find(item => item.id === modelId);
+  $('#model-selected').textContent = modelName({ model:modelId });
+  const allowed = effortOrder.filter(effort => model?.efforts?.includes(effort));
+  const efforts = allowed.length ? allowed : ['low','medium','high'];
+  const slider = $('#effort-range');
+  let index = efforts.indexOf(form.elements.effort.value);
+  if (index < 0) index = Math.max(0, efforts.indexOf('high'));
+  slider.max = String(efforts.length - 1);
+  slider.dataset.efforts = JSON.stringify(efforts);
+  slider.value = String(index);
+  $('#effort-ticks').innerHTML = efforts.map((_,i) => `<i style="left:${efforts.length === 1 ? 50 : 3 + 94 * i / (efforts.length - 1)}%"></i>`).join('');
+  setEffortFromSlider();
+}
+function setEffortFromSlider() {
+  const slider = $('#effort-range');
+  const efforts = JSON.parse(slider.dataset.efforts);
+  const index = Number(slider.value);
+  const effort = efforts[index];
+  $('#editor-form').elements.effort.value = effort;
+  $('#effort-value').textContent = effortName(effort);
+  $('#effort-track').style.setProperty('--progress', `${efforts.length === 1 ? 100 : index / (efforts.length - 1) * 100}%`);
+  slider.setAttribute('aria-valuetext', effortName(effort));
+}
+const rolePresets = {
+  backend: { name:'백엔드 에이전트', role:'백엔드 · API', description:'서버 로직, API, 인증과 연동 코드를 구현합니다.', access:'workspace-write', color:'blue', instructions:'백엔드 구현을 담당합니다. 요청된 API와 서버 로직 범위에 집중하고, 기존 구조와 프로젝트 지침을 먼저 확인하세요. 인증·권한·입력 검증·오류 처리를 살펴보세요. 필요한 파일만 수정하고 비밀키나 실제 자격 증명을 출력하지 마세요. 실행한 테스트와 변경 파일, 미검증 항목을 근거와 함께 보고하세요.' },
+  frontend: { name:'프론트엔드 에이전트', role:'프론트엔드 · UI', description:'화면, 상호작용, 반응형 동작을 구현합니다.', access:'workspace-write', color:'blue', instructions:'프론트엔드 구현을 담당합니다. 요청된 화면과 상호작용만 작업하고 기존 컴포넌트·디자인 규칙을 따르세요. 로딩·오류·빈 상태와 키보드 접근성, 작은 화면을 확인하세요. 필요한 파일만 수정하고 실행한 빌드나 테스트, 변경 파일과 미검증 항목을 보고하세요.' },
+  design: { name:'웹디자인 에이전트', role:'웹디자인 · UX', description:'정보 구조, 시각적 일관성과 사용 흐름을 개선합니다.', access:'workspace-write', color:'violet', instructions:'웹디자인과 UX를 담당합니다. 먼저 현재 화면과 디자인 시스템을 살펴보고 사용자의 목표, 정보 우선순위, 반응형 동작을 정리하세요. 프로젝트에 맞는 컴포넌트와 색상·간격 규칙을 재사용하고 과도한 장식을 피하세요. 수정한 화면과 확인한 뷰포트, 남은 디자인 판단을 보고하세요.' },
+  server: { name:'서버 · 인프라 에이전트', role:'서버 · 인프라', description:'실행 환경, 배포 설정, 컨테이너와 운영 구성을 다룹니다.', access:'workspace-write', color:'amber', instructions:'서버와 인프라 설정을 담당합니다. 요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요. 파괴적인 명령, 외부 배포, 실제 인프라 변경은 실행하지 말고 필요한 명령을 제안하세요. 비밀값을 읽거나 출력하지 말고 샘플 설정은 안전한 자리표시자를 사용하세요. 설정 검사 결과와 운영상 위험, 미검증 항목을 보고하세요.' },
+  database: { name:'DB 에이전트', role:'데이터베이스 · 스키마', description:'데이터 모델, 쿼리, 마이그레이션과 무결성을 다룹니다.', access:'workspace-write', color:'amber', instructions:'데이터베이스 구조와 쿼리를 담당합니다. 기존 스키마와 데이터 접근 방식을 먼저 확인하고 요청된 범위만 수정하세요. 마이그레이션은 되돌릴 수 있는지와 기존 데이터 호환성을 점검하고, 실제 데이터베이스에 접속하거나 데이터를 변경하지 마세요. 스키마 검사·테스트 결과, 영향 범위와 미검증 항목을 보고하세요.' },
+  qa: { name:'QA 에이전트', role:'QA · 테스트', description:'요구사항을 테스트 시나리오로 바꾸고 동작을 확인합니다.', access:'read-only', color:'violet', instructions:'QA와 테스트 검증을 담당합니다. 사용자 요구사항을 확인 가능한 시나리오로 나누고 기존 테스트를 실행하세요. 실패를 재현하는 단계와 실제 결과를 기록하며, 테스트가 없는 부분은 검증되지 않았다고 분명히 적으세요. 파일은 수정하지 말고 명령·통과/실패 결과·재현 근거를 보고하세요.' },
+  security: { name:'보안 리뷰 에이전트', role:'보안 · 권한 검토', description:'권한, 비밀정보 노출, 입력 검증과 위험한 변경을 점검합니다.', access:'read-only', color:'violet', instructions:'독립적인 보안 리뷰를 담당합니다. 변경된 부분의 권한 검사, 입력 검증, 비밀정보 노출, 위험한 명령과 의존성을 살펴보세요. 비밀값을 열거나 결과에 복사하지 마세요. 확인된 문제만 심각도와 파일 위치, 재현 근거를 붙여 보고하고 파일은 수정하지 마세요.' },
+};
+function applyRolePreset(key) {
+  const preset = rolePresets[key]; if (!preset) return;
+  const form = $('#editor-form');
+  for (const field of ['name','role','description','access','instructions']) form.elements[field].value = preset[field];
+}
+function openEditor(type, id) {
+  if (state.activeRunId) return toast('진행 중인 요청이 끝난 뒤 설정을 변경해 주세요.', true);
+  editorType = type; editorId = id;
+  $('#editor-error').textContent = '';
+  const isAgent = type === 'agent';
+  $('#delete-agent').classList.toggle('hidden', !isAgent || !id || id === 'main');
+  if (isAgent) {
+    const agent = state.agents.find(item => item.id === id) || { name:'',role:'',description:'',model:'gpt-6-luna',effort:'high',access:'read-only',instructions:'',optimizationGuidance:'',enabled:true };
+    $('#editor-title').textContent = id ? '에이전트 설정' : '새로운 팀원 만들기';
+    $('#editor-fields').innerHTML = `${id ? '' : `<label>역할 템플릿<select id="agent-preset"><option value="">직접 설정</option><option value="backend">백엔드</option><option value="frontend">프론트엔드</option><option value="design">웹디자인 · UX</option><option value="server">서버 · 인프라</option><option value="database">DB · 데이터</option><option value="qa">QA · 테스트</option><option value="security">보안 리뷰</option></select><small>템플릿은 이름·소개·권한·작업 지침을 채웁니다. 저장 전에 모두 수정할 수 있어요.</small></label>`}${modelControl(agent)}<div class="form-row"><label>이름<input name="name" value="${esc(agent.name)}" maxlength="50" placeholder="예: 문서 에디터" required></label><label>역할<input name="role" value="${esc(agent.role)}" maxlength="80" placeholder="예: 문서 · 편집" required></label></div><label>한 줄 소개<input name="description" value="${esc(agent.description)}" maxlength="300" required></label><label>작업 권한<select name="access" ${id === 'main' ? 'disabled' : ''}><option value="read-only" ${agent.access === 'read-only' ? 'selected' : ''}>읽기 전용</option><option value="workspace-write" ${agent.access === 'workspace-write' ? 'selected' : ''}>프로젝트 내 파일 수정</option></select><small>수정 권한은 여기와 프로젝트 설정이 모두 허용해야 합니다. 조사·QA·보안 리뷰는 읽기 전용으로 두는 편이 안전합니다.</small></label><label>작업 지침<textarea name="instructions" maxlength="8000" required placeholder="이 팀원이 맡을 일과 보고 기준을 적어 주세요.">${esc(agent.instructions)}</textarea></label><label class="check-label"><input type="checkbox" name="enabled" ${agent.enabled ? 'checked' : ''} ${id === 'main' ? 'disabled' : ''}>팀원 활성화</label>`;
+    $('#editor-fields').querySelector('label.check-label').insertAdjacentHTML('beforebegin', `<label>AI 모니터가 추가한 운영 지침<textarea name="optimizationGuidance" maxlength="400" placeholder="운영 점검 후 필요한 경우에만 저장됩니다.">${esc(agent.optimizationGuidance || '')}</textarea><small>기본 작업 지침과 별도로 저장됩니다. 여기서 수정하거나 지울 수 있습니다.</small></label>`);
+    $('#agent-preset')?.addEventListener('change', event => applyRolePreset(event.target.value));
+    $('#agent-model').addEventListener('change', syncEffortControl);
+    $('#effort-range').addEventListener('input', setEffortFromSlider);
+    $('#reset-effort').addEventListener('click', () => { $('#editor-form').elements.effort.value = 'high'; syncEffortControl(); });
+    syncEffortControl();
+  } else {
+    const item = state.projects.find(item => item.id === id) || { name:'',path:'',allowWrites:false };
+    $('#editor-title').textContent = id ? '프로젝트 설정' : '프로젝트 연결';
+    $('#editor-fields').innerHTML = `<label>프로젝트 이름<input name="name" value="${esc(item.name)}" maxlength="80" placeholder="예: 나의 웹사이트" required></label><label>이 PC의 폴더 경로<input name="path" value="${esc(item.path)}" placeholder="C:\\work\\my-project" required><small>이미 존재하는 프로젝트 폴더의 절대 경로를 입력해 주세요.</small></label><label class="check-label"><input type="checkbox" name="allowWrites" ${item.allowWrites ? 'checked' : ''}>실행 담당 에이전트의 파일 수정 허용</label><p class="muted">프로젝트 자료는 각 요청에 필요한 부분만 읽습니다. 메인 AI와 검증 담당은 읽기 전용으로 실행됩니다.</p>`;
+  }
+  $('#editor').showModal();
+}
+function renderDetail() {
+  const run = state.runs.find(item => item.id === selectedRunId); if (!run) return;
+  const gate = run.qualityGate || { required:false,status:'not_required',reason:'이전 실행에는 검증 게이트 기록이 없습니다.' };
+  const gateLabel = { pending:'검증 대기',passed:'검증 통과',failed:'검증 실패',needs_review:'검토 필요',not_required:'변경 검증 불필요' }[gate.status] || '확인 필요';
+  const gateTone = gate.status === 'passed' ? 'passed' : ['failed','needs_review'].includes(gate.status) ? 'needs-review' : 'pending';
+  const nonMain = run.tasks.filter(task => task.agentId !== 'main');
+  const workStatus = nonMain.some(task => ['queued','working','waiting'].includes(task.status)) ? '진행 중' : nonMain.some(task => task.status === 'failed') ? '실패 확인' : nonMain.length ? '완료' : '필요 없음';
+  const reportStatus = ['running','stopping'].includes(run.status) ? '작성 중' : run.answer ? '완료' : '확인 필요';
+  $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt">${esc(run.message)}</div>${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
+  $('#detail-content').querySelectorAll('.detail-task-header').forEach((header,index) => {
+    const handoffs = run.tasks[index]?.handoffFrom || [];
+    if (handoffs.length) header.insertAdjacentHTML('afterend', `<div class="detail-handoff">인계받음: ${handoffs.map(source => esc(source.agentName)).join(', ')} · 선행 보고 ${handoffs.length}개</div>`);
+  });
+}
+
+const monitoringPrompt = 'AI 모니터링 에이전트에게 이 프로젝트의 최근 작업 흐름과 사용량을 점검시켜 줘. 중복되거나 불필요한 위임, 반복 실패가 실제 기록으로 확인될 때만 짧은 운영 지침을 해당 에이전트에 저장해 줘. 개선 근거가 없으면 변경하지 말고 그 이유를 알려줘.';
+document.addEventListener('click', async event => {
+  const button = event.target.closest('button'); if (!button) return;
+  if (button.dataset.view) changeView(button.dataset.view);
+  if (button.dataset.editAgent) openEditor('agent',button.dataset.editAgent);
+  if (button.dataset.editProject) openEditor('project',button.dataset.editProject);
+  if (button.dataset.project) { selectProject(button.dataset.project); changeView('overview'); }
+  if (button.hasAttribute('data-monitor-request')) { changeView('overview'); $('#message').value = monitoringPrompt; $('#message').focus(); }
+  if (button.dataset.prompt) { changeView('overview'); $('#message').value = button.dataset.prompt; $('#message').focus(); }
+  if (button.dataset.detail) { selectedRunId = button.dataset.detail; renderDetail(); $('#detail').showModal(); }
+  if (button.dataset.decline) { try { await api('approvals',{ id:button.dataset.decline, allow:false }); } catch(error) { toast(error.message,true); } }
+});
+$('#project-select').addEventListener('change',event => selectProject(event.target.value));
+$('#project-permission').addEventListener('click',() => openEditor('project',selectedProject));
+for (const selector of ['#add-project','#new-project']) $(selector).addEventListener('click',() => openEditor('project'));
+for (const selector of ['#add-agent','#new-agent']) $(selector).addEventListener('click',() => openEditor('agent'));
+for (const selector of ['#close-editor','#cancel-editor']) $(selector).addEventListener('click',() => $('#editor').close());
+$('#close-detail').addEventListener('click',() => $('#detail').close());
+$('#history-filter').addEventListener('change',renderHistory);
+$('#message').addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!state?.activeRunId) $('#chat-form').requestSubmit(); } });
+$('#chat-form').addEventListener('submit',async event => {
+  event.preventDefault(); const message = $('#message').value.trim(); if (!message || state.activeRunId) return;
+  $('#send').disabled = true;
+  try { await api('runs',{ projectId:selectedProject, message }); $('#message').value = ''; await refresh(); }
+  catch(error) { toast(error.message,true); } finally { render(); }
+});
+$('#stop').addEventListener('click',async () => { try { $('#stop').disabled = true; await api('cancel',{ id:state.activeRunId }); toast('중단을 요청했습니다.'); } catch(error) { toast(error.message,true); } finally { $('#stop').disabled = false; } });
+$('#editor-form').addEventListener('submit',async event => {
+  event.preventDefault(); const form = event.currentTarget; const input = Object.fromEntries(new FormData(form));
+  if (editorId) input.id = editorId;
+  if (editorType === 'agent') { input.enabled = editorId === 'main' || form.elements.enabled.checked; input.access = editorId === 'main' ? 'read-only' : form.elements.access.value; }
+  else input.allowWrites = form.elements.allowWrites.checked;
+  const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+  try { const result = await api(editorType === 'agent' ? 'agents' : 'projects',input); if (editorType === 'project') selectedProject = result.id; $('#editor').close(); await refresh(); toast('저장했습니다.'); }
+  catch(error) { $('#editor-error').textContent = error.message; } finally { submit.disabled = false; }
+});
+$('#delete-agent').addEventListener('click',async () => { try { await api('agents/delete',{ id:editorId }); $('#editor').close(); await refresh(); toast('에이전트를 삭제했습니다.'); } catch(error) { $('#editor-error').textContent = error.message; } });
+$('#settings-form').addEventListener('submit',async event => {
+  event.preventDefault();
+  try { await api('settings',Object.fromEntries(new FormData(event.currentTarget))); settingsPopulated = false; await refresh(); toast('실행 설정을 저장했습니다.'); } catch(error) { toast(error.message,true); }
+});
+$('#approval-list').addEventListener('submit',async event => { event.preventDefault(); const form = event.target; try { await api('approvals',{ id:form.dataset.approval, allow:true, answers:Object.fromEntries(new FormData(form)) }); } catch(error) { toast(error.message,true); } });
+$('#reconnect').addEventListener('click',async () => { const button = $('#reconnect'); button.disabled = true; try { await api('reconnect',{}); await refresh(); toast(state.connection.message,state.connection.status !== 'connected'); } catch(error) { toast(error.message,true); } finally { button.disabled = false; } });
+async function refresh() { const response = await fetch('/api/state',{ cache:'no-store' }); if (!response.ok) throw new Error('서버에 연결할 수 없습니다.'); const result = await response.json(); csrf = result.csrf; state = result; render(); }
+try {
+  await refresh();
+  const events = new EventSource('/api/events');
+  events.addEventListener('state',event => { state = JSON.parse(event.data); render(); });
+  events.onerror = () => { $('#connection').className = 'connection error'; $('#connection').innerHTML = '<i></i>서버 재연결 중'; $('#send').disabled = true; };
+  events.onopen = () => refresh().catch(() => {});
+} catch(error) { toast('서버 연결에 실패했습니다. 시작 스크립트가 실행 중인지 확인해 주세요.',true); }

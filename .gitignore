@@ -1,0 +1,12 @@
+data/
+.runtime/
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+*.pid
+.codex/
+.agents/
+.DS_Store
+coverage/
