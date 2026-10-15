@@ -145,7 +145,7 @@ function drawFlowLines() {
   svg.setAttribute('width', bounds.width); svg.setAttribute('height', bounds.height);
   const activeRun = state.runs.find(run => run.id === state.activeRunId);
   const refining = activeRun?.promptRefinement?.status === 'working';
-  const links = [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId && !refining,waiting:refining }];
+  const links = activeRun?.promptRefinement?.enabled ? [] : [{ from:$('#flow-user'),to:$('#flow-main'),active:!!state.activeRunId,waiting:false }];
   for (const [index,agent] of state.agents.filter(item => item.id !== 'main').entries()) {
     const rt = runtime(agent.id); if (rt.status === 'disabled') continue;
     if (agent.id === 'prompt_refiner') continue;
