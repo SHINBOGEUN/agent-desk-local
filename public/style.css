@@ -99,3 +99,26 @@
   .flow-agent{width:min(100%,280px)}
   .flow-agent:nth-child(even){top:0;justify-self:end}
 }
+
+/* Account-wide Codex quota, separate from the current project's token count. */
+.usage-panel{display:flex;align-items:center;gap:20px;padding:14px 18px;margin:-8px 0 23px;min-height:90px}
+.usage-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:245px;flex:0 0 245px}
+.usage-heading h2{font-size:11px;color:#d8e8db}
+.usage-heading p{font-size:9px;color:#819788;line-height:1.5;margin:4px 0 0}
+.usage-heading .button{font-size:9px;padding:6px 8px}
+.usage-limits{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
+.usage-window{flex:1;min-width:125px}
+.usage-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:10px;color:#a6b9aa}
+.usage-row strong{font-weight:600;color:#d9e9dc}
+.usage-row b{font-size:17px;font-weight:600;color:#a6e1b1}
+.usage-window.low .usage-row b{color:#e6bb79}
+.usage-window.critical .usage-row b{color:#eb9a92}
+.usage-track{height:5px;overflow:hidden;background:#344237;border-radius:99px}
+.usage-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#5aa66d,#b8edbd);transition:width .3s}
+.usage-window.low .usage-track i{background:#d9a756}
+.usage-window.critical .usage-track i{background:#da7770}
+.usage-window small{display:block;font-size:9px;color:#819687;margin-top:6px}
+.usage-checked{font-size:8px;color:#7b9080;white-space:nowrap;align-self:end}
+.usage-message{font-size:10px;color:#a7b9aa;margin:0}
+@media(max-width:1050px){.usage-panel{align-items:stretch;flex-direction:column;gap:15px}.usage-heading{flex:auto;width:100%}.usage-limits{width:100%}}
+@media(max-width:560px){.usage-limits{flex-wrap:wrap;gap:12px}.usage-window{flex:1 1 40%}.usage-checked{width:100%}}

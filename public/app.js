@@ -104,12 +104,30 @@ function render() {
     ['사용한 토큰',format(usage),'',usage ? '메인 AI + 모든 팀원의 사용량' : '첫 요청부터 사용량을 기록해요','token'],
   ];
   $('#stats').innerHTML = stats.map(([title,value,unit,note,i]) => `<article class="stat"><div class="stat-top">${title}${icon(i)}</div><div class="stat-number">${value}<span>${unit}</span></div><div class="stat-note">${note}</div></article>`).join('');
+  renderUsageLimits();
   $('#team-list').innerHTML = state.agents.map(agent => { const rt = runtime(agent.id); return `<button class="team-card" data-edit-agent="${esc(agent.id)}">${avatar(agent)}<div class="agent-details"><div class="agent-name">${esc(agent.name)}</div><div class="agent-role" title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</div></div>${badge(rt.status)}</button>`; }).join('');
   renderFlow();
   renderChat(); renderActivity(); renderApprovals();
   if (view === 'agents') renderAgents(); if (view === 'history') renderHistory(); if (view === 'projects') renderProjects();
   if (view === 'settings' && !settingsPopulated) { for (const [key,value] of Object.entries(state.settings)) if ($('#settings-form').elements[key]) $('#settings-form').elements[key].value = value; settingsPopulated = true; }
   if ($('#detail').open) renderDetail();
+}
+
+function renderUsageLimits() {
+  const limits = state.usageLimits || { status:'loading', windows:[] };
+  const container = $('#usage-limits');
+  if (limits.status !== 'available') {
+    container.innerHTML = `<p class="usage-message">${esc(limits.status === 'loading' ? '사용량을 확인하는 중입니다.' : limits.message || '사용량을 확인할 수 없습니다.')}</p>`;
+    return;
+  }
+  const cards = limits.windows.map((window, index) => {
+    const label = window.windowDurationMins === 300 ? '5시간' : window.windowDurationMins === 10080 ? '1주' : window.windowDurationMins ? `${format(window.windowDurationMins)}분` : `한도 ${index + 1}`;
+    const remaining = Math.max(0, Math.min(100, Number(window.remainingPercent) || 0));
+    const reset = window.resetsAt ? `초기화 ${date(window.resetsAt * 1000)}` : '초기화 시각 확인 불가';
+    const level = remaining <= 10 ? 'critical' : remaining <= 20 ? 'low' : '';
+    return `<div class="usage-window ${level}"><div class="usage-row"><strong>${esc(label)}</strong><span><b>${remaining.toLocaleString('ko-KR')}%</b> 남음</span></div><div class="usage-track" role="progressbar" aria-label="${esc(label)} 남은 사용량" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${remaining}"><i style="width:${remaining}%"></i></div><small>${esc(reset)}</small></div>`;
+  }).join('');
+  container.innerHTML = `${cards}<span class="usage-checked">${limits.checkedAt ? `마지막 확인 ${esc(clock(limits.checkedAt))}` : ''}</span>`;
 }
 
 function renderFlow() {
@@ -438,6 +456,12 @@ $('#settings-form').addEventListener('submit',async event => {
 });
 $('#approval-list').addEventListener('submit',async event => { event.preventDefault(); const form = event.target; try { await api('approvals',{ id:form.dataset.approval, allow:true, answers:Object.fromEntries(new FormData(form)) }); } catch(error) { toast(error.message,true); } });
 $('#reconnect').addEventListener('click',async () => { const button = $('#reconnect'); button.disabled = true; try { await api('reconnect',{}); await refresh(); toast(state.connection.message,state.connection.status !== 'connected'); } catch(error) { toast(error.message,true); } finally { button.disabled = false; } });
+$('#usage-refresh').addEventListener('click', async () => {
+  const button = $('#usage-refresh'); button.disabled = true;
+  try { state.usageLimits = await api('usage-limits/refresh', {}); renderUsageLimits(); }
+  catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+});
 async function refresh() { const response = await fetch('/api/state',{ cache:'no-store' }); if (!response.ok) throw new Error('서버에 연결할 수 없습니다.'); const result = await response.json(); csrf = result.csrf; state = result; render(); }
 try {
   await refresh();

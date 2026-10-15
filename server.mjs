@@ -20,6 +20,8 @@ const origin = `http://${host}`;
 const json = (response, status, data) => { response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(data)); };
 const sendState = response => response.write(`event: state\ndata: ${JSON.stringify(hub.snapshot())}\n\n`);
 hub.on('state', () => { for (const response of streams) sendState(response); });
+const usageTimer = setInterval(() => hub.refreshUsageLimits().catch(() => {}), 60_000);
+usageTimer.unref();
 
 async function body(request) {
   if (!request.headers['content-type']?.startsWith('application/json')) throw new Error('JSON 요청이 필요합니다.');
@@ -56,6 +58,7 @@ const server = http.createServer(async (request, response) => {
       if (url.pathname === '/api/settings') { hub.saveSettings(input); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/approvals') { hub.answerApproval(input.id, input); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/reconnect') { hub.requireIdle(); await hub.connect(); return json(response, 200, hub.connection); }
+      if (url.pathname === '/api/usage-limits/refresh') return json(response, 200, await hub.refreshUsageLimits(true));
       if (url.pathname === '/api/shutdown') { json(response, 200, { ok: true }); setTimeout(() => shutdown(), 50); return; }
       return json(response, 404, { error: '요청한 기능을 찾을 수 없습니다.' });
     }
@@ -78,6 +81,7 @@ server.listen(port, '127.0.0.1', () => {
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return; shuttingDown = true;
+  clearInterval(usageTimer);
   for (const response of streams) response.end();
   await hub.close(); server.close(); setTimeout(() => process.exit(0), 1000).unref();
 }
