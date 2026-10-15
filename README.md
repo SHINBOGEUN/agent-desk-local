@@ -10,6 +10,32 @@
 
 터미널에서는 이 폴더에서 `npm start`로 실행할 수 있습니다. 별도 패키지 설치가 필요하지 않습니다. 시작 스크립트로 실행한 서버는 `powershell -File .\Stop-AgentDesk.ps1`로 종료합니다.
 
+## 다른 PC에서 시작하기
+
+이 저장소를 새 PC에 복제한 다음, 그 PC에 Node.js 22 이상과 Codex CLI를 준비하고 Codex 계정으로 로그인합니다. 저장소는 공개되어 있어 GitHub 계정 로그인 없이 복제할 수 있습니다.
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/SHINBOGEUN/agent-desk-local.git
+cd agent-desk-local
+codex login
+codex login status
+Start-AgentDesk.cmd
+```
+
+macOS 또는 Linux 터미널:
+
+```sh
+git clone https://github.com/SHINBOGEUN/agent-desk-local.git
+cd agent-desk-local
+codex login
+codex login status
+npm start
+```
+
+서버가 시작되면 `http://127.0.0.1:4317`을 엽니다. macOS·Linux에서는 터미널에서 서버를 실행한 채 사용하고, 종료할 때 `Ctrl+C`를 누릅니다. 앱은 `data/`에 PC별 설정과 작업 기록을 저장하며 이 폴더는 Git에 올라가지 않습니다. 새 PC에서는 Codex에 다시 로그인하고 프로젝트 폴더를 다시 연결해야 합니다. 에이전트 설정이나 작업 기록까지 옮기려면 두 PC의 Agent Desk 서버를 종료한 뒤 `data/`를 별도로 안전하게 복사해야 합니다. 이 앱은 현재 Windows에서 실행과 검증을 마쳤고, macOS·Linux 실행은 아직 검증되지 않았습니다.
+
 ## 사용
 
 - 프로젝트 폴더를 연결하고 메인 AI에게 요청합니다. 첫 프로젝트는 상위 AI_Agent 폴더이며 기본 권한은 읽기 전용입니다.
