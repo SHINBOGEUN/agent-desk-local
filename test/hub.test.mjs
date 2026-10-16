@@ -126,6 +126,54 @@ test('five-hour percentage warnings and cap use account usage delta, not token c
   assert.equal(run.accountUsage.consumedPercent,5.2);
   assert.equal(run.usage.totalTokens,0);
   assert.match(run.error,/5.2%p \/ 설정 5%p/);
+  assert.equal(run.endReason.kind,'usage_limit');
+});
+
+test('resuming links a new run, carries prior reports, and keeps the same five-hour budget', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  const old = { id:'previous',resumeFromRunId:'older',projectId:'default',message:'화면을 고치고 검증해 줘',status:'interrupted',error:'사용자가 요청을 중단했습니다.',endReason:{kind:'manual',message:'사용자가 요청을 중단했습니다.'},resumeAttempt:1,accountUsage:{baselineUsedPercent:10,currentUsedPercent:12,consumedPercent:2,windowResetsAt:1800000000},qualityGate:{status:'pending'},tasks:[{agentId:'builder',agentName:'구현 담당',title:'화면 수정',status:'completed',writable:true,output:'버튼을 수정했습니다.',usage:{totalTokens:80}}],usage:{totalTokens:80},answer:'' };
+  store.state.runs.unshift(old);
+  store.state.runs.push({id:'older',projectId:'default',status:'interrupted',tasks:[{agentName:'조사 담당',title:'구조 조사',status:'completed',output:'진입 파일은 app.js입니다.'}],usage:{totalTokens:40}});
+  client.quotaUsedPercent = 12.5;
+  const resumed = await hub.resume(old.id);
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(resumed.resumeFromRunId,old.id);
+  assert.equal(resumed.resumeAttempt,2);
+  assert.equal(resumed.promptRefinement.enabled,false);
+  assert.equal(resumed.accountUsage.baselineUsedPercent,10);
+  assert.equal(resumed.accountUsage.consumedPercent,2.5);
+  assert.equal(old.status,'interrupted');
+  const turn = client.calls.find(call => call.method === 'turn/start');
+  assert.match(turn.params.input[0].text,/버튼을 수정했습니다/);
+  assert.match(turn.params.input[0].text,/진입 파일은 app.js/);
+  assert.match(turn.params.input[0].text,/현재 파일 상태를 다시 확인/);
+  const thread = client.calls.find(call => call.method === 'thread/start');
+  assert.match(thread.params.developerInstructions,/무작정 반복하지 마세요/);
+  await hub.cancel(resumed.id);
+  await settle(() => !hub.active);
+  assert.equal(resumed.endReason.kind,'manual');
+});
+
+test('resume cannot reset a reached limit in the same window and can start after reset', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.runs.unshift({ id:'previous',projectId:'default',message:'계속 작업',status:'interrupted',accountUsage:{baselineUsedPercent:10,currentUsedPercent:15.2,consumedPercent:5.2,windowResetsAt:1800000000},tasks:[],usage:{totalTokens:0} });
+  client.quotaUsedPercent = 15.2;
+  await assert.rejects(() => hub.resume('previous'),/이전 실행을 포함해/);
+  assert.equal(store.state.runs.length,1);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800000100 } } };
+  const resumed = await hub.resume('previous');
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(resumed.accountUsage.baselineUsedPercent,1);
+  assert.equal(resumed.accountUsage.consumedPercent,0);
+  await hub.cancel(resumed.id); await settle(() => !hub.active);
+});
+
+test('legacy resumed runs use their measurement time to keep a same-window cap', async t => {
+  const { hub,client,store } = fixture(t);
+  store.state.runs.unshift({ id:'legacy',projectId:'default',message:'계속 작업',status:'interrupted',accountUsage:{baselineUsedPercent:10,currentUsedPercent:15.2,consumedPercent:5.2,checkedAt:new Date((1800000000 - 3600) * 1000).toISOString()},tasks:[],usage:{totalTokens:0} });
+  client.quotaUsedPercent = 15.2;
+  await assert.rejects(() => hub.resume('legacy'),/이전 실행을 포함해/);
+  assert.equal(store.state.runs.length,1);
 });
 
 test('missing or reset five-hour usage stops rather than running without a cap', async t => {

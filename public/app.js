@@ -46,6 +46,24 @@ async function api(route, payload) {
 const project = () => state?.projects.find(item => item.id === selectedProject);
 const projectRuns = () => (state?.runs || []).filter(item => item.projectId === selectedProject);
 const delegatedCount = run => run.tasks.filter(task => !task.consultation && !['main', 'prompt_refiner'].includes(task.agentId)).length;
+const resumable = run => ['interrupted', 'failed', 'needs_review'].includes(run.status);
+const resumeButton = run => resumable(run) ? `<button class="button secondary resume-button" type="button" data-resume="${esc(run.id)}" ${state.activeRunId || state.connection.status !== 'connected' ? 'disabled' : ''}>이어서 실행</button>` : '';
+function runDiagnostics(run) {
+  const reason = run.endReason?.message || run.error || (run.status === 'needs_review' ? run.qualityGate?.reason : '');
+  const groups = new Map();
+  for (const task of run.tasks || []) {
+    const key = task.agentId || task.agentName;
+    const group = groups.get(key) || { name:task.agentName || key, tokens:0, tasks:0, unreported:0 };
+    group.tasks++;
+    if (Number.isFinite(task.usage?.totalTokens)) group.tokens += task.usage.totalTokens;
+    else group.unreported++;
+    groups.set(key,group);
+  }
+  const measured = [...groups.values()].reduce((total, group) => total + group.tokens, 0);
+  const rows = [...groups.values()].sort((a,b) => b.tokens - a.tokens).map(group => `<div class="agent-usage-row"><strong>${esc(group.name)}</strong><span>${format(group.tokens)} 토큰${measured ? ` · ${format(Math.round(group.tokens / measured * 1000) / 10)}%` : ''} · ${group.tasks}개 작업${group.unreported ? ` · ${group.unreported}개 사용량 미보고` : ''}</span></div>`).join('');
+  const quota = run.accountUsage ? `5시간 한도 사용률 증가 ${format(run.accountUsage.consumedPercent)}%p / 제한 ${format(run.limits?.usagePercentLimit)}%p` : '이 실행의 5시간 사용률 기록 없음';
+  return `${reason ? `<section class="run-reason"><strong>${run.status === 'interrupted' ? '중단 이유' : run.status === 'failed' ? '실패 이유' : '검토 필요 이유'}</strong><p>${esc(reason)}</p>${run.endReason?.at ? `<small>${esc(date(run.endReason.at))}</small>` : ''}</section>` : ''}<section class="agent-usage"><h3>에이전트별 사용량</h3>${rows || '<p>사용량이 보고된 작업이 없습니다.</p>'}<small>${esc(quota)} · 위 비율은 기록된 토큰 기준입니다. 계정의 5시간 사용률은 에이전트별로 나눌 수 없습니다.</small></section>${run.resumeFromRunId ? `<p class="resume-note">이전 작업을 이어서 실행한 기록입니다. 이전 기록 ID: ${esc(run.resumeFromRunId)}</p>` : ''}${resumable(run) ? `<div class="resume-actions">${resumeButton(run)}<small>현재 파일 상태를 확인한 뒤 미완료 부분을 진행합니다. 같은 5시간 창에서는 이전 사용률을 합산합니다.</small></div>` : ''}`;
+}
 const refinementSummary = run => {
   const refinement = run.promptRefinement;
   if (!refinement?.enabled) return '';
@@ -291,7 +309,7 @@ function renderChat() {
   const runs = projectRuns().slice(0,10).reverse();
   const latest = runs.at(-1);
   const mainTask = latest?.tasks.find(item => item.agentId === 'main');
-  const signature = JSON.stringify([selectedProject, runs.map(item => [item.id,item.answer,item.error,item.status,item.tasks.length,item.tasks.find(task => task.agentId === 'main')?.liveText,item.promptRefinement?.status,item.promptRefinement?.text])]);
+  const signature = JSON.stringify([selectedProject, state.activeRunId, state.connection.status, runs.map(item => [item.id,item.answer,item.error,item.status,item.tasks.length,item.tasks.find(task => task.agentId === 'main')?.liveText,item.promptRefinement?.status,item.promptRefinement?.text])]);
   if (signature === chatSignature) return;
   chatSignature = signature;
   const container = $('#chat-messages'); const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
@@ -303,7 +321,7 @@ function renderChat() {
     const task = run.tasks.find(item => item.agentId === 'main');
     const ongoing = ['running','stopping'].includes(run.status);
     const text = run.answer || (ongoing ? task?.liveText : '') || '';
-    return `<article class="message user"><span class="message-avatar">ME</span><div class="message-content"><div class="message-header">나<time>${date(run.startedAt)}</time></div><div class="message-body">${esc(run.message)}</div>${refinementSummary(run)}</div></article><article class="message"><span class="message-avatar">${icon('spark')}</span><div class="message-content"><div class="message-header">메인 AI ${badge(run.status)}</div><div class="message-body">${markdown(text)}</div>${ongoing ? `<div class="thinking"><span><i></i> <i></i> <i></i></span> ${task?.status === 'waiting' ? '팀원의 보고를 기다리고 있어요' : '요청을 처리하고 있어요'}</div>` : ''}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}<div class="run-meta"><span>${delegatedCount(run)}개 위임 · ${format(run.usage.totalTokens)} tokens</span><button class="text-button" data-detail="${esc(run.id)}">작업 상세</button></div></div></article>`;
+    return `<article class="message user"><span class="message-avatar">ME</span><div class="message-content"><div class="message-header">나<time>${date(run.startedAt)}</time></div><div class="message-body">${esc(run.message)}</div>${refinementSummary(run)}</div></article><article class="message"><span class="message-avatar">${icon('spark')}</span><div class="message-content"><div class="message-header">메인 AI ${badge(run.status)}</div><div class="message-body">${markdown(text)}</div>${ongoing ? `<div class="thinking"><span><i></i> <i></i> <i></i></span> ${task?.status === 'waiting' ? '팀원의 보고를 기다리고 있어요' : '요청을 처리하고 있어요'}</div>` : ''}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}<div class="run-meta"><span>${delegatedCount(run)}개 위임 · ${format(run.usage.totalTokens)} tokens</span><button class="text-button" data-detail="${esc(run.id)}">작업 상세</button>${resumeButton(run)}</div></div></article>`;
   }).join('');
   if (atBottom || latest?.status === 'running' && !mainTask?.liveText) container.scrollTop = container.scrollHeight;
 }
@@ -430,6 +448,7 @@ function renderDetail() {
   const workStatus = nonMain.some(task => ['queued','working','waiting'].includes(task.status)) ? '진행 중' : nonMain.some(task => task.status === 'failed') ? '실패 확인' : nonMain.length ? '완료' : '필요 없음';
   const reportStatus = ['running','stopping'].includes(run.status) ? '작성 중' : run.answer ? '완료' : '확인 필요';
   $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt"><strong>사용자 원문</strong><p>${esc(run.message)}</p></div>${refinementSummary(run)}${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
+  $('#detail-content').querySelector('.run-status-line').insertAdjacentHTML('afterend', runDiagnostics(run));
   const discussions = run.discussions || [];
   if (discussions.length) {
     const markup = `<section class="discussion-section"><h3>팀원 간 협의 · ${discussions.length}건</h3>${discussions.map(item => `<article class="discussion-card"><div class="discussion-heading"><strong>${esc(item.fromName)} → ${esc(item.toName)}</strong><span>${item.status === 'completed' ? '답변 완료' : item.status === 'pending' ? '답변 중' : '답변 실패'} · ${clock(item.createdAt)}</span></div><p class="discussion-question">${esc(item.question)}</p>${item.context ? `<p class="discussion-context">맥락: ${esc(item.context)}</p>` : ''}${item.answer ? `<div class="discussion-answer"><b>${esc(item.toName)}의 답변</b><p>${esc(item.answer)}</p></div>` : ''}${item.error ? `<p class="error-text">${esc(item.error)}</p>` : ''}</article>`).join('')}</section>`;
@@ -453,6 +472,16 @@ document.addEventListener('click', async event => {
   if (button.hasAttribute('data-monitor-request')) { changeView('overview'); $('#message').value = monitoringPrompt; $('#message').focus(); }
   if (button.dataset.prompt) { changeView('overview'); $('#message').value = button.dataset.prompt; $('#message').focus(); }
   if (button.dataset.detail) { selectedRunId = button.dataset.detail; renderDetail(); $('#detail').showModal(); }
+  if (button.dataset.resume) {
+    button.disabled = true;
+    try {
+      const oldRun = state.runs.find(run => run.id === button.dataset.resume);
+      await api('runs/resume', { id: button.dataset.resume });
+      if ($('#detail').open) $('#detail').close();
+      if (oldRun) selectProject(oldRun.projectId);
+      changeView('overview'); await refresh(); toast('이전 작업을 이어서 실행합니다.');
+    } catch (error) { toast(error.message, true); button.disabled = false; }
+  }
   if (button.dataset.decline) { try { await api('approvals',{ id:button.dataset.decline, allow:false }); } catch(error) { toast(error.message,true); } }
 });
 $('#project-select').addEventListener('change',event => selectProject(event.target.value));

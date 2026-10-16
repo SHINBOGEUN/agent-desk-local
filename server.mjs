@@ -51,6 +51,7 @@ const server = http.createServer(async (request, response) => {
       if (request.method !== 'POST' || request.headers['x-agent-desk-token'] !== csrf) return json(response, 403, { error: '페이지를 새로고침한 뒤 다시 시도해 주세요.' });
       const input = await body(request);
       if (url.pathname === '/api/runs') return json(response, 202, { id: (await hub.start(input)).id });
+      if (url.pathname === '/api/runs/resume') return json(response, 202, { id: (await hub.resume(input.id)).id });
       if (url.pathname === '/api/cancel') { await hub.cancel(input.id); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/agents') return json(response, 200, hub.saveAgent(input, input.id));
       if (url.pathname === '/api/agents/delete') { hub.deleteAgent(input.id); return json(response, 200, { ok: true }); }
