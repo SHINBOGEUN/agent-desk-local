@@ -45,7 +45,7 @@ async function api(route, payload) {
 }
 const project = () => state?.projects.find(item => item.id === selectedProject);
 const projectRuns = () => (state?.runs || []).filter(item => item.projectId === selectedProject);
-const delegatedCount = run => run.tasks.filter(task => !['main', 'prompt_refiner'].includes(task.agentId)).length;
+const delegatedCount = run => run.tasks.filter(task => !task.consultation && !['main', 'prompt_refiner'].includes(task.agentId)).length;
 const refinementSummary = run => {
   const refinement = run.promptRefinement;
   if (!refinement?.enabled) return '';
@@ -233,7 +233,14 @@ function drawFlowLines() {
       links.push({ from:document.getElementById(`flow-agent-${fromIndex}`),to:document.getElementById(`flow-agent-${toIndex}`),active:true,waiting:false,handoff:true });
     }
   }
-  const pathFor = ({from,to,active,waiting,handoff,bypass}) => {
+  for (const item of activeRun?.discussions || []) {
+    if (item.status !== 'pending' && (!item.answeredAt || Date.now() - Date.parse(item.answeredAt) > 12000)) continue;
+    const fromIndex = agentIndexes.get(item.status === 'pending' ? item.fromId : item.toId);
+    const toIndex = agentIndexes.get(item.status === 'pending' ? item.toId : item.fromId);
+    if (fromIndex === undefined || toIndex === undefined) continue;
+    links.push({ from:document.getElementById(`flow-agent-${fromIndex}`),to:document.getElementById(`flow-agent-${toIndex}`),active:true,waiting:false,discussion:true });
+  }
+  const pathFor = ({from,to,active,waiting,handoff,discussion,bypass}) => {
     if (!from || !to) return '';
     const a=from.getBoundingClientRect(), b=to.getBoundingClientRect();
     const ax=a.left+a.width/2-bounds.left, ay=a.top+a.height/2-bounds.top;
@@ -255,7 +262,7 @@ function drawFlowLines() {
         d = `M ${x1} ${y1} H ${rail + 10} Q ${rail} ${y1} ${rail} ${y1 + 10} V ${y2 - 10} Q ${rail} ${y2} ${rail + 10} ${y2} H ${x2}`;
       }
     }
-    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${bypass?' is-bypass':''}" d="${d}"/>${handoff && !reduceMotion ? `<circle class="flow-light is-returning" r="3.5"><animateMotion path="${d}" dur="2.4s" repeatCount="indefinite"/></circle>` : ''}`;
+    return `<path class="flow-path${active?' is-active':''}${waiting?' is-waiting':''}${handoff?' is-handoff':''}${discussion?' is-discussion':''}${bypass?' is-bypass':''}" d="${d}"/>${(handoff || discussion) && !reduceMotion ? `<circle class="flow-light is-returning" r="3.5"><animateMotion path="${d}" dur="2.4s" repeatCount="indefinite"/></circle>` : ''}`;
   };
   const markup = `<defs><marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z"/></marker></defs>${trunk}${branchPaths}${motionPaths}${links.map(pathFor).join('')}`;
   // Keep live SVG nodes in place between state events so the moving lights do not restart.
@@ -402,10 +409,17 @@ function renderDetail() {
   const gate = run.qualityGate || { required:false,status:'not_required',reason:'이전 실행에는 검증 게이트 기록이 없습니다.' };
   const gateLabel = { pending:'검증 대기',passed:'검증 통과',failed:'검증 실패',needs_review:'검토 필요',not_required:'변경 검증 불필요' }[gate.status] || '확인 필요';
   const gateTone = gate.status === 'passed' ? 'passed' : ['failed','needs_review'].includes(gate.status) ? 'needs-review' : 'pending';
-  const nonMain = run.tasks.filter(task => !['main', 'prompt_refiner'].includes(task.agentId));
+  const nonMain = run.tasks.filter(task => !task.consultation && !['main', 'prompt_refiner'].includes(task.agentId));
   const workStatus = nonMain.some(task => ['queued','working','waiting'].includes(task.status)) ? '진행 중' : nonMain.some(task => task.status === 'failed') ? '실패 확인' : nonMain.length ? '완료' : '필요 없음';
   const reportStatus = ['running','stopping'].includes(run.status) ? '작성 중' : run.answer ? '완료' : '확인 필요';
   $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt"><strong>사용자 원문</strong><p>${esc(run.message)}</p></div>${refinementSummary(run)}${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
+  const discussions = run.discussions || [];
+  if (discussions.length) {
+    const markup = `<section class="discussion-section"><h3>팀원 간 협의 · ${discussions.length}건</h3>${discussions.map(item => `<article class="discussion-card"><div class="discussion-heading"><strong>${esc(item.fromName)} → ${esc(item.toName)}</strong><span>${item.status === 'completed' ? '답변 완료' : item.status === 'pending' ? '답변 중' : '답변 실패'} · ${clock(item.createdAt)}</span></div><p class="discussion-question">${esc(item.question)}</p>${item.context ? `<p class="discussion-context">맥락: ${esc(item.context)}</p>` : ''}${item.answer ? `<div class="discussion-answer"><b>${esc(item.toName)}의 답변</b><p>${esc(item.answer)}</p></div>` : ''}${item.error ? `<p class="error-text">${esc(item.error)}</p>` : ''}</article>`).join('')}</section>`;
+    const firstTask = $('#detail-content').querySelector('.detail-task');
+    if (firstTask) firstTask.insertAdjacentHTML('beforebegin', markup);
+    else $('#detail-content').insertAdjacentHTML('beforeend', markup);
+  }
   $('#detail-content').querySelectorAll('.detail-task-header').forEach((header,index) => {
     const handoffs = run.tasks[index]?.handoffFrom || [];
     if (handoffs.length) header.insertAdjacentHTML('afterend', `<div class="detail-handoff">인계받음: ${handoffs.map(source => esc(source.agentName)).join(', ')} · 선행 보고 ${handoffs.length}개</div>`);

@@ -14,7 +14,7 @@ class FakeClient extends EventEmitter {
     if (method === 'turn/start') {
       const id = `turn-${params.threadId}`;
       this.emit('notification', { method:'turn/started', params:{ threadId:params.threadId, turn:{ id } } });
-      if (this.mode === 'complete' || this.mode === 'hold-main' && params.threadId !== 'thread-1') setTimeout(() => {
+      if (this.mode === 'complete' || this.mode === 'hold-main' && params.threadId !== 'thread-1' || this.autoComplete?.(params.threadId)) setTimeout(() => {
         const answer = params.threadId === 'thread-1' && this.refinerAnswer !== undefined ? this.refinerAnswer : '실행 결과';
         this.emit('notification', { method:'thread/tokenUsage/updated', params:{ threadId:params.threadId, tokenUsage:{ total:{ totalTokens:30,inputTokens:20,outputTokens:10,cachedInputTokens:5 } } } });
         this.emit('notification', { method:'item/completed', params:{ threadId:params.threadId, item:{ id:'answer',type:'agentMessage',phase:'final_answer',text:answer } } });
@@ -172,6 +172,46 @@ test('selected completed reports are handed to a later agent and recorded', asyn
   await hub.cancel(run.id); await settle(() => !hub.active);
 });
 
+test('working teammates can ask and read a bounded, read-only consultation without adding a worker slot', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  const run = await hub.start({ projectId:'default',message:'프론트와 백엔드의 API 계약을 정해 주세요.' });
+  await settle(() => hub.contexts.size === 1);
+  const active = hub.active;
+  const front = store.state.agents.find(agent => agent.id === 'researcher');
+  const back = store.state.agents.find(agent => agent.id === 'worker');
+  const frontTask = hub.newTask(run,front,'프론트 설계'); frontTask.brief = '목록 화면의 응답 구조를 정한다.';
+  const backTask = hub.newTask(run,back,'백엔드 설계'); backTask.brief = 'GET /items 계약을 정한다.';
+  const frontWork = hub.turn(active,front,frontTask,'프론트 역할','화면 설계').catch(() => {});
+  const backWork = hub.turn(active,back,backTask,'백엔드 역할','API 설계').catch(() => {});
+  await settle(() => hub.contexts.size === 3);
+  active.runningWorkers = 2;
+  client.autoComplete = threadId => threadId === 'thread-4';
+  const frontThread = [...hub.contexts.values()].find(item => item.agent.id === front.id).threadId;
+  const backThread = [...hub.contexts.values()].find(item => item.agent.id === back.id).threadId;
+  const workerTools = client.calls.filter(call => call.method === 'thread/start')[1].params.dynamicTools.map(tool => tool.name);
+  assert.deepEqual(workerTools,['agent_desk_ask','agent_desk_inbox']);
+  await hub.serverRequest({ id:701,method:'item/tool/call',params:{ threadId:frontThread,tool:'agent_desk_ask',arguments:{ agentId:back.id,question:'GET /items 응답 필드는?',context:'목록 화면에 제목과 상태가 필요합니다.' } } });
+  const answer = JSON.parse(client.responses.find(item => item.id === 701).result.contentItems[0].text);
+  assert.equal(answer.fromName,back.name);
+  assert.equal(run.discussions.length,1);
+  assert.equal(run.discussions[0].status,'completed');
+  assert.equal(run.discussions[0].question,'GET /items 응답 필드는?');
+  assert.equal(active.runningWorkers,2);
+  const consultant = client.calls.filter(call => call.method === 'thread/start')[3].params;
+  assert.equal(consultant.sandbox,'read-only');
+  assert.equal(consultant.config['features.shell_tool'],false);
+  assert.equal(consultant.dynamicTools,undefined);
+  assert.match(client.calls.filter(call => call.method === 'turn/start')[3].params.input[0].text,/GET \/items 계약을 정한다/);
+  await hub.serverRequest({ id:702,method:'item/tool/call',params:{ threadId:backThread,tool:'agent_desk_inbox',arguments:{} } });
+  const inbox = JSON.parse(client.responses.find(item => item.id === 702).result.contentItems[0].text);
+  assert.equal(inbox.discussions[0].question,'GET /items 응답 필드는?');
+  assert.equal(inbox.discussions[0].answer,answer.answer);
+  await hub.serverRequest({ id:703,method:'item/tool/call',params:{ threadId:frontThread,tool:'agent_desk_ask',arguments:{ agentId:front.id,question:'나에게 질문' } } });
+  assert.equal(client.responses.find(item => item.id === 703).result.success,false);
+  assert.equal(run.discussions.length,1);
+  await hub.cancel(run.id); await Promise.all([frontWork,backWork]); await settle(() => !hub.active);
+});
+
 test('monitor receives bounded history and only its completed report can update separate guidance', async t => {
   const { hub,client,store } = fixture(t,'hold-main');
   store.state.runs.unshift({ id:'previous',projectId:'default',message:'반복 조사',answer:'조사 완료',status:'completed',usage:{ totalTokens:120 },qualityGate:{ status:'not_required' },tasks:[{ id:'old-task',agentId:'researcher',title:'조사',status:'completed',usage:{ totalTokens:80 } }] });
@@ -212,6 +252,10 @@ test('file changes require a PASS from a verifier after the last writer', t => {
   base.tasks[1].output = '[검증 결과: FAIL]\n테스트 실패';
   hub.evaluateQualityGate(base);
   assert.equal(base.qualityGate.status,'failed');
+  base.tasks[1].consultation = true;
+  base.tasks[1].output = '[검증 결과: PASS]\n상담 답변';
+  hub.evaluateQualityGate(base);
+  assert.equal(base.qualityGate.status,'needs_review');
 });
 
 test('persisted in-flight runs are marked interrupted on restart', t => {
