@@ -10,6 +10,7 @@ class FakeClient extends EventEmitter {
   constructor(mode = 'complete') { super(); this.mode = mode; this.calls = []; this.responses = []; this.threadNumber = 0; this.connected = true; }
   async request(method, params) {
     this.calls.push({ method, params });
+    if (method === 'account/rateLimits/read') return this.rateLimits || { rateLimits: { primary: { usedPercent: this.quotaUsedPercent ?? 10, windowDurationMins:300, resetsAt:1800000000 } } };
     if (method === 'thread/start') return { thread: { id: `thread-${++this.threadNumber}` } };
     if (method === 'turn/start') {
       const id = `turn-${params.threadId}`;
@@ -44,7 +45,8 @@ test('agent validation prevents making the main agent writable or inactive', () 
   const result = validateAgent({ ...defaultAgents[0], access:'workspace-write',enabled:false });
   assert.equal(result.access,'read-only'); assert.equal(result.enabled,true);
   assert.throws(() => validateAgent({ ...defaultAgents[1], instructions:'' }));
-  assert.throws(() => validateSettings({ concurrency:100,maxDelegations:6,timeoutMinutes:15,tokenBudget:100000 }));
+  assert.throws(() => validateSettings({ concurrency:100,maxDelegations:6,timeoutMinutes:15,usagePercentLimit:5 }));
+  assert.throws(() => validateSettings({ concurrency:2,maxDelegations:6,timeoutMinutes:15,usagePercentLimit:0 }));
 });
 
 test('model-specific reasoning effort is saved only when supported', t => {
@@ -70,6 +72,75 @@ test('real event lifecycle yields completed report and counts usage once', async
   const thread = client.calls.find(item => item.method === 'thread/start').params;
   assert.equal(thread.sandbox,'read-only'); assert.equal(thread.config['features.shell_tool'],false);
   assert.equal(thread.dynamicTools[0].name,'agent_desk_run');
+});
+
+test('main AI receives measured budget facts without a completion guarantee', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.runs.unshift({ id:'earlier',projectId:'default',status:'interrupted',usage:{ totalTokens:312215 },limits:{ tokenBudget:250000 },tasks:[{},{}] });
+  const run = await hub.start({ projectId:'default',message:'토큰 예산을 확인하고 조사 계획을 세워줘' });
+  await settle(() => hub.contexts.size === 1);
+  const threadId = [...hub.contexts.keys()][0];
+  const main = client.calls.find(call => call.method === 'thread/start').params;
+  assert.match(main.developerInstructions,/완료를 보장하지 마세요/);
+  assert.match(main.developerInstructions,/5%p/);
+  assert.match(main.developerInstructions,/312215/);
+  assert.ok(main.dynamicTools.some(tool => tool.name === 'agent_desk_budget'));
+  await hub.serverRequest({ id:810,method:'item/tool/call',params:{ threadId,tool:'agent_desk_budget',arguments:{} } });
+  const facts = JSON.parse(client.responses.at(-1).result.contentItems[0].text);
+  assert.equal(facts.usagePercentLimit,5);
+  assert.equal(facts.baselineUsedPercent,10);
+  assert.equal(facts.consumedPercent,0);
+  assert.equal(facts.observedTokens,0);
+  assert.equal(facts.previousRuns[0].totalTokens,312215);
+  assert.equal(facts.previousRuns[0].budgetTokens,250000);
+  assert.match(facts.note,/환산할 수 없습니다/);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('simple budget adequacy questions get a factual answer without spending tokens', async t => {
+  const { hub,client,store } = fixture(t);
+  store.state.runs.unshift({ id:'earlier',projectId:'default',status:'interrupted',usage:{ totalTokens:312215 },limits:{ tokenBudget:250000 },tasks:[] });
+  const run = await hub.start({ projectId:'default',message:'250000 토큰이 적은거야?' });
+  assert.equal(run.status,'completed');
+  assert.equal(run.usage.totalTokens,0);
+  assert.match(run.answer,/5%p/);
+  assert.match(run.answer,/312,215토큰/);
+  assert.match(run.answer,/충분하다고 보장할 수 없습니다/);
+  assert.equal(client.calls.filter(call => call.method === 'thread/start').length,0);
+  const again = await hub.start({ projectId:'default',message:'토큰 예산이 충분해?' });
+  assert.match(again.answer,/312,215토큰/);
+});
+
+test('five-hour percentage warnings and cap use account usage delta, not token count', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.settings.usagePercentLimit = 5;
+  const run = await hub.start({ projectId:'default',message:'사용량 확인' });
+  await settle(() => hub.contexts.size === 1);
+  const report = async usedPercent => { client.quotaUsedPercent = usedPercent; await hub.refreshUsageLimits(true,true); };
+  await report(13.5); await report(14); await report(14.5);
+  assert.equal(run.events.filter(event => event.message.includes('70% 도달')).length,1);
+  assert.equal(run.events.filter(event => event.message.includes('90% 도달')).length,1);
+  await report(15.2);
+  await settle(() => !hub.active);
+  assert.equal(run.status,'interrupted');
+  assert.equal(run.accountUsage.consumedPercent,5.2);
+  assert.equal(run.usage.totalTokens,0);
+  assert.match(run.error,/5.2%p \/ 설정 5%p/);
+});
+
+test('missing or reset five-hour usage stops rather than running without a cap', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  client.rateLimits = {};
+  await assert.rejects(() => hub.start({ projectId:'default',message:'실행' }),/한도 사용률을 확인할 수 없어/);
+  assert.equal(store.state.runs.length,0);
+  client.rateLimits = null;
+  const run = await hub.start({ projectId:'default',message:'실행' });
+  await settle(() => hub.contexts.size === 1);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800000100 } } };
+  await hub.refreshUsageLimits(true,true);
+  await settle(() => !hub.active);
+  assert.equal(run.status,'interrupted');
+  assert.match(run.error,/5시간 한도 창이 갱신/);
 });
 
 test('prompt refinement runs first only when enabled and preserves the original request', async t => {
@@ -265,13 +336,26 @@ test('persisted in-flight runs are marked interrupted on restart', t => {
   assert.equal(reopened.state.runs[0].status,'interrupted'); assert.equal(reopened.state.runs[0].tasks[0].status,'interrupted');
 });
 
+test('legacy token budget migrates to a percentage cap without changing old run history', t => {
+  const { store } = fixture(t);
+  store.state.version = 3;
+  store.state.settings = { concurrency:2,maxDelegations:6,timeoutMinutes:15,tokenBudget:250000 };
+  store.state.runs.push({ id:'old',status:'completed',limits:{ tokenBudget:250000 },tasks:[] });
+  store.save();
+  const reopened = new Store(store.directory,process.cwd());
+  assert.equal(reopened.state.version,4);
+  assert.equal(reopened.state.settings.usagePercentLimit,5);
+  assert.equal('tokenBudget' in reopened.state.settings,false);
+  assert.equal(reopened.state.runs[0].limits.tokenBudget,250000);
+});
+
 test('legacy team gains the monitor and prompt refiner once', t => {
   const { store } = fixture(t);
   store.state.version = 1;
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,3);
+  assert.equal(migrated.state.version,4);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');

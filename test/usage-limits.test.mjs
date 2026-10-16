@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { normalizeRateLimits } from '../lib/usage-limits.mjs';
+import { normalizeRateLimits, primaryUsageSince } from '../lib/usage-limits.mjs';
 import { AgentHub } from '../lib/hub.mjs';
 
 test('Codex account windows show remaining percentage, not consumed percentage', () => {
@@ -14,8 +14,18 @@ test('Codex account windows show remaining percentage, not consumed percentage',
   assert.equal(result.status, 'available');
   assert.deepEqual(result.windows.map(window => window.remainingPercent), [8, 73]);
   assert.deepEqual(result.windows.map(window => window.windowDurationMins), [300, 10080]);
+  assert.deepEqual(result.windows.map(window => window.kind), ['primary', 'secondary']);
   assert.equal(result.windows[0].resetsAt, 1800000000);
   assert.equal(result.checkedAt, '2026-10-15T00:00:00.000Z');
+});
+
+test('per-request percentage points use the primary window and reject resets or missing data', () => {
+  const baseline = { kind:'primary', usedPercent:11, resetsAt:1800000000, windowDurationMins:300 };
+  const current = normalizeRateLimits({ rateLimits: { primary: { usedPercent:15.7, resetsAt:1800000000, windowDurationMins:300 }, secondary: { usedPercent:70 } } });
+  assert.deepEqual(primaryUsageSince(baseline,current), { status:'available', currentUsedPercent:15.7, consumedPercent:4.7, checkedAt:current.checkedAt });
+  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:1,resetsAt:1800000100,windowDurationMins:300 } } })).status,'reset');
+  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:12,resetsAt:1800000000,windowDurationMins:60 } } })).status,'reset');
+  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ secondary:{ usedPercent:80 } } })).status,'unavailable');
 });
 
 test('legacy rate limit payload is supported and missing values are never shown as zero', () => {

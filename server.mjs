@@ -20,7 +20,7 @@ const origin = `http://${host}`;
 const json = (response, status, data) => { response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(data)); };
 const sendState = response => response.write(`event: state\ndata: ${JSON.stringify(hub.snapshot())}\n\n`);
 hub.on('state', () => { for (const response of streams) sendState(response); });
-const usageTimer = setInterval(() => hub.refreshUsageLimits().catch(() => {}), 60_000);
+const usageTimer = setInterval(() => hub.refreshUsageLimits(!!hub.active).catch(() => {}), 5_000);
 usageTimer.unref();
 
 async function body(request) {

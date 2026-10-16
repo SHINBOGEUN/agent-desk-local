@@ -105,12 +105,29 @@ function render() {
   ];
   $('#stats').innerHTML = stats.map(([title,value,unit,note,i]) => `<article class="stat"><div class="stat-top">${title}${icon(i)}</div><div class="stat-number">${value}<span>${unit}</span></div><div class="stat-note">${note}</div></article>`).join('');
   renderUsageLimits();
+  renderBudgetStatus();
   $('#team-list').innerHTML = state.agents.map(agent => { const rt = runtime(agent.id); return `<button class="team-card" data-edit-agent="${esc(agent.id)}">${avatar(agent)}<div class="agent-details"><div class="agent-name">${esc(agent.name)}</div><div class="agent-role" title="${esc(rt.task || agent.role)}">${esc(rt.task || agent.role)}</div></div>${badge(rt.status)}</button>`; }).join('');
   renderFlow();
   renderChat(); renderActivity(); renderApprovals();
   if (view === 'agents') renderAgents(); if (view === 'history') renderHistory(); if (view === 'projects') renderProjects();
   if (view === 'settings' && !settingsPopulated) { for (const [key,value] of Object.entries(state.settings)) if ($('#settings-form').elements[key]) $('#settings-form').elements[key].value = value; settingsPopulated = true; }
   if ($('#detail').open) renderDetail();
+}
+
+function renderBudgetStatus() {
+  const latest = projectRuns()[0];
+  const running = latest && ['running', 'stopping'].includes(latest.status);
+  const limit = running ? latest.limits?.usagePercentLimit : state.settings.usagePercentLimit;
+  const consumed = latest?.accountUsage?.consumedPercent;
+  const measured = Number.isFinite(consumed);
+  const measurementLimit = latest?.limits?.usagePercentLimit || limit;
+  const percentage = measured && measurementLimit ? Math.round(consumed / measurementLimit * 100) : 0;
+  const tone = measured && percentage >= 90 ? 'critical' : measured && percentage >= 70 ? 'warning' : '';
+  const label = running ? `이번 요청 5시간 한도 ${measured ? `${format(consumed)}%p` : '측정 중'} / 제한 ${format(limit)}%p` : `다음 요청 제한: 5시간 한도의 ${format(limit)}%p`;
+  const last = !running && latest ? latest.accountUsage ? `최근 실행 ${format(consumed)}%p / ${format(latest.limits?.usagePercentLimit)}%p · ${labels[latest.status] || latest.status}` : '최근 실행의 사용률 기록 없음' : '';
+  const selected = project();
+  $('#budget-status').className = `budget-status ${tone}`;
+  $('#budget-status').innerHTML = `<div class="budget-status-row"><strong>${esc(label)}</strong><span>${esc(last)}</span></div>${running && measured ? `<div class="budget-status-track" role="progressbar" aria-label="이번 요청 5시간 한도 사용률 제한 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, percentage)}"><i style="width:${Math.min(100, percentage)}%"></i></div>` : ''}<small>선택 프로젝트: ${esc(selected?.path || '')} · ${selected?.allowWrites ? '파일 수정 허용' : '읽기 전용'} · 계정 전체의 5시간 사용률 변화이므로 다른 Codex 작업도 포함될 수 있습니다.</small>`;
 }
 
 function renderUsageLimits() {
