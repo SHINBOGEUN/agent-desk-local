@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { Store, validateAgent, validateSettings, defaultAgents } from '../lib/store.mjs';
 import { AgentHub } from '../lib/hub.mjs';
@@ -49,6 +49,42 @@ test('agent validation prevents making the main agent writable or inactive', () 
   assert.throws(() => validateSettings({ concurrency:2,maxDelegations:6,timeoutMinutes:15,usagePercentLimit:0 }));
 });
 
+test('skills persist as standard Codex SKILL.md manifests and are invoked as assigned skill inputs', async t => {
+  const { hub,client,store } = fixture(t);
+  const agent = store.state.agents.find(item => item.id === 'worker');
+  store.state.skills = [];
+  const instructions = '먼저 영향을 받는 API 계약을 확인하고 관련 검사 결과를 기록하세요.';
+  const skill = hub.saveSkill({ name:'API 계약 확인', description:'API 변경과 관련된 계약을 확인할 때 사용합니다.', instructions, agentIds:[agent.id], enabled:true });
+  const manifestPath = path.join(store.directory,'skills',skill.id,'SKILL.md');
+  const manifest = readFileSync(manifestPath,'utf8');
+  assert.match(manifest,new RegExp(`^---\\nname: "agent-desk-${skill.id}"\\ndescription:`));
+  assert.match(manifest,new RegExp(instructions));
+  const active = { cancelled:false, project:{ path:process.cwd(),allowWrites:false,autoApproveCommands:false }, run:{ events:[],tasks:[],usage:{ totalTokens:0,inputTokens:0,outputTokens:0,cachedInputTokens:0 } } };
+  await hub.turn(active,agent,{ title:'API 조사' },'담당자 지침','API 계약을 확인하세요.',false,[],[skill]);
+  const turn = client.calls.find(call => call.method === 'turn/start').params;
+  assert.match(turn.input[0].text,new RegExp(`\\$agent-desk-${skill.id}`));
+  assert.deepEqual(turn.input.at(-1),{ type:'skill',name:`agent-desk-${skill.id}`,path:manifestPath });
+  const thread = client.calls.find(call => call.method === 'thread/start').params;
+  assert.doesNotMatch(thread.developerInstructions,new RegExp(instructions));
+  hub.deleteSkill(skill.id);
+  assert.equal(existsSync(path.dirname(manifestPath)),false);
+});
+
+test('main selects only task-relevant skills that are assigned to its chosen agent', async t => {
+  const { hub,client,store } = fixture(t,'hold-main');
+  store.state.skills = [];
+  const worker = store.state.agents.find(item => item.id === 'worker');
+  const skill = hub.saveSkill({ name:'API 계약 확인',description:'API 변경 계약을 확인할 때 사용합니다.',instructions:'요청·응답 형식과 오류 동작을 확인하세요.',agentIds:[worker.id],enabled:true });
+  const run = await hub.start({ projectId:'default',message:'작업을 나누어 처리해 주세요.' });
+  await settle(() => hub.contexts.size === 1);
+  const main = client.calls.find(call => call.method === 'thread/start').params;
+  assert.match(main.dynamicTools[0].description,new RegExp(skill.id));
+  await hub.serverRequest({ id:811,method:'item/tool/call',params:{ threadId:[...hub.contexts.keys()][0],tool:'agent_desk_run',arguments:{ tasks:[{ agentId:worker.id,title:'API 확인',task:'계약을 확인하세요.',readOnly:true,skillIds:[skill.id] }] } } });
+  const workerTurn = client.calls.filter(call => call.method === 'turn/start').at(-1).params;
+  assert.equal(workerTurn.input.at(-1).name,`agent-desk-${skill.id}`);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
 test('model-specific reasoning effort is saved only when supported', t => {
   const { hub } = fixture(t);
   hub.models = [
@@ -94,6 +130,26 @@ test('main AI receives measured budget facts without a completion guarantee', as
   assert.equal(facts.previousRuns[0].totalTokens,312215);
   assert.equal(facts.previousRuns[0].budgetTokens,250000);
   assert.match(facts.note,/환산할 수 없습니다/);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('main AI receives the latest needs-review request, checker reason, and team report on a short follow-up', async t => {
+  const { hub,client,store } = fixture(t,'hold-main');
+  store.state.runs.unshift({
+    id:'reviewed-run',projectId:'default',message:'프로젝트의 로그인 흐름을 수정하고 테스트해줘',answer:'로그인 변경은 적용했지만 실제 브라우저 검증이 남았습니다.',status:'needs_review',
+    endReason:{ kind:'error',message:'상위 요청이 종료되었습니다.' },
+    qualityGate:{ required:true,status:'needs_review',reason:'마지막 파일 변경 이후 체커의 검증 보고가 없습니다.' },
+    tasks:[{ id:'login-writer',agentId:'frontend',agentName:'프론트엔드 에이전트',title:'로그인 흐름 수정',status:'completed',writable:true,output:'로그인 리다이렉트 처리를 수정했습니다. 관련 파일과 단위 테스트 결과를 기록했습니다.' }],
+  });
+  const run = await hub.start({ projectId:'default',message:'다시 해줘' });
+  await settle(() => hub.contexts.size === 1);
+  const main = client.calls.find(call => call.method === 'thread/start').params;
+  assert.match(main.developerInstructions,/완료되지 않은 요청/);
+  assert.match(main.developerInstructions,/reviewed-run · 검토 필요/);
+  assert.match(main.developerInstructions,/로그인 흐름을 수정하고 테스트해줘/);
+  assert.match(main.developerInstructions,/마지막 파일 변경 이후 체커의 검증 보고가 없습니다/);
+  assert.match(main.developerInstructions,/로그인 리다이렉트 처리를 수정했습니다/);
+  assert.doesNotMatch(main.developerInstructions,/상위 요청이 종료되었습니다/);
   await hub.cancel(run.id); await settle(() => !hub.active);
 });
 
@@ -160,12 +216,68 @@ test('resume cannot reset a reached limit in the same window and can start after
   client.quotaUsedPercent = 15.2;
   await assert.rejects(() => hub.resume('previous'),/이전 실행을 포함해/);
   assert.equal(store.state.runs.length,1);
-  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800000100 } } };
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:15.2,windowDurationMins:300,resetsAt:1800000001 } } };
+  await assert.rejects(() => hub.resume('previous'),/이전 실행을 포함해/);
+  assert.equal(store.state.runs.length,1);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800018000 } } };
   const resumed = await hub.resume('previous');
   await settle(() => hub.contexts.size === 1);
   assert.equal(resumed.accountUsage.baselineUsedPercent,1);
   assert.equal(resumed.accountUsage.consumedPercent,0);
   await hub.cancel(resumed.id); await settle(() => !hub.active);
+});
+
+test('a usage-limit run can add 5 percentage points without resetting its consumed usage or default', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.settings.usagePercentLimit = 5;
+  store.state.runs.unshift({ id:'limited',projectId:'default',message:'계속 작업',status:'interrupted',endReason:{kind:'usage_limit'},limits:{usagePercentLimit:5},accountUsage:{baselineUsedPercent:10,currentUsedPercent:15.2,consumedPercent:5.2,windowResetsAt:1800000000},tasks:[],usage:{totalTokens:0} });
+  client.quotaUsedPercent = 15.2;
+  await assert.rejects(() => hub.resume('limited'),/이전 실행을 포함해/);
+  const resumed = await hub.resume('limited',5);
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(resumed.limits.usagePercentLimit,10);
+  assert.equal(resumed.accountUsage.baselineUsedPercent,10);
+  assert.equal(resumed.accountUsage.consumedPercent,5.2);
+  assert.equal(store.state.settings.usagePercentLimit,5);
+  client.quotaUsedPercent = 20.1;
+  await hub.refreshUsageLimits(true,true);
+  await settle(() => !hub.active);
+  assert.equal(resumed.endReason.kind,'usage_limit');
+  assert.equal(resumed.accountUsage.consumedPercent,10.1);
+  const secondResume = await hub.resume(resumed.id,5);
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(secondResume.limits.usagePercentLimit,15);
+  assert.equal(secondResume.accountUsage.baselineUsedPercent,10);
+  await hub.cancel(secondResume.id); await settle(() => !hub.active);
+});
+
+test('a later account increase explains why five points are insufficient and accepts a larger explicit increment', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.settings.usagePercentLimit = 20;
+  store.state.runs.unshift({ id:'limited',projectId:'default',message:'계속 작업',status:'interrupted',endReason:{kind:'usage_limit'},limits:{usagePercentLimit:20},accountUsage:{baselineUsedPercent:0,currentUsedPercent:20,consumedPercent:20,windowResetsAt:1800000000},tasks:[],usage:{totalTokens:0} });
+  client.quotaUsedPercent = 33;
+  await assert.rejects(() => hub.resume('limited',5),/33%p.*25%p.*\+20%p/);
+  assert.equal(store.state.runs.length,1);
+  const resumed = await hub.resume('limited',20);
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(resumed.limits.usagePercentLimit,40);
+  assert.equal(resumed.accountUsage.consumedPercent,33);
+  assert.equal(store.state.settings.usagePercentLimit,20);
+  await hub.cancel(resumed.id); await settle(() => !hub.active);
+});
+
+test('quota extension requires a limited run, same window, and five percent account headroom', async t => {
+  const { hub,client,store } = fixture(t,'hold');
+  store.state.runs.unshift({ id:'limited',projectId:'default',message:'계속 작업',status:'interrupted',endReason:{kind:'usage_limit'},limits:{usagePercentLimit:5},accountUsage:{baselineUsedPercent:90,currentUsedPercent:95.2,consumedPercent:5.2,windowResetsAt:1800000000},tasks:[],usage:{totalTokens:0} });
+  client.quotaUsedPercent = 95.2;
+  await assert.rejects(() => hub.resume('limited',5),/잔여량/);
+  await assert.rejects(() => hub.resume('limited',7),/5%p 단위/);
+  store.state.runs[0].endReason.kind = 'manual';
+  await assert.rejects(() => hub.resume('limited',5),/사용률 제한으로 중단된/);
+  store.state.runs[0].endReason.kind = 'usage_limit';
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800018000 } } };
+  await assert.rejects(() => hub.resume('limited',5),/새 5시간 창/);
+  assert.equal(store.state.runs.length,1);
 });
 
 test('legacy resumed runs use their measurement time to keep a same-window cap', async t => {
@@ -176,7 +288,7 @@ test('legacy resumed runs use their measurement time to keep a same-window cap',
   assert.equal(store.state.runs.length,1);
 });
 
-test('missing or reset five-hour usage stops rather than running without a cap', async t => {
+test('missing five-hour usage stops, while a quota-window reset rebases and keeps the run active', async t => {
   const { hub,client,store } = fixture(t,'hold');
   client.rateLimits = {};
   await assert.rejects(() => hub.start({ projectId:'default',message:'실행' }),/한도 사용률을 확인할 수 없어/);
@@ -184,11 +296,25 @@ test('missing or reset five-hour usage stops rather than running without a cap',
   client.rateLimits = null;
   const run = await hub.start({ projectId:'default',message:'실행' });
   await settle(() => hub.contexts.size === 1);
-  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800000100 } } };
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:11,windowDurationMins:300,resetsAt:1800000001 } } };
+  await hub.refreshUsageLimits(true,true);
+  assert.equal(run.accountUsage.baselineUsedPercent,10);
+  assert.equal(run.accountUsage.consumedPercent,1);
+  assert.equal(run.events.some(event => event.message.includes('새 창 기준')),false);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:1,windowDurationMins:300,resetsAt:1800018000 } } };
+  await hub.refreshUsageLimits(true,true);
+  assert.equal(hub.active.run.id,run.id);
+  assert.equal(run.status,'running');
+  assert.equal(run.accountUsage.baselineUsedPercent,0);
+  assert.equal(run.accountUsage.consumedPercent,1);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:3,windowDurationMins:300,resetsAt:1800018001 } } };
+  await hub.refreshUsageLimits(true,true);
+  assert.equal(run.accountUsage.consumedPercent,3);
+  client.rateLimits = { rateLimits:{ primary:{ usedPercent:6,windowDurationMins:300,resetsAt:1800018002 } } };
   await hub.refreshUsageLimits(true,true);
   await settle(() => !hub.active);
-  assert.equal(run.status,'interrupted');
-  assert.match(run.error,/5시간 한도 창이 갱신/);
+  assert.equal(run.endReason.kind,'usage_limit');
+  assert.equal(run.accountUsage.consumedPercent,6);
 });
 
 test('prompt refinement runs first only when enabled and preserves the original request', async t => {
@@ -236,6 +362,24 @@ test('stopping during refinement does not start the main AI', async t => {
   assert.equal(client.calls.filter(call => call.method === 'thread/start').length,1);
 });
 
+test('image-only request reaches the main turn and only explicitly selected teammate', async t => {
+  const { hub,client } = fixture(t,'hold-main');
+  const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+b9d0AAAAASUVORK5CYII=';
+  const run = await hub.start({ projectId:'default',message:'',images:[pixel],refinePrompt:true });
+  await settle(() => hub.contexts.size === 1);
+  assert.equal(run.images.length,1);
+  assert.equal(run.promptRefinement.enabled,false);
+  assert.equal(run.images[0].mimeType,'image/png');
+  const mainTurn = client.calls.find(call => call.method === 'turn/start').params;
+  assert.equal(mainTurn.input[1].type,'localImage');
+  assert.ok(mainTurn.input[1].path.endsWith(`${run.images[0].id}.png`));
+  const mainThread = [...hub.contexts.keys()][0];
+  await hub.serverRequest({ id:811,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'researcher',title:'이미지 확인',task:'첨부 이미지를 확인해 주세요.',includeImages:true }] } } });
+  const teammateTurn = client.calls.filter(call => call.method === 'turn/start').at(-1).params;
+  assert.equal(teammateTurn.input[1].path,mainTurn.input[1].path);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
 test('cancellation interrupts every active context and returns agents to idle', async t => {
   const { hub,client } = fixture(t,'hold');
   const run = await hub.start({ projectId:'default',message:'긴 작업' });
@@ -256,6 +400,48 @@ test('worker write access requires both agent and project permission', async t =
     await hub.turn(active,agent,task,'test','test');
     assert.equal(client.calls.filter(item => item.method === 'thread/start').at(-1).params.sandbox,allowWrites ? 'workspace-write' : 'read-only');
   }
+});
+
+test('project command automation persists and keeps read-only agents behind automatic review', async t => {
+  const { hub,client,store } = fixture(t);
+  const project = hub.saveProject({ id:'default',name:'Test project',path:process.cwd(),allowWrites:true,autoApproveCommands:true });
+  assert.equal(project.autoApproveCommands,true);
+  const active = { run:{ tasks:[],events:[],usage:{ totalTokens:0 },limits:{ tokenBudget:100000 } },project,cancelled:false };
+  const writer = defaultAgents.find(agent => agent.id === 'worker');
+  await hub.turn(active,writer,hub.newTask(active.run,writer,'구현'),'test','test');
+  const writableParams = client.calls.filter(item => item.method === 'thread/start').at(-1).params;
+  assert.equal(writableParams.sandbox,'workspace-write');
+  assert.equal(writableParams.approvalPolicy,'never');
+  const verifier = defaultAgents.find(agent => agent.id === 'verifier');
+  await hub.turn(active,verifier,hub.newTask(active.run,verifier,'검증'),'test','test');
+  const verifierParams = client.calls.filter(item => item.method === 'thread/start').at(-1).params;
+  assert.equal(verifierParams.sandbox,'read-only');
+  assert.equal(verifierParams.approvalPolicy,'on-request');
+  assert.equal(verifierParams.approvalsReviewer,'auto_review');
+  assert.equal(store.state.projects[0].autoApproveCommands,true);
+});
+
+test('read-only operational delegation skips change verification for a writable agent', async t => {
+  const { hub,client,store } = fixture(t,'hold-main');
+  store.state.projects[0].allowWrites = true;
+  const run = await hub.start({ projectId:'default',message:'개발 서버를 실행하고 주소를 확인해 줘' });
+  await settle(() => hub.contexts.size === 1);
+  const mainThread = [...hub.contexts.keys()][0];
+  const mainThreadStart = client.calls.find(call => call.method === 'thread/start').params;
+  assert.match(mainThreadStart.developerInstructions,/readOnly: true를 지정하고 체커를 별도로 호출하지 마세요/);
+  assert.equal(mainThreadStart.dynamicTools[0].inputSchema.properties.tasks.items.properties.readOnly.type,'boolean');
+  await hub.serverRequest({ id:801,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'서버 실행 확인',task:'서버 상태만 확인',readOnly:true }] } } });
+  const operational = run.tasks.find(task => task.agentId === 'worker');
+  assert.equal(operational.status,'completed');
+  assert.equal(operational.readOnly,true);
+  assert.equal(operational.writable,false);
+  assert.equal(client.calls.filter(call => call.method === 'thread/start').at(-1).params.sandbox,'read-only');
+  assert.equal(run.qualityGate.required,false);
+  assert.equal(run.tasks.some(task => task.agentId === 'verifier'),false);
+  await hub.serverRequest({ id:802,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'설정 변경',task:'설정을 수정' }] } } });
+  assert.equal(run.qualityGate.required,true);
+  assert.equal(client.calls.filter(call => call.method === 'thread/start').at(-1).params.sandbox,'workspace-write');
+  await hub.cancel(run.id); await settle(() => !hub.active);
 });
 
 test('delegation cap rejects a batch before any child starts', async t => {
@@ -371,6 +557,10 @@ test('file changes require a PASS from a verifier after the last writer', t => {
   base.tasks[1].output = '[검증 결과: FAIL]\n테스트 실패';
   hub.evaluateQualityGate(base);
   assert.equal(base.qualityGate.status,'failed');
+  base.tasks[1].output = '[검증 결과: NOT_VERIFIED]\n실기기 동작 미확인';
+  hub.evaluateQualityGate(base);
+  assert.equal(base.qualityGate.status,'needs_review');
+  assert.match(base.qualityGate.reason,/실제 동작을 확인하지 못해/);
   base.tasks[1].consultation = true;
   base.tasks[1].output = '[검증 결과: PASS]\n상담 답변';
   hub.evaluateQualityGate(base);
@@ -384,6 +574,15 @@ test('persisted in-flight runs are marked interrupted on restart', t => {
   assert.equal(reopened.state.runs[0].status,'interrupted'); assert.equal(reopened.state.runs[0].tasks[0].status,'interrupted');
 });
 
+test('saved NOT_VERIFIED history keeps its review status and gains the correct reason', t => {
+  const { store } = fixture(t);
+  store.state.runs.unshift({ id:'review',status:'needs_review',qualityGate:{ required:true,status:'needs_review',verifierTaskId:'check',reason:'체커 보고에 표준 판정이 없어 검토가 필요합니다.' },tasks:[{ id:'check',agentId:'verifier',output:'[검증 결과: NOT_VERIFIED]\n실기기 미확인' }] });
+  store.save();
+  const reopened = new Store(store.directory,process.cwd());
+  assert.equal(reopened.state.runs[0].status,'needs_review');
+  assert.match(reopened.state.runs[0].qualityGate.reason,/실제 동작을 확인하지 못해/);
+});
+
 test('legacy token budget migrates to a percentage cap without changing old run history', t => {
   const { store } = fixture(t);
   store.state.version = 3;
@@ -391,7 +590,7 @@ test('legacy token budget migrates to a percentage cap without changing old run 
   store.state.runs.push({ id:'old',status:'completed',limits:{ tokenBudget:250000 },tasks:[] });
   store.save();
   const reopened = new Store(store.directory,process.cwd());
-  assert.equal(reopened.state.version,4);
+  assert.equal(reopened.state.version,5);
   assert.equal(reopened.state.settings.usagePercentLimit,5);
   assert.equal('tokenBudget' in reopened.state.settings,false);
   assert.equal(reopened.state.runs[0].limits.tokenBudget,250000);
@@ -403,7 +602,7 @@ test('legacy team gains the monitor and prompt refiner once', t => {
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,4);
+  assert.equal(migrated.state.version,5);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');

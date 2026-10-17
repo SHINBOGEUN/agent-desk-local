@@ -19,11 +19,12 @@ test('Codex account windows show remaining percentage, not consumed percentage',
   assert.equal(result.checkedAt, '2026-10-15T00:00:00.000Z');
 });
 
-test('per-request percentage points use the primary window and reject resets or missing data', () => {
+test('per-request percentage points tolerate reset-time jitter but detect a real rollover', () => {
   const baseline = { kind:'primary', usedPercent:11, resetsAt:1800000000, windowDurationMins:300 };
   const current = normalizeRateLimits({ rateLimits: { primary: { usedPercent:15.7, resetsAt:1800000000, windowDurationMins:300 }, secondary: { usedPercent:70 } } });
   assert.deepEqual(primaryUsageSince(baseline,current), { status:'available', currentUsedPercent:15.7, consumedPercent:4.7, checkedAt:current.checkedAt });
-  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:1,resetsAt:1800000100,windowDurationMins:300 } } })).status,'reset');
+  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:15.7,resetsAt:1800000001,windowDurationMins:300 } } })).status,'available');
+  assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:1,resetsAt:1800018000,windowDurationMins:300 } } })).status,'reset');
   assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ primary:{ usedPercent:12,resetsAt:1800000000,windowDurationMins:60 } } })).status,'reset');
   assert.equal(primaryUsageSince(baseline,normalizeRateLimits({ rateLimits:{ secondary:{ usedPercent:80 } } })).status,'unavailable');
 });
