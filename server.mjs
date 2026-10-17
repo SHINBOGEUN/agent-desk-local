@@ -118,6 +118,7 @@ const server = http.createServer(async (request, response) => {
       }
       if (url.pathname === '/api/settings') { hub.saveSettings(input); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/approvals') { hub.answerApproval(input.id, input); return json(response, 200, { ok: true }); }
+      if (url.pathname === '/api/approvals/allow-all') return json(response, 200, hub.allowAllApprovalsForActiveRun(input.enabled));
       if (url.pathname === '/api/reconnect') { hub.requireIdle(); await hub.connect(); return json(response, 200, hub.connection); }
       if (url.pathname === '/api/usage-limits/refresh') return json(response, 200, await hub.refreshUsageLimits(true, true));
       if (url.pathname === '/api/shutdown') { json(response, 200, { ok: true }); setTimeout(() => shutdown(), 50); return; }

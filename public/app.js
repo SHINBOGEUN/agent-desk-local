@@ -385,10 +385,12 @@ function renderActivity() {
 }
 
 function renderApprovals() {
-  const signature = JSON.stringify(state.approvals);
+  const signature = JSON.stringify([state.approvals,state.activeRunId,state.allowAllApprovalsForRun]);
   if (signature === lastApprovalSignature) return;
   lastApprovalSignature = signature;
-  $('#approval-list').innerHTML = state.approvals.map(approval => {
+  const canBulkApprove = state.approvals.filter(approval => ['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(approval.method)).length;
+  const bulkControls = state.activeRunId && (canBulkApprove || state.allowAllApprovalsForRun) ? `<section class="approval-bulk"><div><strong>${state.allowAllApprovalsForRun ? '이번 요청 전체 허용 켜짐' : '팀원 승인 한 번에 처리'}</strong><small>현재 대기 중인 실행 승인과 이번 요청에서 이어지는 실행 승인을 자동 허용합니다. 질문 답변과 외부 앱 요청은 포함하지 않으며 다음 요청에는 적용되지 않습니다.</small></div><button class="button ${state.allowAllApprovalsForRun ? 'secondary' : 'primary'}" type="button" data-allow-all-approvals="${!state.allowAllApprovalsForRun}">${state.allowAllApprovalsForRun ? '전체 허용 끄기' : `모두 허용 (${canBulkApprove}건 대기)`}</button></section>` : '';
+  $('#approval-list').innerHTML = bulkControls + state.approvals.map(approval => {
     const p = approval.params;
     const question = approval.method.includes('requestUserInput');
     const unsupported = approval.method === 'mcpServer/elicitation/request';
@@ -464,7 +466,7 @@ const rolePresets = {
   backend: { name:'백엔드 에이전트', role:'백엔드 · API', description:'서버 로직, API, 인증과 연동 코드를 구현합니다.', access:'workspace-write', color:'blue', instructions:'백엔드 구현을 담당합니다. 요청된 API와 서버 로직 범위에 집중하고, 기존 구조와 프로젝트 지침을 먼저 확인하세요. 인증·권한·입력 검증·오류 처리를 살펴보세요. 필요한 파일만 수정하고 비밀키나 실제 자격 증명을 출력하지 마세요. 실행한 테스트와 변경 파일, 미검증 항목을 근거와 함께 보고하세요.' },
   frontend: { name:'프론트엔드 에이전트', role:'프론트엔드 · UI', description:'화면, 상호작용, 반응형 동작을 구현합니다.', access:'workspace-write', color:'blue', instructions:'프론트엔드 구현을 담당합니다. 요청된 화면과 상호작용만 작업하고 기존 컴포넌트·디자인 규칙을 따르세요. 로딩·오류·빈 상태와 키보드 접근성, 작은 화면을 확인하세요. UI 버그는 실제 실행 화면에서 재현하고, 수정 뒤 같은 주소·화면 크기에서 낮은 값과 높은 값 등 문제가 드러나는 상태를 눈으로 확인하세요. CSP·캐시·기존 서버처럼 코드와 화면이 달라지는 원인도 점검하고, 확인하지 못한 화면은 미검증으로 보고하세요. 필요한 파일만 수정하고 실행한 빌드나 테스트, 변경 파일과 미검증 항목을 보고하세요.' },
   design: { name:'웹디자인 에이전트', role:'웹디자인 · UX', description:'정보 구조, 시각적 일관성과 사용 흐름을 개선합니다.', access:'workspace-write', color:'violet', instructions:'웹디자인과 UX를 담당합니다. 먼저 현재 화면과 디자인 시스템을 살펴보고 사용자의 목표, 정보 우선순위, 반응형 동작을 정리하세요. 프로젝트에 맞는 컴포넌트와 색상·간격 규칙을 재사용하고 과도한 장식을 피하세요. 수정한 화면과 확인한 뷰포트, 남은 디자인 판단을 보고하세요.' },
-  server: { name:'서버 · 인프라 에이전트', role:'서버 · 인프라', description:'실행 환경, 배포 설정, 컨테이너와 운영 구성을 다룹니다.', access:'workspace-write', color:'amber', instructions:'서버와 인프라 설정을 담당합니다. 요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요. 파괴적인 명령, 외부 배포, 실제 인프라 변경은 실행하지 말고 필요한 명령을 제안하세요. 비밀값을 읽거나 출력하지 말고 샘플 설정은 안전한 자리표시자를 사용하세요. 설정 검사 결과와 운영상 위험, 미검증 항목을 보고하세요.' },
+  server: { name:'서버 · 인프라 에이전트', role:'서버 · 인프라', description:'실행 환경, 배포 설정, 컨테이너와 운영 구성을 다룹니다.', access:'workspace-write', color:'amber', instructions:'서버와 인프라 설정을 담당합니다. 요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요. 파괴적인 명령과 외부 배포는 사용자가 명시적으로 요청하지 않으면 실행하지 마세요. 사용자가 명시적으로 요청한 로컬 서비스 시작·재시작은 수행하되, 지정한 IP·호스트·포트의 실제 상태 응답을 확인하기 전에는 성공이라고 보고하지 마세요. EPERM/EACCES/권한 거부가 발생하면 같은 명령을 반복하거나 권한·샌드박스를 바꾸지 말고 멈춰서 차단된 경로와 확인된 결과를 보고하세요. EPERM/EACCES만으로 OS 권한, 샌드박스 정책, 파일 잠금 중 무엇이 원인인지 단정하지 마세요. 재확인 요청에는 과거 보고를 근거로 쓰지 말고 요청 주소를 다시 검사하세요. 오래 실행하는 서비스는 작업 명령이 끝난 뒤와 잠시 기다린 뒤에도 프로세스 및 요청 주소가 살아 있는지 확인하세요. 일시 확인만 했으면 지속 실행 여부는 확인되지 않았다고 보고하세요. 비밀값을 읽거나 출력하지 말고 샘플 설정은 안전한 자리표시자를 사용하세요. 설정 검사 결과와 운영상 위험, 미검증 항목을 보고하세요.' },
   database: { name:'DB 에이전트', role:'데이터베이스 · 스키마', description:'데이터 모델, 쿼리, 마이그레이션과 무결성을 다룹니다.', access:'workspace-write', color:'amber', instructions:'데이터베이스 구조와 쿼리를 담당합니다. 기존 스키마와 데이터 접근 방식을 먼저 확인하고 요청된 범위만 수정하세요. 마이그레이션은 되돌릴 수 있는지와 기존 데이터 호환성을 점검하고, 실제 데이터베이스에 접속하거나 데이터를 변경하지 마세요. 스키마 검사·테스트 결과, 영향 범위와 미검증 항목을 보고하세요.' },
   qa: { name:'QA 에이전트', role:'QA · 테스트', description:'요구사항을 테스트 시나리오로 바꾸고 동작을 확인합니다.', access:'read-only', color:'violet', instructions:'QA와 테스트 검증을 담당합니다. 사용자 요구사항을 확인 가능한 시나리오로 나누고 기존 테스트를 실행하세요. UI·서비스 버그는 실제 사용 중인 주소와 버전에서 재현 조건을 다시 확인하세요. 표시 값뿐 아니라 눈에 보이는 결과를 낮은 값·중간 값·제한 근처 상태에서 점검하고, 미확인 상태는 통과로 기록하지 마세요. 실패를 재현하는 단계와 실제 결과를 기록하며, 테스트가 없는 부분은 검증되지 않았다고 분명히 적으세요. 파일은 수정하지 말고 명령·통과/실패 결과·재현 근거를 보고하세요.' },
   security: { name:'보안 리뷰 에이전트', role:'보안 · 권한 검토', description:'권한, 비밀정보 노출, 입력 검증과 위험한 변경을 점검합니다.', access:'read-only', color:'violet', instructions:'독립적인 보안 리뷰를 담당합니다. 변경된 부분의 권한 검사, 입력 검증, 비밀정보 노출, 위험한 명령과 의존성을 살펴보세요. 비밀값을 열거나 결과에 복사하지 마세요. 확인된 문제만 심각도와 파일 위치, 재현 근거를 붙여 보고하고 파일은 수정하지 마세요.' },
@@ -539,8 +541,8 @@ document.addEventListener('click', async event => {
   if (button.dataset.editProject) openEditor('project',button.dataset.editProject);
   if (button.dataset.editSkill) openSkillEditor(button.dataset.editSkill);
   if (button.dataset.project) { selectProject(button.dataset.project); changeView('overview'); }
-  if (button.hasAttribute('data-monitor-request')) { changeView('overview'); $('#message').value = monitoringPrompt; $('#message').focus(); }
-  if (button.dataset.prompt) { changeView('overview'); $('#message').value = button.dataset.prompt; $('#message').focus(); }
+  if (button.hasAttribute('data-monitor-request')) { changeView('overview'); $('#message').value = monitoringPrompt; resizeMessageInput(); $('#message').focus(); }
+  if (button.dataset.prompt) { changeView('overview'); $('#message').value = button.dataset.prompt; resizeMessageInput(); $('#message').focus(); }
   if (button.dataset.detail) { selectedRunId = button.dataset.detail; renderDetail(); $('#detail').showModal(); }
   if (button.dataset.resume) {
     button.disabled = true;
@@ -561,6 +563,14 @@ document.addEventListener('click', async event => {
   }
   if (button.dataset.decline) { try { await api('approvals',{ id:button.dataset.decline, allow:false }); } catch(error) { toast(error.message,true); } }
   if (button.dataset.allowSession) { try { await api('approvals',{ id:button.dataset.allowSession, allow:true, scope:'session' }); toast('현재 팀원 실행에서 허용했습니다.'); } catch(error) { toast(error.message,true); } }
+  if (button.dataset.allowAllApprovals) {
+    const enabled = button.dataset.allowAllApprovals === 'true';
+    button.disabled = true;
+    try {
+      const result = await api('approvals/allow-all',{ enabled });
+      toast(enabled ? `이번 요청의 대기 중인 실행 승인 ${result.approved}건을 처리했고, 이어지는 실행 승인도 자동 허용합니다.` : '이후 실행 승인부터 직접 확인합니다. 이미 허용한 작업은 취소되지 않습니다.');
+    } catch(error) { toast(error.message,true); button.disabled = false; }
+  }
 });
 $('#project-select').addEventListener('change',event => selectProject(event.target.value));
 $('#project-permission').addEventListener('click',() => openEditor('project',selectedProject));
@@ -571,6 +581,15 @@ for (const selector of ['#close-editor','#cancel-editor']) $(selector).addEventL
 for (const selector of ['#close-skill-editor','#cancel-skill-editor']) $(selector).addEventListener('click',() => $('#skill-editor').close());
 $('#close-detail').addEventListener('click',() => $('#detail').close());
 $('#history-filter').addEventListener('change',renderHistory);
+const resizeMessageInput = () => {
+  const input = $('#message');
+  input.style.height = 'auto';
+  const maxHeight = 360;
+  input.style.height = `${Math.min(Math.max(input.scrollHeight, 136), maxHeight)}px`;
+  input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
+};
+$('#message').addEventListener('input', resizeMessageInput);
+resizeMessageInput();
 $('#message').addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!state?.activeRunId) $('#chat-form').requestSubmit(); } });
 $('#message').addEventListener('paste', async event => {
   const files = [...(event.clipboardData?.items || [])].filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
@@ -591,7 +610,7 @@ $('#chat-form').addEventListener('submit',async event => {
   if (!message && !draftImages.length) return toast('요청 문장이나 이미지를 입력해 주세요.', true);
   if (state.activeRunId || pendingImageReads || sendingRequest) return;
   sendingRequest = true; render();
-  try { await api('runs',{ projectId:selectedProject, message, images:draftImages.map(image => image.dataUrl), refinePrompt:$('#refine-prompt').checked }); $('#message').value = ''; draftImages = []; renderDraftImages(); await refresh(); }
+  try { await api('runs',{ projectId:selectedProject, message, images:draftImages.map(image => image.dataUrl), refinePrompt:$('#refine-prompt').checked }); $('#message').value = ''; resizeMessageInput(); draftImages = []; renderDraftImages(); await refresh(); }
   catch(error) { toast(error.message,true); } finally { sendingRequest = false; render(); }
 });
 $('#stop').addEventListener('click',async () => { try { $('#stop').disabled = true; await api('cancel',{ id:state.activeRunId }); toast('중단을 요청했습니다.'); } catch(error) { toast(error.message,true); } finally { $('#stop').disabled = false; } });

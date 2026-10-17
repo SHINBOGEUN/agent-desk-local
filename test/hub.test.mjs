@@ -12,6 +12,7 @@ class FakeClient extends EventEmitter {
     this.calls.push({ method, params });
     if (method === 'account/rateLimits/read') return this.rateLimits || { rateLimits: { primary: { usedPercent: this.quotaUsedPercent ?? 10, windowDurationMins:300, resetsAt:1800000000 } } };
     if (method === 'thread/start') return { thread: { id: `thread-${++this.threadNumber}` } };
+    if (method === 'thread/resume') return { thread: { id: params.threadId } };
     if (method === 'turn/start') {
       const id = `turn-${params.threadId}`;
       this.emit('notification', { method:'turn/started', params:{ threadId:params.threadId, turn:{ id } } });
@@ -40,6 +41,57 @@ function fixture(t, mode) {
   return { store,client,hub };
 }
 const settle = async predicate => { for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve,10)); } throw new Error('did not settle'); };
+
+test('main conversation resumes the same durable Codex thread for follow-up requests in a project', async t => {
+  const { hub,client,store } = fixture(t);
+  const first = await hub.start({ projectId:'default',message:'API 응답에 페이지 정보를 포함해줘.' });
+  await settle(() => !hub.active);
+  const mainStart = client.calls.find(call => call.method === 'thread/start');
+  assert.equal(mainStart.params.ephemeral,false);
+  assert.equal(store.state.mainThreads.default.threadId,'thread-1');
+
+  const second = await hub.start({ projectId:'default',message:'방금 말한 페이지 정보는 total과 current로 해줘.' });
+  await settle(() => !hub.active);
+  const resume = client.calls.find(call => call.method === 'thread/resume');
+  assert.equal(resume.params.threadId,'thread-1');
+  assert.equal(second.status,'completed');
+  const latestTurn = client.calls.filter(call => call.method === 'turn/start').at(-1).params;
+  assert.equal(latestTurn.threadId,'thread-1');
+  assert.match(latestTurn.input[0].text,/방금 말한 페이지 정보는 total과 current로 해줘/);
+  assert.doesNotMatch(latestTurn.input[0].text,/이 프로젝트의 이전 대화 요약/);
+  assert.match(mainStart.params.developerInstructions,/요청한 주소의 실제 HTTP 응답/);
+  assert.match(mainStart.params.baseInstructions,/agent's claim from direct command\/endpoint evidence/);
+});
+
+test('server teammate receives strict target endpoint and permission failure reporting rules', async t => {
+  const { hub,client,store } = fixture(t,'hold-main');
+  const serverAgent = { id:'custom-server-agent',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',model:'test-model',effort:'low',access:'workspace-write',enabled:true,instructions:'서버 설정을 확인하세요.',optimizationGuidance:'' };
+  store.state.agents.push(serverAgent);
+  const run = await hub.start({ projectId:'default',message:'192.168.75.151:8083 서비스를 재시작하고 접속을 확인하세요.' });
+  await settle(() => hub.contexts.size === 1);
+  const mainThread = [...hub.contexts.keys()][0];
+  await hub.serverRequest({ id:800,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:serverAgent.id,title:'8083 서비스 재시작',task:'192.168.75.151:8083 서비스를 재시작하고 접속을 확인하세요.',readOnly:true }] } } });
+  const thread = client.calls.filter(call => call.method === 'thread/start').at(-1).params;
+  await hub.cancel(run.id); await settle(() => !hub.active);
+  assert.match(thread.developerInstructions,/사용자가 지정한 호스트\/IP, 포트, 경로/);
+  assert.match(thread.developerInstructions,/EPERM\/EACCES/);
+  assert.match(thread.developerInstructions,/샌드박스를 우회/);
+  assert.match(thread.developerInstructions,/사용자가 로컬 서비스를 명시적으로 시작·재시작/);
+  assert.match(thread.developerInstructions,/성공하지 않은 작업을 성공으로 표현하지 마세요/);
+  assert.equal(run.tasks.find(task => task.agentId === serverAgent.id).status,'completed');
+});
+
+test('first durable main thread seeds older unresolved requests alongside recent completed work', t => {
+  const { hub,store } = fixture(t);
+  store.state.runs = [
+    ...Array.from({ length:5 }, (_, index) => ({ id:`done-${index}`,projectId:'default',message:`완료 요청 ${index}`,status:'completed',startedAt:`2026-10-1${index}T00:00:00Z` })),
+    { id:'review-old',projectId:'default',message:'삭제 기능이 검토 필요로 끝났으니 이어서 수정해 줘',status:'needs_review',startedAt:'2026-09-01T00:00:00Z',qualityGate:{reason:'체커 실패'} },
+  ];
+  const context = hub.recentConversation('default','current');
+  assert.match(context,/삭제 기능이 검토 필요로 끝났으니 이어서 수정해 줘/);
+  assert.match(context,/완료 요청 0/);
+  assert.doesNotMatch(context,/완료 요청 4/);
+});
 
 test('agent validation prevents making the main agent writable or inactive', () => {
   const result = validateAgent({ ...defaultAgents[0], access:'workspace-write',enabled:false });
@@ -144,12 +196,13 @@ test('main AI receives the latest needs-review request, checker reason, and team
   const run = await hub.start({ projectId:'default',message:'다시 해줘' });
   await settle(() => hub.contexts.size === 1);
   const main = client.calls.find(call => call.method === 'thread/start').params;
-  assert.match(main.developerInstructions,/완료되지 않은 요청/);
-  assert.match(main.developerInstructions,/reviewed-run · 검토 필요/);
-  assert.match(main.developerInstructions,/로그인 흐름을 수정하고 테스트해줘/);
-  assert.match(main.developerInstructions,/마지막 파일 변경 이후 체커의 검증 보고가 없습니다/);
-  assert.match(main.developerInstructions,/로그인 리다이렉트 처리를 수정했습니다/);
-  assert.doesNotMatch(main.developerInstructions,/상위 요청이 종료되었습니다/);
+  const mainInput = client.calls.find(call => call.method === 'turn/start').params.input[0].text;
+  assert.match(main.developerInstructions,/대화 이어가기/);
+  assert.match(mainInput,/reviewed-run · 검토 필요/);
+  assert.match(mainInput,/로그인 흐름을 수정하고 테스트해줘/);
+  assert.match(mainInput,/마지막 파일 변경 이후 체커의 검증 보고가 없습니다/);
+  assert.match(mainInput,/로그인 리다이렉트 처리를 수정했습니다/);
+  assert.doesNotMatch(mainInput,/상위 요청이 종료되었습니다/);
   await hub.cancel(run.id); await settle(() => !hub.active);
 });
 
@@ -590,7 +643,7 @@ test('legacy token budget migrates to a percentage cap without changing old run 
   store.state.runs.push({ id:'old',status:'completed',limits:{ tokenBudget:250000 },tasks:[] });
   store.save();
   const reopened = new Store(store.directory,process.cwd());
-  assert.equal(reopened.state.version,5);
+  assert.equal(reopened.state.version,10);
   assert.equal(reopened.state.settings.usagePercentLimit,5);
   assert.equal('tokenBudget' in reopened.state.settings,false);
   assert.equal(reopened.state.runs[0].limits.tokenBudget,250000);
@@ -602,12 +655,32 @@ test('legacy team gains the monitor and prompt refiner once', t => {
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,5);
+  assert.equal(migrated.state.version,10);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');
   migrated.save();
   assert.equal(new Store(store.directory,process.cwd()).state.agents.some(agent => agent.id === 'monitor'),false);
+});
+
+test('saved main and custom-ID server agent instructions gain operational truth rules without replacing custom guidance', t => {
+  const { store } = fixture(t);
+  store.state.version = 6;
+  const main = store.state.agents.find(agent => agent.id === 'main');
+  main.instructions = '기존 메인 지침';
+  store.state.agents.push({ id:'7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',instructions:'기존 서버 지침' });
+  store.save();
+  const migrated = new Store(store.directory,process.cwd());
+  assert.equal(migrated.state.version,10);
+  assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/기존 메인 지침.*에이전트의 성공 주장만으로 완료 처리하지 마세요/s);
+  const server = migrated.state.agents.find(agent => agent.name === '서버 · 인프라 에이전트').instructions;
+  assert.match(server,/기존 서버 지침/);
+  assert.match(server,/EPERM\/EACCES/);
+  assert.match(server,/OS ACL, 샌드박스 정책, 파일 잠금/);
+  assert.match(server,/일시적으로 접속된 사실만으로/);
+  assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/그 시점의 지정 주소·포트를 다시 검사/);
+  assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/오래 실행해야 하는 서비스/);
+  assert.equal((server.match(/운영·서비스 실행 및 상태 보고 규칙:/g) || []).length,1);
 });
 
 test('scheduler caps readers and keeps writes exclusive even across tool batches', async t => {
@@ -633,5 +706,36 @@ test('approval requests stay pending until an explicit user decision', async t =
   assert.equal(hub.approvals.size,1); assert.equal(client.responses.length,0);
   const id = [...hub.approvals.keys()][0]; hub.answerApproval(id,{ allow:false }); await pending;
   assert.deepEqual(client.responses.at(-1),{ id:987,result:{ decision:'decline' } });
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('bulk approval enables pending and future execution approvals for this request only', async t => {
+  const { hub,client } = fixture(t,'hold');
+  const run = await hub.start({ projectId:'default',message:'여러 팀원 작업을 진행해줘' });
+  await settle(() => hub.contexts.size === 1);
+  const threadId = [...hub.contexts.keys()][0];
+  const pendingCommand = hub.serverRequest({ id:988,method:'item/commandExecution/requestApproval',params:{ threadId,command:'npm test' } });
+  assert.equal(hub.approvals.size,1);
+  assert.deepEqual(hub.allowAllApprovalsForActiveRun(true),{ enabled:true,approved:1 });
+  await pendingCommand;
+  assert.deepEqual(client.responses.at(-1),{ id:988,result:{ decision:'accept' } });
+  assert.equal(hub.snapshot().allowAllApprovalsForRun,true);
+
+  await hub.serverRequest({ id:989,method:'item/permissions/requestApproval',params:{ threadId,permissions:{ network:{ allow:true } } } });
+  assert.deepEqual(client.responses.at(-1),{ id:989,result:{ permissions:{ network:{ allow:true } },scope:'turn' } });
+
+  const question = hub.serverRequest({ id:990,method:'item/tool/requestUserInput',params:{ threadId,questions:[{ id:'choice',question:'무엇을 선택할까요?' }] } });
+  assert.equal(hub.approvals.size,1);
+  hub.answerApproval([...hub.approvals.keys()][0],{ allow:true,answers:{ choice:'A' } });
+  await question;
+  assert.deepEqual(client.responses.at(-1),{ id:990,result:{ answers:{ choice:{ answers:['A'] } } } });
+
+  hub.allowAllApprovalsForActiveRun(false);
+  assert.equal(hub.snapshot().allowAllApprovalsForRun,false);
+  const nextCommand = hub.serverRequest({ id:991,method:'item/commandExecution/requestApproval',params:{ threadId,command:'npm run check' } });
+  assert.equal(hub.approvals.size,1);
+  hub.answerApproval([...hub.approvals.keys()][0],{ allow:false });
+  await nextCommand;
+  assert.deepEqual(client.responses.at(-1),{ id:991,result:{ decision:'decline' } });
   await hub.cancel(run.id); await settle(() => !hub.active);
 });
