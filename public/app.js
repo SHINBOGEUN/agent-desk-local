@@ -30,6 +30,7 @@ const labels = { idle:'대기 중', working:'작업 중', running:'진행 중', 
 const badge = status => `<span class="status ${esc(status)}"><i></i>${labels[status] || esc(status)}</span>`;
 let state, csrf, selectedProject = localStorage.getItem('agent-desk-project') || '', view = 'overview', editorType, editorId, selectedRunId, skillEditorId;
 let chatSignature = '', lastActivitySignature = '', lastApprovalSignature = '', settingsPopulated = false;
+let supabaseState = null, supabasePreview = null, supabaseLoadedFor = '', supabaseLoading = false;
 let flowReturnTimer;
 let draftImages = [], pendingImageReads = 0, sendingRequest = false;
 const MAX_DRAFT_IMAGES = 3, MAX_DRAFT_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -175,6 +176,7 @@ function render() {
   renderChat(); renderActivity(); renderApprovals();
   if (view === 'agents') renderAgents(); if (view === 'skills') renderSkills(); if (view === 'history') renderHistory(); if (view === 'projects') renderProjects();
   if (view === 'settings' && !settingsPopulated) { for (const [key,value] of Object.entries(state.settings)) if ($('#settings-form').elements[key]) $('#settings-form').elements[key].value = value; settingsPopulated = true; }
+  if (view === 'settings' && selectedProject && supabaseLoadedFor !== selectedProject && !supabaseLoading) loadSupabaseStatus();
   if ($('#detail').open) renderDetail();
 }
 
@@ -426,10 +428,41 @@ function changeView(next) {
   document.querySelectorAll('.nav-item').forEach(element => element.classList.toggle('active', element.dataset.view === view));
   $('#page-label').textContent = viewInfo[view][0]; $('#page-title').innerHTML = `${esc(viewInfo[view][1])}<span class="accent">.</span>`; $('#page-description').textContent = viewInfo[view][2];
   settingsPopulated = false; render();
+  if (view === 'settings') loadSupabaseStatus();
 }
 function selectProject(id) {
   if (state.activeRunId) { toast('진행 중인 요청이 끝난 뒤 프로젝트를 바꿔 주세요.', true); render(); return; }
-  selectedProject = id; chatSignature = ''; lastActivitySignature = ''; render();
+  selectedProject = id; chatSignature = ''; lastActivitySignature = ''; supabaseLoadedFor = ''; supabasePreview = null; render();
+  if (view === 'settings') loadSupabaseStatus();
+}
+
+function renderSupabase() {
+  if (!supabaseState || supabaseState.projectId !== selectedProject) return;
+  const status = $('#supabase-status');
+  status.className = `status ${supabaseState.configured ? 'completed' : 'idle'}`;
+  status.textContent = supabaseState.configured ? `연결됨 · ${supabaseState.projectRef}` : '연결 필요';
+  const form = $('#supabase-form');
+  if (document.activeElement !== form.elements.projectRef) form.elements.projectRef.value = supabaseState.projectRef || '';
+  form.elements.projectId.value = selectedProject;
+  form.elements.accessToken.placeholder = supabaseState.hasAccessToken ? '저장된 토큰 있음 · 바꿀 때만 입력' : 'Supabase Personal Access Token';
+  $('#supabase-disconnect').classList.toggle('hidden', !supabaseState.configured);
+  $('#supabase-install').textContent = supabaseState.cliInstalled ? '설치됨' : 'CLI 설치';
+  $('#supabase-install').disabled = !!supabaseState.cliInstalled;
+  $('#supabase-cli-note').textContent = supabaseState.cliInstalled ? 'Agent Desk 전용 폴더에 설치되어 있습니다.' : 'Agent Desk 전용 폴더에 설치합니다. 선택한 프로젝트의 package.json은 바꾸지 않습니다.';
+  $('#supabase-migration-count').textContent = `로컬 마이그레이션 ${supabaseState.localMigrations.length}개 · ${supabaseState.localMigrations.slice(0,3).join(', ') || '파일 없음'}${supabaseState.localMigrations.length > 3 ? ' 외' : ''}`;
+  $('#supabase-preview').disabled = !supabaseState.configured || !supabaseState.cliInstalled || !supabaseState.localMigrations.length;
+  $('#supabase-apply').classList.toggle('hidden', !supabasePreview?.canApply);
+  $('#supabase-apply').disabled = !supabasePreview?.canApply;
+  const result = $('#supabase-preview-result');
+  result.classList.toggle('hidden', !supabasePreview);
+  result.innerHTML = supabasePreview ? `<strong>대상: ${esc(supabasePreview.projectRef)}</strong><p>${supabasePreview.pending?.length ? `적용 대기 ${supabasePreview.pending.length}개` : '적용 대기 마이그레이션 없음'}</p>${supabasePreview.pending?.length ? `<ul>${supabasePreview.pending.map(item => `<li><code>${esc(item.name)}</code> · ${format(item.size)} bytes</li>`).join('')}</ul>` : ''}<details><summary>CLI 미리보기 결과</summary><pre>${esc(supabasePreview.output || '')}</pre></details>` : '';
+}
+async function loadSupabaseStatus() {
+  if (!selectedProject || supabaseLoading) return;
+  supabaseLoading = true;
+  try { supabaseState = await api('supabase/status', { projectId:selectedProject }); supabaseLoadedFor = selectedProject; renderSupabase(); }
+  catch (error) { $('#supabase-status').textContent = error.message; $('#supabase-status').className = 'status failed'; }
+  finally { supabaseLoading = false; }
 }
 
 function modelOptions(value = '') { return `<option value="">Codex 기본 모델 (계정 기본값)</option>${state.models.map(model => `<option value="${esc(model.id)}" ${value === model.id ? 'selected' : ''}>${esc((model.name || model.id).replace(/^(GPT-\d+(?:\.\d+)?)-/, '$1 '))}${model.isDefault ? ' · 기본' : ''}</option>`).join('')}`; }
@@ -495,7 +528,21 @@ function openEditor(type, id) {
   } else {
     const item = state.projects.find(item => item.id === id) || { name:'',path:'',allowWrites:false };
     $('#editor-title').textContent = id ? '프로젝트 설정' : '프로젝트 연결';
-    $('#editor-fields').innerHTML = `<label>프로젝트 이름<input name="name" value="${esc(item.name)}" maxlength="80" placeholder="예: 나의 웹사이트" required></label><div class="path-field"><label for="project-folder-path">이 PC의 폴더 경로</label><div class="path-picker"><input id="project-folder-path" name="path" value="${esc(item.path)}" placeholder="C:\\work\\my-project" required><button class="button secondary" id="browse-project" type="button">${icon('folder')}폴더 찾아보기</button></div><small>폴더 찾아보기로 프로젝트 폴더를 선택하거나 경로를 직접 입력하세요.</small></div><label class="check-label"><input type="checkbox" name="allowWrites" ${item.allowWrites ? 'checked' : ''}>실행 담당 에이전트의 파일 수정 허용</label><label class="check-label"><input type="checkbox" name="autoApproveCommands" ${item.autoApproveCommands ? 'checked' : ''}>이 프로젝트에서 명령 자동 실행</label><p class="muted">자동 실행을 켜면 수정 담당은 프로젝트 내부 명령을 매번 묻지 않고 실행합니다. 읽기 전용 담당의 명령은 자동 검토합니다. 프로젝트 밖 파일과 네트워크 제한은 유지되며, 범위를 벗어난 작업은 실패하거나 확인이 필요할 수 있습니다.</p><p class="muted">프로젝트 자료는 각 요청에 필요한 부분만 읽습니다. 메인 AI와 검증 담당은 읽기 전용으로 실행됩니다.</p>`;
+    $('#editor-fields').innerHTML = `<label>프로젝트 이름<input name="name" value="${esc(item.name)}" maxlength="80" placeholder="예: 나의 웹사이트" required></label><div class="path-field"><label for="project-folder-path">이 PC의 폴더 경로</label><div class="path-picker"><input id="project-folder-path" name="path" value="${esc(item.path)}" placeholder="C:\\work\\my-project" required><button class="button secondary" id="browse-project" type="button">${icon('folder')}폴더 찾아보기</button></div><small>폴더 찾아보기로 프로젝트 폴더를 선택하거나 경로를 직접 입력하세요.</small></div><section class="project-permission-mode"><label class="check-label"><input id="project-allow-all" type="checkbox" ${item.allowWrites && item.autoApproveCommands ? 'checked' : ''}>프로젝트 자동 허용 <span>파일 수정 + 명령 실행</span></label><p>한 번에 켜거나 끕니다. 아래에서 권한을 각각 조정할 수도 있습니다.</p></section><label class="check-label"><input id="project-allow-writes" type="checkbox" name="allowWrites" ${item.allowWrites ? 'checked' : ''}>실행 담당 에이전트의 파일 수정 허용</label><label class="check-label"><input id="project-auto-commands" type="checkbox" name="autoApproveCommands" ${item.autoApproveCommands ? 'checked' : ''}>이 프로젝트에서 명령 자동 실행</label><p class="muted">자동 실행을 켜면 수정 담당은 프로젝트 내부 명령을 매번 묻지 않고 실행합니다. 읽기 전용 담당의 명령은 자동 검토합니다. 프로젝트 밖 파일과 네트워크 제한은 유지되며, 범위를 벗어난 작업은 실패하거나 확인이 필요할 수 있습니다.</p><p class="muted">프로젝트 자료는 각 요청에 필요한 부분만 읽습니다. 메인 AI와 검증 담당은 읽기 전용으로 실행됩니다.</p>`;
+    const allowAll = $('#project-allow-all');
+    const allowWrites = $('#project-allow-writes');
+    const autoCommands = $('#project-auto-commands');
+    const syncAllowAll = () => {
+      allowAll.checked = allowWrites.checked && autoCommands.checked;
+      allowAll.indeterminate = allowWrites.checked !== autoCommands.checked;
+    };
+    allowAll.addEventListener('change', () => {
+      allowWrites.checked = allowAll.checked;
+      autoCommands.checked = allowAll.checked;
+      allowAll.indeterminate = false;
+    });
+    allowWrites.addEventListener('change', syncAllowAll);
+    autoCommands.addEventListener('change', syncAllowAll);
   }
   $('#editor').showModal();
 }
@@ -654,6 +701,41 @@ $('#delete-agent').addEventListener('click',async () => { try { await api('agent
 $('#settings-form').addEventListener('submit',async event => {
   event.preventDefault();
   try { await api('settings',Object.fromEntries(new FormData(event.currentTarget))); settingsPopulated = false; await refresh(); toast('실행 설정을 저장했습니다.'); } catch(error) { toast(error.message,true); }
+});
+$('#supabase-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget, button = form.querySelector('[type="submit"]'); button.disabled = true;
+  try {
+    supabaseState = await api('supabase/connect', { projectId:selectedProject, projectRef:form.elements.projectRef.value, accessToken:form.elements.accessToken.value, databasePassword:form.elements.databasePassword.value });
+    form.elements.accessToken.value = ''; form.elements.databasePassword.value = ''; supabasePreview = null; supabaseLoadedFor = selectedProject; renderSupabase(); toast('Supabase 연결 정보를 이 PC에 암호화해 저장했습니다.');
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+});
+$('#supabase-disconnect').addEventListener('click', async () => {
+  if (!confirm('이 프로젝트의 Supabase 토큰과 DB 비밀번호를 이 PC에서 삭제할까요?')) return;
+  try { supabaseState = await api('supabase/disconnect', { projectId:selectedProject }); supabasePreview = null; renderSupabase(); toast('Supabase 연결 정보를 삭제했습니다.'); }
+  catch (error) { toast(error.message, true); }
+});
+$('#supabase-install').addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true; button.textContent = '설치 중…';
+  try { await api('supabase/install', {}); await loadSupabaseStatus(); toast('Supabase CLI를 Agent Desk 전용 폴더에 설치했습니다.'); }
+  catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; if (supabaseState) renderSupabase(); }
+});
+$('#supabase-preview').addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true; button.textContent = '확인 중…'; supabasePreview = null; renderSupabase();
+  try { supabasePreview = await api('supabase/preview', { projectId:selectedProject }); renderSupabase(); toast(supabasePreview.pending.length ? `미적용 마이그레이션 ${supabasePreview.pending.length}개를 찾았습니다.` : '적용 대기 마이그레이션이 없습니다.'); }
+  catch (error) { toast(error.message, true); }
+  finally { button.textContent = '적용 목록 미리보기'; button.disabled = false; renderSupabase(); }
+});
+$('#supabase-apply').addEventListener('click', async event => {
+  if (!supabasePreview?.canApply) return;
+  const pendingNames = supabasePreview.pending.map(item => item.name).join('\n');
+  if (!confirm(`다음 ${supabasePreview.pending.length}개 마이그레이션을 원격 DB에 적용합니다.\n\n대상: ${supabasePreview.projectRef}\n\n${pendingNames}\n\n운영 데이터베이스의 스키마가 변경될 수 있습니다. 계속할까요?`)) return;
+  const button = event.currentTarget; button.disabled = true; button.textContent = '적용 중…';
+  try { const result = await api('supabase/apply', { projectId:selectedProject, previewId:supabasePreview.previewId }); supabasePreview = { canApply:false, projectRef:result.projectRef, pending:[], output:result.output }; renderSupabase(); toast('Supabase 마이그레이션 적용 명령이 성공적으로 끝났습니다. 다시 미리보기해 상태를 확인하세요.'); }
+  catch (error) { toast(error.message, true); supabasePreview = null; renderSupabase(); }
+  finally { button.textContent = '검토한 마이그레이션 적용'; }
 });
 $('#approval-list').addEventListener('submit',async event => { event.preventDefault(); const form = event.target; try { await api('approvals',{ id:form.dataset.approval, allow:true, answers:Object.fromEntries(new FormData(form)) }); } catch(error) { toast(error.message,true); } });
 $('#reconnect').addEventListener('click',async () => { const button = $('#reconnect'); button.disabled = true; try { await api('reconnect',{}); await refresh(); toast(state.connection.message,state.connection.status !== 'connected'); } catch(error) { toast(error.message,true); } finally { button.disabled = false; } });

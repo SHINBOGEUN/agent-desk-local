@@ -8,13 +8,15 @@ import { CodexClient } from './lib/codex.mjs';
 import { Store } from './lib/store.mjs';
 import { AgentHub } from './lib/hub.mjs';
 import { imagePath } from './lib/images.mjs';
+import { SupabaseManager } from './lib/supabase-manager.mjs';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.AGENT_DESK_PORT || 4317);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('유효한 포트가 필요합니다.');
 const store = new Store(process.env.AGENT_DESK_DATA || path.join(directory, 'data'), path.dirname(directory));
 const client = new CodexClient({ cwd: directory });
-const hub = new AgentHub(store, client);
+const supabase = new SupabaseManager({ dataDirectory: store.directory, projects: () => store.state.projects });
+const hub = new AgentHub(store, client, supabase);
 const csrf = randomBytes(32).toString('hex');
 const streams = new Set();
 const host = `127.0.0.1:${port}`;
@@ -121,6 +123,12 @@ const server = http.createServer(async (request, response) => {
       if (url.pathname === '/api/approvals/allow-all') return json(response, 200, hub.allowAllApprovalsForActiveRun(input.enabled));
       if (url.pathname === '/api/reconnect') { hub.requireIdle(); await hub.connect(); return json(response, 200, hub.connection); }
       if (url.pathname === '/api/usage-limits/refresh') return json(response, 200, await hub.refreshUsageLimits(true, true));
+      if (url.pathname === '/api/supabase/status') return json(response, 200, await supabase.status(input.projectId));
+      if (url.pathname === '/api/supabase/connect') return json(response, 200, await supabase.configure(input));
+      if (url.pathname === '/api/supabase/disconnect') return json(response, 200, supabase.disconnect(input.projectId));
+      if (url.pathname === '/api/supabase/install') return json(response, 200, await supabase.installCli());
+      if (url.pathname === '/api/supabase/preview') return json(response, 200, await supabase.preview(input.projectId));
+      if (url.pathname === '/api/supabase/apply') { hub.requireIdle(); return json(response, 200, await supabase.apply(input.projectId, input.previewId)); }
       if (url.pathname === '/api/shutdown') { json(response, 200, { ok: true }); setTimeout(() => shutdown(), 50); return; }
       return json(response, 404, { error: '요청한 기능을 찾을 수 없습니다.' });
     }
