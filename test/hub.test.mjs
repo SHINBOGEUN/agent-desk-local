@@ -220,6 +220,97 @@ test('database teammate can run only a ref-checked, read-only Supabase preview t
   await delegation;
 });
 
+test('main can retry an agent through a bounded same-owner chain with prior failure context', async t => {
+  const { hub,client } = fixture(t,'hold-main');
+  const run = await hub.start({ projectId:'default',message:'조사 결과를 확인하고 필요한 정보를 정리해줘.' });
+  await settle(() => hub.contexts.size === 1);
+  const mainThreadId = [...hub.contexts.keys()][0];
+  const delegate = retryOfTaskId => hub.serverRequest({ id:900 + (run.tasks.length * 10),method:'item/tool/call',params:{ threadId:mainThreadId,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'researcher',title:'자료 조사',task:retryOfTaskId ? '누락된 근거를 다시 조사하고 보완하세요.' : '관련 자료를 조사하세요.',readOnly:true,...(retryOfTaskId ? { retryOfTaskId } : {}) }] } } });
+  await delegate();
+  const first = run.tasks.find(task => task.agentId === 'researcher');
+  assert.equal(first.retryAttemptNumber,1);
+  await delegate(first.id);
+  const second = run.tasks.filter(task => task.agentId === 'researcher').at(-1);
+  assert.equal(second.retryAttemptNumber,2);
+  assert.equal(second.retryOfTaskId,first.id);
+  assert.equal(second.retryContext.report,'실행 결과');
+  await delegate(second.id);
+  const third = run.tasks.filter(task => task.agentId === 'researcher').at(-1);
+  assert.equal(third.retryAttemptNumber,3);
+  const count = run.tasks.length;
+  await delegate(third.id);
+  const error = client.responses.at(-1).result.contentItems[0].text;
+  assert.match(error,/최대 3회 시도했습니다/);
+  assert.equal(run.tasks.length,count);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('execution diagnostics redact common credential values before saving them to run history', async t => {
+  const { hub } = fixture(t,'hold-main');
+  const run = await hub.start({ projectId:'default',message:'필요한 자료를 조사해줘.' });
+  await settle(() => hub.contexts.size === 1);
+  const threadId = [...hub.contexts.keys()][0];
+  hub.notification({ method:'item/completed',params:{ threadId,item:{ id:'cmd-1',type:'commandExecution',command:'node script.js --api-key=secret_value_123456789',cwd:process.cwd(),exitCode:1,aggregatedOutput:'password=hunter2\nAuthorization: Bearer abcdefghi123456789' } } });
+  const diagnostic = run.events.find(event => event.details?.type === 'command');
+  assert.ok(diagnostic);
+  const serialized = JSON.stringify(diagnostic);
+  assert.match(serialized,/REDACTED/);
+  assert.doesNotMatch(serialized,/secret_value_123456789|hunter2|abcdefghi123456789/);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('main receives the local process tool and calls it for the selected project without delegating', async t => {
+  const { hub,client } = fixture(t,'hold-main');
+  const calls = [];
+  hub.processManager = { snapshot:() => [], run:async (projectId,input) => { calls.push({ projectId,input }); return { id:'process-1',status:'running',script:input.script,pid:1234 }; } };
+  const run = await hub.start({ projectId:'default',message:'프로젝트 개발 서버를 실행해줘.' });
+  await settle(() => hub.contexts.size === 1);
+  const context = [...hub.contexts.values()][0];
+  const start = client.calls.find(call => call.method === 'thread/start');
+  assert.ok(start.params.dynamicTools.some(tool => tool.name === 'agent_desk_process'));
+  assert.match(start.params.baseInstructions,/agent_desk_process 도구가 있습니다/);
+  await hub.serverRequest({ id:944,method:'item/tool/call',params:{ threadId:context.threadId,tool:'agent_desk_process',arguments:{ action:'start',script:'dev' } } });
+  assert.deepEqual(calls,[{ projectId:'default',input:{ action:'start',script:'dev' } }]);
+  const result = JSON.parse(client.responses.at(-1).result.contentItems[0].text);
+  assert.equal(result.status,'running');
+  assert.equal(run.events.some(event => event.details?.type === 'local-process' && event.details.status === 'running'),true);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('configuration profile export contains only agents and skills and imports with local model compatibility', t => {
+  const { hub,store } = fixture(t);
+  const profile = hub.exportProfile();
+  assert.deepEqual(Object.keys(profile).sort(),['agents','exportedAt','format','skills','version']);
+  assert.equal(profile.format,'agent-desk-profile');
+  assert.equal(profile.agents.length,store.state.agents.length);
+  assert.equal(profile.skills.length,store.state.skills.length);
+  profile.projects = [{ path:'C:\\secret-project' }];
+  profile.agents[0].model = 'model-not-on-this-pc';
+  const imported = hub.importProfile(profile);
+  assert.equal(imported.agents,store.state.agents.length);
+  assert.ok(imported.warnings.some(warning => warning.includes('모델')));
+  assert.equal(store.state.agents[0].model,'test-model');
+  assert.equal('projects' in hub.exportProfile(),false);
+  assert.equal(store.state.projects.some(project => project.path === 'C:\\secret-project'),false);
+  const invalid = hub.exportProfile();
+  invalid.skills[0].agentIds.push('missing-agent');
+  const normalized = hub.importProfile(invalid);
+  assert.ok(normalized.warnings.some(warning => warning.includes('찾지 못한 에이전트 연결')));
+});
+
+test('continuity checkpoint captures goal, pending tasks, failures, and actionable resume step', t => {
+  const { hub } = fixture(t);
+  const run = { message:'기능을 만들고 테스트해줘',status:'interrupted',tasks:[
+    { agentId:'worker',agentName:'빌더',title:'기능 구현',status:'completed',output:'구현은 끝났습니다.' },
+    { agentId:'verifier',agentName:'체커',title:'검증',status:'failed',error:'테스트에서 실패했습니다.' },
+  ],qualityGate:{ required:true,status:'needs_review',reason:'체커 실패' },endReason:{ message:'서비스 종료' },error:'서비스 종료' };
+  hub.updateContinuity(run);
+  assert.equal(run.continuity.objective,'기능을 만들고 테스트해줘');
+  assert.equal(run.continuity.completed[0].report,'구현은 끝났습니다.');
+  assert.equal(run.continuity.failures[0].error,'테스트에서 실패했습니다.');
+  assert.match(run.continuity.nextStep,/실패 원인과 미완료 작업/);
+});
+
 test('main AI receives the latest needs-review request, checker reason, and team report on a short follow-up', async t => {
   const { hub,client,store } = fixture(t,'hold-main');
   store.state.runs.unshift({
@@ -516,8 +607,8 @@ test('read-only operational delegation skips change verification for a writable 
   await settle(() => hub.contexts.size === 1);
   const mainThread = [...hub.contexts.keys()][0];
   const mainThreadStart = client.calls.find(call => call.method === 'thread/start').params;
-  assert.match(mainThreadStart.developerInstructions,/서비스 상태 조회만 readOnly: true/);
-  assert.match(mainThreadStart.developerInstructions,/서비스를 시작·중지·재시작하라고 하면 프로세스와 로그 상태를 바꾸므로 readOnly: true를 지정하지 말고/);
+  assert.match(mainThreadStart.developerInstructions,/서비스 상태 조회[^.\n]*readOnly: true/);
+  assert.match(mainThreadStart.developerInstructions,/서비스를 (?:실제로 )?시작·중지·재시작(?:하라고 하면|하는 요청은) 프로세스와 로그 상태를 바꾸므로 readOnly: true를 지정하지 말고/);
   assert.equal(mainThreadStart.dynamicTools[0].inputSchema.properties.tasks.items.properties.readOnly.type,'boolean');
   assert.equal(mainThreadStart.dynamicTools[0].inputSchema.properties.tasks.items.properties.verifyChanges.type,'boolean');
   await hub.serverRequest({ id:801,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'서버 실행 확인',task:'서버 상태만 확인',readOnly:true }] } } });
@@ -680,7 +771,7 @@ test('legacy token budget migrates to a percentage cap without changing old run 
   store.state.runs.push({ id:'old',status:'completed',limits:{ tokenBudget:250000 },tasks:[] });
   store.save();
   const reopened = new Store(store.directory,process.cwd());
-  assert.equal(reopened.state.version,14);
+  assert.equal(reopened.state.version,15);
   assert.equal(reopened.state.settings.usagePercentLimit,5);
   assert.equal('tokenBudget' in reopened.state.settings,false);
   assert.equal(reopened.state.runs[0].limits.tokenBudget,250000);
@@ -692,7 +783,7 @@ test('legacy team gains the monitor and prompt refiner once', t => {
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,14);
+  assert.equal(migrated.state.version,15);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');
@@ -708,7 +799,7 @@ test('saved main and custom-ID server agent instructions gain operational truth 
   store.state.agents.push({ id:'7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',instructions:'기존 서버 지침' });
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,14);
+  assert.equal(migrated.state.version,15);
   assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/기존 메인 지침.*에이전트의 성공 주장만으로 완료 처리하지 마세요/s);
   const server = migrated.state.agents.find(agent => agent.name === '서버 · 인프라 에이전트').instructions;
   assert.match(server,/기존 서버 지침/);
@@ -733,7 +824,7 @@ test('v11 migration removes contradictory read-only start rule and permits reque
   server.instructions = '요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요. 파괴적인 명령, 외부 배포, 실제 인프라 변경은 실행하지 말고 필요한 명령을 제안하세요.';
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,14);
+  assert.equal(migrated.state.version,15);
   assert.doesNotMatch(migrated.state.agents.find(agent => agent.id === 'main').instructions,/서비스 실행·중지나 단순 상태 확인[\s\S]*?readOnly: true로 지정하세요/);
   assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/서비스를 시작·중지·재시작하는 요청은 프로세스와 로그를 바꾸므로/);
   assert.match(server.instructions,/요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요/);
@@ -750,7 +841,7 @@ test('v12 migration distinguishes denied diagnostic logs from a denied service s
 
   const migrated = new Store(store.directory,process.cwd());
   const updated = migrated.state.agents.find(agent => agent.id === server.id).instructions;
-  assert.equal(migrated.state.version,14);
+  assert.equal(migrated.state.version,15);
   assert.doesNotMatch(updated,/시작·재시작이 EPERM\/EACCES\/권한 거부로 실패하면 해당 시도에서 멈추세요\./);
   assert.match(updated,/진단용 로그 파일 생성 또는 stdout\/stderr 리다이렉션만 거부된 경우에는 그 로그 작업만 포기하세요/);
   assert.match(updated,/출력 리다이렉션 없이 요청한 서비스를 프로젝트 폴더에서 실행해도 됩니다/);
@@ -765,13 +856,13 @@ test('v13 migration adds bounded, evidence-based retries to the saved main agent
 
   const migrated = new Store(store.directory,process.cwd());
   const savedMain = migrated.state.agents.find(agent => agent.id === 'main');
-  assert.equal(migrated.state.version,14);
+  assert.equal(migrated.state.version,15);
   assert.match(savedMain.instructions,/사용자 지정 메인 지침/);
   assert.match(savedMain.instructions,/실패 분석과 제한 재시도/);
   assert.match(savedMain.instructions,/최대 3회 시도/);
   assert.match(savedMain.instructions,/자격 증명·승인/);
   assert.equal((savedMain.instructions.match(/실패 분석과 제한 재시도:/g) || []).length,1);
-  assert.equal(new Store(store.directory,process.cwd()).state.version,14);
+  assert.equal(new Store(store.directory,process.cwd()).state.version,15);
 });
 
 test('scheduler caps readers and keeps writes exclusive even across tool batches', async t => {

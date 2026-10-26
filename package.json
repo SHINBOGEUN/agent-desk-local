@@ -8,6 +8,6 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server.mjs && node --check lib/codex.mjs && node --check lib/hub.mjs && node --check lib/images.mjs && node --check lib/usage-limits.mjs && node --check lib/supabase-manager.mjs && node --check public/app.js"
+    "check": "node --check server.mjs && node --check lib/codex.mjs && node --check lib/hub.mjs && node --check lib/images.mjs && node --check lib/usage-limits.mjs && node --check lib/supabase-manager.mjs && node --check lib/local-process-manager.mjs && node --check public/app.js"
   }
 }

@@ -30,6 +30,8 @@ const labels = { idle:'대기 중', working:'작업 중', running:'진행 중', 
 const badge = status => `<span class="status ${esc(status)}"><i></i>${labels[status] || esc(status)}</span>`;
 let state, csrf, selectedProject = localStorage.getItem('agent-desk-project') || '', view = 'overview', editorType, editorId, selectedRunId, skillEditorId;
 let chatSignature = '', lastActivitySignature = '', lastApprovalSignature = '', settingsPopulated = false;
+const processScriptsCache = new Map(), processLogCache = new Map();
+let processScriptsLoading = '';
 let supabaseState = null, supabasePreview = null, supabaseLoadedFor = '', supabaseLoading = false;
 let flowReturnTimer;
 let draftImages = [], pendingImageReads = 0, sendingRequest = false;
@@ -67,6 +69,21 @@ async function addImages(files) {
   finally { pendingImageReads--; if (state) render(); }
 }
 const runImages = run => (run.images || []).length ? `<div class="run-images">${run.images.map((image, index) => `<a href="/api/attachments/${esc(image.id)}" target="_blank" rel="noopener noreferrer" aria-label="첨부 이미지 ${index + 1} 크게 보기"><img src="/api/attachments/${esc(image.id)}" alt="첨부 이미지 ${index + 1}" loading="lazy"></a>`).join('')}</div>` : '';
+function approvalDetails(approval) {
+  const p = approval.params || {};
+  if (approval.method === 'item/commandExecution/requestApproval') return { title:'명령 실행 권한', body:p.command || p.reason || '명령 정보가 전달되지 않았습니다.', cwd:p.cwd || p.workdir || '' };
+  if (approval.method === 'item/fileChange/requestApproval') {
+    const files = (p.changes || p.files || []).map(item => typeof item === 'string' ? item : item.path || item.filename || JSON.stringify(item)).slice(0, 30);
+    return { title:'파일 변경 권한', body:[p.reason, ...files].filter(Boolean).join('\n') || 'Codex가 파일 변경 승인을 요청했습니다.', cwd:p.cwd || '' };
+  }
+  if (approval.method === 'item/permissions/requestApproval') return { title:'추가 작업 권한', body:JSON.stringify(p.permissions || {}, null, 2).slice(0, 3000), cwd:p.cwd || '' };
+  return { title:approval.method.includes('requestUserInput') ? '질문에 답변' : '외부 요청 확인', body:p.reason || p.message || '요청 세부 정보가 없습니다.', cwd:p.cwd || '' };
+}
+function renderExecutionLog(run) {
+  const events = (run.events || []).filter(item => ['command','approval','error'].includes(item.details?.type)).slice(-30);
+  if (!events.length) return '';
+  return `<section class="execution-log"><h3>명령과 권한 기록 · ${events.length}건</h3>${events.map(item => `<article class="execution-entry ${item.kind === 'error' ? 'error' : ''}"><div><strong>${esc(item.message)}</strong><time>${clock(item.at)}</time></div>${item.details.command ? `<pre>${esc(item.details.command)}</pre>` : ''}${item.details.cwd ? `<small>작업 폴더: ${esc(item.details.cwd)}</small>` : ''}${item.details.permissions ? `<details><summary>요청 권한 보기</summary><pre>${esc(JSON.stringify(item.details.permissions,null,2))}</pre></details>` : ''}${item.details.exitCode != null ? `<small>종료 코드: ${esc(item.details.exitCode)}</small>` : ''}${item.details.diagnosis ? `<p>${esc(item.details.diagnosis)}</p>` : ''}${item.details.reason ? `<p>${esc(item.details.reason)}</p>` : ''}${item.details.output ? `<details><summary>명령 출력 보기</summary><pre>${esc(item.details.output)}</pre></details>` : ''}</article>`).join('')}</section>`;
+}
 async function api(route, payload) {
   const response = await fetch(`/api/${route}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Agent-Desk-Token':csrf }, body:JSON.stringify(payload) });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || '요청에 실패했습니다.'); return result;
@@ -172,6 +189,7 @@ function render() {
   $('#stats').innerHTML = stats.map(([title,value,unit,note,i]) => `<article class="stat"><div class="stat-top">${title}${icon(i)}</div><div class="stat-number">${value}<span>${unit}</span></div><div class="stat-note">${note}</div></article>`).join('');
   renderUsageLimits();
   renderBudgetStatus();
+  renderLocalProcesses();
   renderFlow();
   renderChat(); renderActivity(); renderApprovals();
   if (view === 'agents') renderAgents(); if (view === 'skills') renderSkills(); if (view === 'history') renderHistory(); if (view === 'projects') renderProjects();
@@ -396,8 +414,9 @@ function renderApprovals() {
     const p = approval.params;
     const question = approval.method.includes('requestUserInput');
     const unsupported = approval.method === 'mcpServer/elicitation/request';
+    const details = approvalDetails(approval);
     const canAllowSession = !question && !unsupported && ['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(approval.method);
-    return `<form class="approval-card" data-approval="${esc(approval.id)}"><h3>${esc(approval.agentName)} · ${question ? '답변이 필요해요' : '실행 확인이 필요해요'}</h3>${question ? (p.questions || []).map(q => `<label>${esc(q.question)}${q.options?.length ? `<small>${esc(q.options.map(option => `${option.label}: ${option.description || ''}`).join(' / '))}</small>` : ''}<input name="${esc(q.id)}" placeholder="답변 입력" maxlength="10000"></label>`).join('') : `<pre>${esc(p.command || p.reason || p.message || JSON.stringify(p.permissions || p, null, 2))}</pre>`}${unsupported ? '<p>외부 앱의 양식 확인은 현재 지원하지 않습니다. 거절하고 계속할 수 있습니다.</p>' : ''}<div class="approval-actions">${!unsupported ? `<button class="button primary" type="submit">${question ? '답변 보내기' : '이번 실행 허용'}</button>${canAllowSession ? `<button class="button secondary" type="button" data-allow-session="${esc(approval.id)}">현재 팀원 실행에서 허용</button>` : ''}` : ''}<button type="button" class="button secondary" data-decline="${esc(approval.id)}">${question ? '건너뛰기' : '거절'}</button></div>${canAllowSession ? '<small class="approval-scope-note">이 팀원의 현재 실행에만 적용됩니다. 다른 팀원이나 다음 요청에는 다시 확인할 수 있습니다.</small>' : ''}</form>`;
+    return `<form class="approval-card" data-approval="${esc(approval.id)}"><h3>${esc(approval.agentName)} · ${question ? '답변이 필요해요' : esc(details.title)}</h3>${question ? (p.questions || []).map(q => `<label>${esc(q.question)}${q.options?.length ? `<small>${esc(q.options.map(option => `${option.label}: ${option.description || ''}`).join(' / '))}</small>` : ''}<input name="${esc(q.id)}" placeholder="답변 입력" maxlength="10000"></label>`).join('') : `<pre>${esc(details.body)}</pre>${details.cwd ? `<small class="approval-scope-note">대상 폴더: ${esc(details.cwd)}</small>` : ''}<p>허용하면 이 요청에 표시된 작업을 Codex가 실행합니다. Agent Desk 자동 허용 범위는 프로젝트 설정의 파일·명령 권한에 따릅니다.</p>`}${unsupported ? '<p>외부 앱의 양식 확인은 현재 지원하지 않습니다. 거절하고 계속할 수 있습니다.</p>' : ''}<div class="approval-actions">${!unsupported ? `<button class="button primary" type="submit">${question ? '답변 보내기' : '이번 요청만 허용'}</button>${canAllowSession ? `<button class="button secondary" type="button" data-allow-session="${esc(approval.id)}">Codex 세션 허용</button>` : ''}` : ''}<button type="button" class="button secondary" data-decline="${esc(approval.id)}">${question ? '건너뛰기' : '거절'}</button></div>${canAllowSession ? '<small class="approval-scope-note">세션 허용은 Codex 세션 범위입니다. 프로젝트 전체 권한이나 Windows 권한을 변경하지 않습니다.</small>' : ''}</form>`;
   }).join('');
 }
 
@@ -418,7 +437,32 @@ function renderHistory() {
   $('#history-list').innerHTML = runs.length ? runs.map(run => `<button class="panel history-card" data-detail="${esc(run.id)}"><span class="folder-box">${icon('history')}</span><div class="history-text"><h3>${esc(run.message || "이미지 요청")}</h3><p>${date(run.startedAt)} · ${delegatedCount(run)}개 위임 · ${format(run.usage.totalTokens)} tokens${run.promptRefinement?.enabled ? ' · 요청 정리 사용' : ''}</p></div>${badge(run.status)}${icon('arrow-right')}</button>`).join('') : `<div class="panel empty-panel">${icon('history')}<h3>아직 작업 기록이 없어요</h3><p>대시보드에서 메인 AI에게 요청을 보내 보세요.</p></div>`;
 }
 function renderProjects() {
-  $('#projects-grid').innerHTML = state.projects.map(item => `<article class="panel project-large"><span class="folder-box">${icon('folder')}</span><h3>${esc(item.name)}</h3><p>${esc(item.path)}</p><div class="project-actions"><span class="status ${item.allowWrites ? 'queued' : 'idle'}">${icon(item.allowWrites ? 'edit' : 'lock')}${item.allowWrites ? '파일 수정 허용' : '읽기 전용'}</span>${item.autoApproveCommands ? '<span class="status completed">명령 자동 실행</span>' : ''}<div><button class="button secondary" data-edit-project="${esc(item.id)}">설정</button> <button class="button primary" data-project="${esc(item.id)}">열기 ${icon('arrow-right')}</button></div></div></article>`).join('');
+  $('#projects-grid').innerHTML = state.projects.map(item => `<article class="panel project-large"><span class="folder-box">${icon('folder')}</span><h3>${esc(item.name)}</h3><p>${esc(item.path)}</p><div class="project-actions"><span class="status ${item.allowWrites ? 'queued' : 'idle'}">${icon(item.allowWrites ? 'edit' : 'lock')}${item.allowWrites ? '파일 수정 허용' : '읽기 전용'}</span>${item.autoApproveCommands ? '<span class="status completed">명령 자동 실행</span>' : ''}${item.allowLocalProcesses ? '<span class="status completed">로컬 프로세스 허용</span>' : ''}<div><button class="button secondary" data-edit-project="${esc(item.id)}">설정</button> <button class="button primary" data-project="${esc(item.id)}">열기 ${icon('arrow-right')}</button></div></div></article>`).join('');
+}
+
+function renderLocalProcesses() {
+  if (!state || !$('#process-list')) return;
+  const current = project(); if (!current) return;
+  const cached = processScriptsCache.get(current.id);
+  $('#process-permission-note').textContent = current.allowLocalProcesses
+    ? '이 프로젝트에서 허용됨: 등록된 start/dev/serve/preview npm 스크립트가 현재 Windows 사용자 권한으로 실행됩니다. 실행 옵션은 셸 명령이 될 수 없도록 제한됩니다.'
+    : '프로세스 시작을 쓰려면 프로젝트 설정에서 “로컬 프로세스 관리 허용”을 한 번 켜세요. 상태·로그 확인은 계속 사용할 수 있습니다.';
+  if (cached) {
+    const selected = $('#process-script').value;
+    $('#process-script').innerHTML = cached.scripts.length ? cached.scripts.map(item => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join('') : '<option value="">개발 스크립트 없음</option>';
+    if (cached.scripts.some(item => item.name === selected)) $('#process-script').value = selected;
+    $('#process-script').disabled = !cached.scripts.length;
+    $('#process-start').disabled = !current.allowLocalProcesses || !cached.scripts.length;
+    if (!cached.scripts.length && cached.message) $('#process-permission-note').textContent = cached.message;
+  } else {
+    $('#process-script').innerHTML = '<option value="">스크립트 확인 중</option>'; $('#process-script').disabled = true; $('#process-start').disabled = true;
+    if (processScriptsLoading !== current.id) {
+      processScriptsLoading = current.id;
+      api('processes',{ projectId:current.id, action:'scripts' }).then(result => processScriptsCache.set(current.id,result)).catch(error => processScriptsCache.set(current.id,{ scripts:[],message:error.message })).finally(() => { processScriptsLoading = ''; renderLocalProcesses(); });
+    }
+  }
+  const processes = (state.localProcesses || []).filter(item => item.projectId === current.id).sort((a,b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+  $('#process-list').innerHTML = processes.length ? processes.map(item => `<article class="process-card"><div class="process-card-heading"><div><strong>${esc(item.script)} ${item.args?.length ? `<small>${esc(item.args.join(' '))}</small>` : ''}</strong><span>${esc(item.projectName)} · PID ${esc(item.pid || '확인 중')} · ${item.startedAt ? clock(item.startedAt) : ''}</span></div>${badge(item.status)}${['running','starting','checking','stopping'].includes(item.status) ? `<button class="button danger" type="button" data-process-stop="${esc(item.id)}">중지</button>` : ''}</div>${item.error ? `<p class="error-text">${esc(item.error)}</p>` : ''}<details data-process-log-id="${esc(item.id)}"><summary>실행 로그 보기</summary><pre>${esc(processLogCache.get(item.id) || '로그를 불러오려면 펼치세요.')}</pre></details></article>`).join('') : '<p class="muted process-empty">이 프로젝트에서 Agent Desk가 시작한 개발 프로세스가 없습니다.</p>';
 }
 
 const viewInfo = { overview:['대시보드','나의 AI 팀, 한눈에','메인 AI에게 맡기고, 팀이 일하는 과정을 확인하세요.'], agents:['에이전트','나만의 AI 팀을 구성하세요','프로젝트가 바뀌어도, 함께 일할 팀은 그대로.'], skills:['스킬','반복 작업 절차를 재사용하세요','필요한 스킬만 선택한 에이전트에게 전달합니다.'], history:['작업 기록','팀이 해온 일을 돌아보세요','담당자부터 검증 결과까지, 요청 하나의 모든 기록.'], projects:['프로젝트','어떤 프로젝트든, 같은 팀으로','내 PC의 작업 폴더를 연결하고 바로 시작하세요.'], settings:['환경 설정','나에게 맞는 작업 방식','실행 범위와 사용량을 직접 조절하세요.'] };
@@ -526,9 +570,9 @@ function openEditor(type, id) {
     $('#reset-effort').addEventListener('click', () => { $('#editor-form').elements.effort.value = 'high'; syncEffortControl(); });
     syncEffortControl();
   } else {
-    const item = state.projects.find(item => item.id === id) || { name:'',path:'',allowWrites:false };
+    const item = state.projects.find(item => item.id === id) || { name:'',path:'',allowWrites:false,autoApproveCommands:false,allowLocalProcesses:false };
     $('#editor-title').textContent = id ? '프로젝트 설정' : '프로젝트 연결';
-    $('#editor-fields').innerHTML = `<label>프로젝트 이름<input name="name" value="${esc(item.name)}" maxlength="80" placeholder="예: 나의 웹사이트" required></label><div class="path-field"><label for="project-folder-path">이 PC의 폴더 경로</label><div class="path-picker"><input id="project-folder-path" name="path" value="${esc(item.path)}" placeholder="C:\\work\\my-project" required><button class="button secondary" id="browse-project" type="button">${icon('folder')}폴더 찾아보기</button></div><small>폴더 찾아보기로 프로젝트 폴더를 선택하거나 경로를 직접 입력하세요.</small></div><section class="project-permission-mode"><label class="check-label"><input id="project-allow-all" type="checkbox" ${item.allowWrites && item.autoApproveCommands ? 'checked' : ''}>프로젝트 자동 허용 <span>파일 수정 + 명령 실행</span></label><p>한 번에 켜거나 끕니다. 아래에서 권한을 각각 조정할 수도 있습니다.</p></section><label class="check-label"><input id="project-allow-writes" type="checkbox" name="allowWrites" ${item.allowWrites ? 'checked' : ''}>실행 담당 에이전트의 파일 수정 허용</label><label class="check-label"><input id="project-auto-commands" type="checkbox" name="autoApproveCommands" ${item.autoApproveCommands ? 'checked' : ''}>이 프로젝트에서 명령 자동 실행</label><p class="muted">자동 실행을 켜면 수정 담당은 프로젝트 내부 명령을 매번 묻지 않고 실행합니다. 읽기 전용 담당의 명령은 자동 검토합니다. 프로젝트 밖 파일과 네트워크 제한은 유지되며, 범위를 벗어난 작업은 실패하거나 확인이 필요할 수 있습니다.</p><p class="muted">프로젝트 자료는 각 요청에 필요한 부분만 읽습니다. 메인 AI와 검증 담당은 읽기 전용으로 실행됩니다.</p>`;
+    $('#editor-fields').innerHTML = `<label>프로젝트 이름<input name="name" value="${esc(item.name)}" maxlength="80" placeholder="예: 나의 웹사이트" required></label><div class="path-field"><label for="project-folder-path">이 PC의 폴더 경로</label><div class="path-picker"><input id="project-folder-path" name="path" value="${esc(item.path)}" placeholder="C:\\work\\my-project" required><button class="button secondary" id="browse-project" type="button">${icon('folder')}폴더 찾아보기</button></div><small>폴더 찾아보기로 프로젝트 폴더를 선택하거나 경로를 직접 입력하세요.</small></div><section class="project-permission-mode"><label class="check-label"><input id="project-allow-all" type="checkbox" ${item.allowWrites && item.autoApproveCommands ? 'checked' : ''}>프로젝트 자동 허용 <span>파일 수정 + Codex 명령</span></label><p>한 번에 켜거나 끕니다. 아래에서 권한을 각각 조정할 수도 있습니다.</p></section><label class="check-label"><input id="project-allow-writes" type="checkbox" name="allowWrites" ${item.allowWrites ? 'checked' : ''}>실행 담당 에이전트의 파일 수정 허용</label><label class="check-label"><input id="project-auto-commands" type="checkbox" name="autoApproveCommands" ${item.autoApproveCommands ? 'checked' : ''}>이 프로젝트에서 Codex 명령 자동 실행</label><label class="check-label"><input id="project-local-processes" type="checkbox" name="allowLocalProcesses" ${item.allowLocalProcesses ? 'checked' : ''}>로컬 프로세스 관리 허용</label><p class="muted">로컬 프로세스 허용은 Agent Desk가 선택 프로젝트의 start/dev/serve/preview npm 스크립트를 현재 Windows 사용자 권한으로 실행하고 종료하도록 합니다. 코드 변경 권한과는 별도이며, 스크립트 자체는 프로젝트 파일을 수정할 수 있으니 신뢰하는 프로젝트에서만 켜세요.</p><p class="muted">Codex 자동 실행은 프로젝트 내부 명령을 대상으로 합니다. 메인 AI와 검증 담당은 읽기 전용으로 실행됩니다.</p>`;
     const allowAll = $('#project-allow-all');
     const allowWrites = $('#project-allow-writes');
     const autoCommands = $('#project-auto-commands');
@@ -566,6 +610,9 @@ function renderDetail() {
   const workStatus = nonMain.some(task => ['queued','working','waiting'].includes(task.status)) ? '진행 중' : nonMain.some(task => task.status === 'failed') ? '실패 확인' : nonMain.length ? '완료' : '필요 없음';
   const reportStatus = ['running','stopping'].includes(run.status) ? '작성 중' : run.answer ? '완료' : '확인 필요';
   $('#detail-content').innerHTML = `<div class="run-status-line">${badge(run.status)}<span>${date(run.startedAt)} · ${format(run.usage.totalTokens)} tokens · ${esc(run.projectName)}</span></div><div class="detail-workflow" aria-label="작업 흐름"><div><small>1단계</small><b>요청 분석</b><span>${run.tasks.some(task => task.agentId === 'main') ? '기록됨' : '대기'}</span></div><i>›</i><div><small>2단계</small><b>팀 작업</b><span>${esc(workStatus)}</span></div><i>›</i><div class="${gateTone}"><small>3단계</small><b>검증</b><span>${esc(gateLabel)}</span></div><i>›</i><div><small>4단계</small><b>최종 보고</b><span>${esc(reportStatus)}</span></div></div><section class="quality-gate ${gateTone}"><div><strong>품질 확인</strong><span>${gate.required ? '파일을 변경한 작업은 체커의 판정을 확인합니다.' : '파일을 변경하지 않은 읽기 전용 작업입니다.'}</span></div><b>${esc(gateLabel)}</b><p>${esc(gate.reason || '검증 판정이 아직 없습니다.')}</p></section><div class="detail-prompt"><strong>사용자 원문</strong><p>${esc(run.message)}</p>${runImages(run)}</div>${refinementSummary(run)}${run.tasks.map(task => `<article class="detail-task"><div class="detail-task-header"><div><h3>${esc(task.agentName)} · ${esc(task.title)}</h3><small>${task.startedAt ? clock(task.startedAt) : '대기'}${task.finishedAt ? ` → ${clock(task.finishedAt)}` : ''} · ${format(task.usage?.totalTokens)} tokens${task.writable ? ' · 파일 수정 권한 사용' : ''}</small></div>${badge(task.status)}</div>${task.plan?.length ? `<p class="muted">${task.plan.map(item => `${item.status === 'completed' ? '✓' : '○'} ${esc(item.step)}`).join('<br>')}</p>` : ''}<div class="detail-output">${esc(task.output || task.liveText || '작업 시작을 기다리고 있어요.')}</div>${task.error ? `<p class="error-text">${esc(task.error)}</p>` : ''}</article>`).join('')}${run.error ? `<p class="error-text">${esc(run.error)}</p>` : ''}`;
+  const detailAnchor = $('#detail-content').querySelector('.quality-gate');
+  const checkpoint = run.continuity ? `<section class="continuity-card"><strong>이어하기 요약</strong><p>${esc(run.continuity.nextStep || '')}</p>${run.continuity.pending?.length ? `<small>남은 작업: ${run.continuity.pending.map(item => `${item.agent} · ${item.title} (${item.status})`).map(esc).join(' / ')}</small>` : ''}${run.continuity.failures?.length ? `<small>실패 기록: ${run.continuity.failures.map(item => `${item.agent} · ${item.title}: ${item.error}`).map(esc).join(' / ')}</small>` : ''}</section>` : '';
+  detailAnchor?.insertAdjacentHTML('afterend', checkpoint + renderExecutionLog(run));
   $('#detail-content').querySelector('.run-status-line').insertAdjacentHTML('afterend', runDiagnostics(run));
   const discussions = run.discussions || [];
   if (discussions.length) {
@@ -583,6 +630,16 @@ function renderDetail() {
 const monitoringPrompt = 'AI 모니터링 에이전트에게 이 프로젝트의 최근 작업 흐름과 사용량을 점검시켜 줘. 중복되거나 불필요한 위임, 반복 실패가 실제 기록으로 확인될 때만 짧은 운영 지침을 해당 에이전트에 저장해 줘. 개선 근거가 없으면 변경하지 말고 그 이유를 알려줘.';
 document.addEventListener('click', async event => {
   const button = event.target.closest('button'); if (!button) return;
+  if (button.id === 'profile-export') {
+    try {
+      const response = await fetch('/api/profile/export',{ cache:'no-store' });
+      if (!response.ok) throw new Error('팀 설정 파일을 내보내지 못했습니다.');
+      const blob = await response.blob(), url = URL.createObjectURL(blob), anchor = document.createElement('a');
+      anchor.href = url; anchor.download = 'agent-desk-profile.json'; anchor.click(); URL.revokeObjectURL(url);
+      toast('에이전트와 스킬 설정을 내보냈습니다. 파일을 공유하기 전에 지침에 비밀 정보가 없는지 확인하세요.');
+    } catch (error) { toast(error.message,true); }
+  }
+  if (button.id === 'profile-import') $('#profile-file').click();
   if (button.dataset.view) changeView(button.dataset.view);
   if (button.dataset.editAgent) openEditor('agent',button.dataset.editAgent);
   if (button.dataset.editProject) openEditor('project',button.dataset.editProject);
@@ -621,8 +678,51 @@ document.addEventListener('click', async event => {
 });
 $('#project-select').addEventListener('change',event => selectProject(event.target.value));
 $('#project-permission').addEventListener('click',() => openEditor('project',selectedProject));
+$('#process-start').addEventListener('click',async () => {
+  const button = $('#process-start'); button.disabled = true;
+  try {
+    const args = $('#process-args').value.trim().split(/\s+/).filter(Boolean);
+    const result = await api('processes',{ projectId:selectedProject,action:'start',script:$('#process-script').value,args });
+    await refresh(); toast(`${result.script} 프로세스 ${result.status === 'running' ? '실행 중' : result.status} · PID ${result.pid}`);
+  } catch(error) { toast(error.message,true); }
+  finally { renderLocalProcesses(); }
+});
+$('#process-refresh').addEventListener('click',async () => {
+  processScriptsCache.delete(selectedProject);
+  try { for (const item of (state.localProcesses || []).filter(item => item.projectId === selectedProject)) await api('processes',{ projectId:selectedProject,action:'status',processId:item.id }); await refresh(); }
+  catch(error) { toast(error.message,true); }
+});
+$('#process-probe').addEventListener('click',async () => {
+  const button = $('#process-probe'); button.disabled = true; $('#process-probe-result').textContent = '확인 중';
+  try { const result = await api('processes',{ projectId:selectedProject,action:'probe',url:$('#process-probe-url').value.trim() }); $('#process-probe-result').textContent = result.status ? `HTTP ${result.status} · ${result.ok ? '응답 확인' : '오류 응답'}` : `접속 실패 · ${result.error}`; }
+  catch(error) { $('#process-probe-result').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+$('#process-list').addEventListener('click',async event => {
+  const button = event.target.closest('[data-process-stop]'); if (!button) return;
+  button.disabled = true;
+  try { const result = await api('processes',{ projectId:selectedProject,action:'stop',processId:button.dataset.processStop }); await refresh(); toast(`${result.script} 프로세스 종료를 요청했습니다.`); }
+  catch(error) { toast(error.message,true); button.disabled = false; }
+});
+$('#process-list').addEventListener('toggle',async event => {
+  const details = event.target; if (!details.matches('details[data-process-log-id]') || !details.open || processLogCache.has(details.dataset.processLogId)) return;
+  const id = details.dataset.processLogId;
+  try { const result = await api('processes',{ projectId:selectedProject,action:'logs',processId:id,lines:100 }); processLogCache.set(id,result.output || '(출력이 없습니다.)'); renderLocalProcesses(); const node = $('#process-list').querySelector(`[data-process-log-id="${CSS.escape(id)}"]`); if (node) node.open = true; }
+  catch(error) { processLogCache.set(id,error.message); renderLocalProcesses(); }
+},true);
 for (const selector of ['#add-project','#new-project']) $(selector).addEventListener('click',() => openEditor('project'));
 $('#new-agent').addEventListener('click',() => openEditor('agent'));
+$('#profile-file').addEventListener('change',async event => {
+  const file = event.target.files?.[0]; event.target.value = '';
+  if (!file) return;
+  try {
+    const profile = JSON.parse(await file.text());
+    if (!confirm('현재 에이전트와 스킬 구성을 가져온 설정으로 교체할까요? 프로젝트와 대화 기록은 그대로 유지됩니다.')) return;
+    const result = await api('profile/import',profile);
+    await refresh();
+    toast(`팀 설정을 가져왔습니다: 에이전트 ${result.agents}명, 스킬 ${result.skills}개${result.warnings.length ? ` · 확인할 조정 사항 ${result.warnings.length}개` : ''}`);
+  } catch (error) { toast(error.message || '팀 설정 파일을 읽지 못했습니다.',true); }
+});
 $('#new-skill').addEventListener('click',() => openSkillEditor());
 for (const selector of ['#close-editor','#cancel-editor']) $(selector).addEventListener('click',() => $('#editor').close());
 for (const selector of ['#close-skill-editor','#cancel-skill-editor']) $(selector).addEventListener('click',() => $('#skill-editor').close());
@@ -665,7 +765,7 @@ $('#editor-form').addEventListener('submit',async event => {
   event.preventDefault(); const form = event.currentTarget; const input = Object.fromEntries(new FormData(form));
   if (editorId) input.id = editorId;
   if (editorType === 'agent') { input.enabled = ['main', 'prompt_refiner'].includes(editorId) || form.elements.enabled.checked; input.access = ['main', 'prompt_refiner'].includes(editorId) ? 'read-only' : form.elements.access.value; }
-  else { input.allowWrites = form.elements.allowWrites.checked; input.autoApproveCommands = form.elements.autoApproveCommands.checked; }
+  else { input.allowWrites = form.elements.allowWrites.checked; input.autoApproveCommands = form.elements.autoApproveCommands.checked; input.allowLocalProcesses = form.elements.allowLocalProcesses.checked; }
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
   try { const result = await api(editorType === 'agent' ? 'agents' : 'projects',input); if (editorType === 'project') selectedProject = result.id; $('#editor').close(); await refresh(); toast('저장했습니다.'); }
   catch(error) { $('#editor-error').textContent = error.message; } finally { submit.disabled = false; }

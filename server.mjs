@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { CodexClient } from './lib/codex.mjs';
 import { Store } from './lib/store.mjs';
 import { AgentHub } from './lib/hub.mjs';
+import { LocalProcessManager } from './lib/local-process-manager.mjs';
 import { imagePath } from './lib/images.mjs';
 import { SupabaseManager } from './lib/supabase-manager.mjs';
 
@@ -16,7 +17,8 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('유
 const store = new Store(process.env.AGENT_DESK_DATA || path.join(directory, 'data'), path.dirname(directory));
 const client = new CodexClient({ cwd: directory });
 const supabase = new SupabaseManager({ dataDirectory: store.directory, projects: () => store.state.projects });
-const hub = new AgentHub(store, client, supabase);
+const processManager = new LocalProcessManager({ dataDirectory:store.directory, projects:() => store.state.projects });
+const hub = new AgentHub(store, client, supabase, processManager);
 const csrf = randomBytes(32).toString('hex');
 const streams = new Set();
 const host = `127.0.0.1:${port}`;
@@ -87,6 +89,10 @@ const server = http.createServer(async (request, response) => {
   try {
     if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { ok: true, connection: hub.connection.status, activeRunId: hub.active?.run.id || null, pid: process.pid, appDirectory: directory, quotaWindowReset: 'continue', usageWindowDriftToleranceSeconds: 300, quotaResumeIncrement: 5 });
     if (request.method === 'GET' && url.pathname === '/api/state') return json(response, 200, { ...hub.snapshot(), csrf });
+    if (request.method === 'GET' && url.pathname === '/api/profile/export') {
+      response.writeHead(200, { 'Content-Type':'application/json; charset=utf-8', 'Content-Disposition':'attachment; filename="agent-desk-profile.json"', 'Cache-Control':'no-store' });
+      response.end(JSON.stringify(hub.exportProfile(), null, 2)); return;
+    }
     if (request.method === 'GET' && /^\/api\/attachments\/[0-9a-f-]{36}$/.test(url.pathname)) {
       const id = url.pathname.split('/').at(-1);
       const image = store.state.runs.flatMap(run => run.images || []).find(item => item.id === id);
@@ -109,10 +115,12 @@ const server = http.createServer(async (request, response) => {
       if (url.pathname === '/api/runs/resume') return json(response, 202, { id: (await hub.resume(input.id, input.additionalUsagePercent ?? 0)).id });
       if (url.pathname === '/api/cancel') { await hub.cancel(input.id); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/agents') return json(response, 200, hub.saveAgent(input, input.id));
+      if (url.pathname === '/api/profile/import') return json(response, 200, hub.importProfile(input));
       if (url.pathname === '/api/agents/delete') { hub.deleteAgent(input.id); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/skills') return json(response, 200, hub.saveSkill(input, input.id));
       if (url.pathname === '/api/skills/delete') { hub.deleteSkill(input.id); return json(response, 200, { ok: true }); }
       if (url.pathname === '/api/projects') return json(response, 200, hub.saveProject(input));
+      if (url.pathname === '/api/processes') return json(response, 200, await processManager.run(input.projectId, input));
       if (url.pathname === '/api/projects/browse') {
         hub.requireIdle();
         const selectedPath = await pickDirectory(typeof input.path === 'string' ? input.path : '');
