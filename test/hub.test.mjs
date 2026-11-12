@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { Store, validateAgent, validateSettings, defaultAgents } from '../lib/store.mjs';
+import { Store, validateAgent, validateSettings, defaultAgents, defaultSkills } from '../lib/store.mjs';
 import { AgentHub } from '../lib/hub.mjs';
+import { routeRequest, routingPlanText } from '../lib/agent-router.mjs';
 
 class FakeClient extends EventEmitter {
   constructor(mode = 'complete') { super(); this.mode = mode; this.calls = []; this.responses = []; this.threadNumber = 0; this.connected = true; }
@@ -65,9 +66,137 @@ test('main conversation resumes the same durable Codex thread for follow-up requ
   assert.match(mainStart.params.developerInstructions,/필수 사용자 설정·자격 증명·승인이 없거나/);
 });
 
+test('main exposes explicit role and skill routing triggers with task assignment contracts', async t => {
+  const { hub,client } = fixture(t,'hold-main');
+  const run = await hub.start({ projectId:'default',message:'API 계약 스킬의 사용 기준을 설명해줘.' });
+  await settle(() => hub.contexts.size === 1);
+  const mainThread = [...hub.contexts.keys()][0];
+  const start = client.calls.find(call => call.method === 'thread/start').params;
+  assert.match(start.params?.developerInstructions || start.developerInstructions,/요청별 배정 기준/);
+  assert.match(start.developerInstructions,/API·서버 로직은 백엔드/);
+  assert.match(start.developerInstructions,/스킬은 이름이 아니라 설명의 “사용 시점”/);
+  const delegation = start.dynamicTools.find(tool => tool.name === 'agent_desk_run');
+  assert.ok(delegation.description.includes('selectionReason과 가능한 경우 acceptanceCriteria'));
+  assert.match(delegation.description,/사용 시점:/);
+  assert.match(delegation.description,/건너뛸 때:/);
+  assert.equal(delegation.inputSchema.properties.tasks.items.properties.acceptanceCriteria.maxItems,3);
+  assert.ok(delegation.inputSchema.properties.tasks.items.required.includes('selectionReason'));
+  await hub.serverRequest({ id:911,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'API와 화면 구현',task:'API와 화면을 구현하세요.',selectionReason:'구현 작업이며 전담 백엔드가 없어서 빌더가 맡습니다.',acceptanceCriteria:['응답 필드가 화면에 표시된다.'],skillIds:['api-contract-alignment'] }] } } });
+  const task = run.tasks.find(item => item.agentId === 'worker');
+  const workerStart = client.calls.filter(call => call.method === 'thread/start').at(-1).params;
+  assert.equal(task.selectionReason,'구현 작업이며 전담 백엔드가 없어서 빌더가 맡습니다.');
+  assert.deepEqual(task.acceptanceCriteria,['응답 필드가 화면에 표시된다.']);
+  assert.match(workerStart.developerInstructions,/배정 이유: 구현 작업이며 전담 백엔드가 없어서 빌더가 맡습니다\./);
+  assert.match(workerStart.developerInstructions,/완료 조건:\n- 응답 필드가 화면에 표시된다\./);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('deterministic routing requires an action plus domain and keeps plain questions direct', t => {
+  const agents = [
+    { id:'backend',name:'백엔드 에이전트',role:'백엔드 · API',enabled:true },
+    { id:'frontend',name:'프론트엔드 에이전트',role:'프론트엔드 · UI',enabled:true },
+    { id:'researcher',name:'리서처',role:'조사 · 탐색',enabled:true },
+    { id:'verifier',name:'체커',role:'검증 · 테스트',enabled:true },
+  ];
+  const question = routeRequest('백엔드 에이전트의 역할은 뭐야?',agents);
+  assert.equal(question.mode,'direct');
+  assert.deepEqual(question.requiredAgentIds,[]);
+  assert.equal(routeRequest('API가 뭐야?',agents).mode,'direct');
+  const change = routeRequest('API 응답 필드를 수정해줘.',agents);
+  assert.deepEqual(change.requiredAgentIds,['backend']);
+  assert.deepEqual(routeRequest('버튼을 조금 크게 해줘.',agents).requiredAgentIds,['frontend']);
+  const mixed = routeRequest('기존 API 구조를 조사하고 화면을 구현해줘.',agents);
+  assert.deepEqual(mixed.requiredAgentIds,['researcher','backend','frontend']);
+  assert.deepEqual(routeRequest('로그인 오류 원인을 분석해줘.',agents).requiredAgentIds,['researcher']);
+  const testRequest = routeRequest('로그인 오류를 재현하고 테스트해줘.',[...agents,{ id:'qa',name:'QA 에이전트',role:'QA · 테스트',enabled:true }]);
+  assert.deepEqual(testRequest.requiredAgentIds,['qa']);
+  const dbRequest = routeRequest('사용자 테이블 마이그레이션을 만들어줘.',[...agents,{ id:'database',name:'DB 에이전트',role:'데이터베이스 · 스키마',enabled:true }]);
+  assert.deepEqual(dbRequest.requiredAgentIds,['database']);
+  const serviceRequest = routeRequest('개발 서버를 재시작하고 접속 상태를 확인해줘.',[...agents,{ id:'server',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',enabled:true }]);
+  assert.deepEqual(serviceRequest.requiredAgentIds,['server']);
+  assert.match(routingPlanText(mixed),/메인이 변경 불가/);
+});
+
+test('migration adds missing specialist roles without replacing a custom role', t => {
+  const { store } = fixture(t);
+  store.state.version = 16;
+  store.state.agents = store.state.agents.filter(agent => !['backend','frontend','design','server','database','qa','security'].includes(agent.id));
+  store.state.agents.push({ id:'my-backend',name:'내 백엔드 담당',role:'백엔드 · API',instructions:'내 지침',enabled:true });
+  store.saveAgentInstruction(store.state.agents.at(-1));
+  store.save();
+  const migrated = new Store(store.directory,process.cwd());
+  assert.equal(migrated.state.version,17);
+  assert.equal(migrated.state.agents.some(agent => agent.id === 'frontend'),true);
+  assert.equal(migrated.state.agents.filter(agent => /백엔드/.test(`${agent.name} ${agent.role}`)).length,1);
+  assert.equal(migrated.state.agents.find(agent => agent.id === 'my-backend').instructions,'내 지침');
+  assert.equal(routeRequest('API 응답을 수정해줘.',migrated.state.agents).requiredAgentIds[0],'my-backend');
+});
+
+test('agent instructions persist in Markdown while runtime settings remain in JSON', t => {
+  const { store } = fixture(t);
+  const frontend = store.state.agents.find(agent => agent.id === 'frontend');
+  frontend.instructions = 'UI 절차를 확인하고 변경 뒤 화면을 검사합니다.';
+  store.saveAgentInstruction(frontend);
+  store.state.agents.push({ id:'custom-reviewer',name:'문서 담당',role:'문서 검토',description:'문서 검토',instructions:'제목과 근거를 검토합니다.',model:'test-model',effort:'high',access:'read-only',enabled:true,color:'violet',optimizationGuidance:'' });
+  store.saveAgentInstruction(store.state.agents.at(-1));
+  store.save();
+  const json = JSON.parse(readFileSync(store.file,'utf8'));
+  assert.equal('instructions' in json.agents.find(agent => agent.id === 'frontend'),false);
+  assert.match(readFileSync(path.join(store.directory,'agents','frontend.md'),'utf8'),/UI 절차를 확인하고 변경 뒤 화면을 검사합니다/);
+  assert.match(readFileSync(path.join(store.directory,'agent-instructions','custom-reviewer.md'),'utf8'),/제목과 근거를 검토합니다/);
+  const reopened = new Store(store.directory,process.cwd());
+  assert.equal(reopened.state.agents.find(agent => agent.id === 'frontend').instructions,'UI 절차를 확인하고 변경 뒤 화면을 검사합니다.');
+  assert.equal(reopened.state.agents.find(agent => agent.id === 'custom-reviewer').instructions,'제목과 근거를 검토합니다.');
+});
+
+test('legacy JSON agent instructions migrate over default Markdown without losing custom text', t => {
+  const { store } = fixture(t);
+  const backend = store.state.agents.find(agent => agent.id === 'backend');
+  backend.instructions = '기존 PC에서 사용하던 백엔드 지침';
+  store.state.version = 16;
+  writeFileSync(store.file,JSON.stringify(store.state,null,2),'utf8');
+  const migrated = new Store(store.directory,process.cwd());
+  assert.equal(migrated.state.agents.find(agent => agent.id === 'backend').instructions,'기존 PC에서 사용하던 백엔드 지침');
+  assert.match(readFileSync(path.join(store.directory,'agents','backend.md'),'utf8'),/기존 PC에서 사용하던 백엔드 지침/);
+  assert.equal('instructions' in JSON.parse(readFileSync(store.file,'utf8')).agents.find(agent => agent.id === 'backend'),false);
+});
+
+test('runtime rejects a delegation that skips a trigger-selected specialist', async t => {
+  const { hub,client,store } = fixture(t,'hold-main');
+  store.state.agents.push({ id:'backend',name:'백엔드 에이전트',role:'백엔드 · API',description:'API 변경',model:'test-model',effort:'high',access:'workspace-write',enabled:true,instructions:'API를 담당합니다.' });
+  const run = await hub.start({ projectId:'default',message:'API 응답 필드를 수정해줘.' });
+  await settle(() => hub.contexts.size === 1);
+  const mainThread = [...hub.contexts.keys()][0];
+  await hub.serverRequest({ id:921,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'변경',task:'API를 수정',selectionReason:'테스트' }] } } });
+  assert.match(JSON.stringify(client.responses.at(-1)),/필수 담당자가 남아 있습니다/);
+  await hub.serverRequest({ id:922,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'backend',title:'API 수정',task:'응답 필드를 수정',selectionReason:'API 변경 트리거' }] } } });
+  assert.equal(run.routing.status,'dispatched');
+  assert.deepEqual(run.routing.dispatchedAgentIds,['backend']);
+  await hub.cancel(run.id); await settle(() => !hub.active);
+});
+
+test('skill descriptions state when to use or skip and migration preserves custom descriptions', t => {
+  for (const skill of defaultSkills) {
+    assert.match(skill.description,/사용 시점:/);
+    assert.match(skill.description,/건너뛸 때:/);
+  }
+  const { store } = fixture(t);
+  store.state.version = 15;
+  const seeded = store.state.skills.find(skill => skill.id === 'visible-ui-check');
+  seeded.description = 'UI 변경을 실행 중인 화면과 대표 상태에서 확인합니다.';
+  const custom = store.state.skills.find(skill => skill.id === 'focused-exploration');
+  custom.description = '사용자가 직접 작성한 설명을 유지합니다.';
+  store.save();
+  const migrated = new Store(store.directory,process.cwd());
+  assert.equal(migrated.state.version,17);
+  assert.equal(migrated.state.skills.find(skill => skill.id === 'visible-ui-check').description,defaultSkills.find(skill => skill.id === 'visible-ui-check').description);
+  assert.equal(migrated.state.skills.find(skill => skill.id === 'focused-exploration').description,'사용자가 직접 작성한 설명을 유지합니다.');
+});
+
 test('server teammate receives strict target endpoint and permission failure reporting rules', async t => {
   const { hub,client,store } = fixture(t,'hold-main');
   store.state.projects[0].allowWrites = true;
+  store.state.agents = store.state.agents.filter(agent => agent.id !== 'server');
   const serverAgent = { id:'custom-server-agent',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',model:'test-model',effort:'low',access:'workspace-write',enabled:true,instructions:'서버 설정을 확인하세요.',optimizationGuidance:'' };
   store.state.agents.push(serverAgent);
   const run = await hub.start({ projectId:'default',message:'192.168.75.151:8083 서비스를 재시작하고 접속을 확인하세요.' });
@@ -501,7 +630,9 @@ test('prompt refinement runs first only when enabled and preserves the original 
   client.refinerAnswer = '목표: 화면 수정. 제약: 파일 삭제 금지.';
   const run = await hub.start({ projectId:'default',message:'화면 좀 수정해줘. 파일은 지우지 마.',refinePrompt:true });
   await settle(() => !hub.active);
-  assert.equal(run.status,'completed');
+  assert.equal(run.status,'needs_review');
+  assert.equal(run.routing.status,'needs_review');
+  assert.deepEqual(run.routing.requiredAgentIds,['frontend']);
   assert.equal(run.message,'화면 좀 수정해줘. 파일은 지우지 마.');
   assert.equal(run.promptRefinement.status,'completed');
   assert.equal(run.promptRefinement.text,client.refinerAnswer);
@@ -611,15 +742,15 @@ test('read-only operational delegation skips change verification for a writable 
   assert.match(mainThreadStart.developerInstructions,/서비스를 (?:실제로 )?시작·중지·재시작(?:하라고 하면|하는 요청은) 프로세스와 로그 상태를 바꾸므로 readOnly: true를 지정하지 말고/);
   assert.equal(mainThreadStart.dynamicTools[0].inputSchema.properties.tasks.items.properties.readOnly.type,'boolean');
   assert.equal(mainThreadStart.dynamicTools[0].inputSchema.properties.tasks.items.properties.verifyChanges.type,'boolean');
-  await hub.serverRequest({ id:801,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'서버 실행 확인',task:'서버 상태만 확인',readOnly:true }] } } });
-  const operational = run.tasks.find(task => task.agentId === 'worker');
+  await hub.serverRequest({ id:801,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'server',title:'서버 실행 확인',task:'서버 상태만 확인',readOnly:true }] } } });
+  const operational = run.tasks.find(task => task.agentId === 'server');
   assert.equal(operational.status,'completed');
   assert.equal(operational.readOnly,true);
   assert.equal(operational.writable,false);
   assert.equal(client.calls.filter(call => call.method === 'thread/start').at(-1).params.sandbox,'read-only');
   assert.equal(run.qualityGate.required,false);
   assert.equal(run.tasks.some(task => task.agentId === 'verifier'),false);
-  await hub.serverRequest({ id:802,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'worker',title:'설정 변경',task:'설정을 수정' }] } } });
+  await hub.serverRequest({ id:802,method:'item/tool/call',params:{ threadId:mainThread,tool:'agent_desk_run',arguments:{ tasks:[{ agentId:'server',title:'설정 변경',task:'설정을 수정' }] } } });
   assert.equal(run.qualityGate.required,true);
   assert.equal(client.calls.filter(call => call.method === 'thread/start').at(-1).params.sandbox,'workspace-write');
   await hub.cancel(run.id); await settle(() => !hub.active);
@@ -771,7 +902,7 @@ test('legacy token budget migrates to a percentage cap without changing old run 
   store.state.runs.push({ id:'old',status:'completed',limits:{ tokenBudget:250000 },tasks:[] });
   store.save();
   const reopened = new Store(store.directory,process.cwd());
-  assert.equal(reopened.state.version,15);
+  assert.equal(reopened.state.version,17);
   assert.equal(reopened.state.settings.usagePercentLimit,5);
   assert.equal('tokenBudget' in reopened.state.settings,false);
   assert.equal(reopened.state.runs[0].limits.tokenBudget,250000);
@@ -783,7 +914,7 @@ test('legacy team gains the monitor and prompt refiner once', t => {
   store.state.agents = store.state.agents.filter(agent => agent.id !== 'monitor');
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,15);
+  assert.equal(migrated.state.version,17);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'monitor').length,1);
   assert.equal(migrated.state.agents.filter(agent => agent.id === 'prompt_refiner').length,1);
   migrated.state.agents = migrated.state.agents.filter(agent => agent.id !== 'monitor');
@@ -794,12 +925,16 @@ test('legacy team gains the monitor and prompt refiner once', t => {
 test('saved main and custom-ID server agent instructions gain operational truth rules without replacing custom guidance', t => {
   const { store } = fixture(t);
   store.state.version = 6;
+  store.state.agents = store.state.agents.filter(agent => agent.id !== 'server');
   const main = store.state.agents.find(agent => agent.id === 'main');
   main.instructions = '기존 메인 지침';
-  store.state.agents.push({ id:'7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',instructions:'기존 서버 지침' });
+  store.saveAgentInstruction(main);
+  const customServer = { id:'7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',instructions:'기존 서버 지침' };
+  store.state.agents.push(customServer);
+  store.saveAgentInstruction(customServer);
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,15);
+  assert.equal(migrated.state.version,17);
   assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/기존 메인 지침.*에이전트의 성공 주장만으로 완료 처리하지 마세요/s);
   const server = migrated.state.agents.find(agent => agent.name === '서버 · 인프라 에이전트').instructions;
   assert.match(server,/기존 서버 지침/);
@@ -819,12 +954,15 @@ test('v11 migration removes contradictory read-only start rule and permits reque
   store.state.version = 11;
   const main = store.state.agents.find(agent => agent.id === 'main');
   main.instructions = '서비스 실행·중지나 단순 상태 확인처럼 코드·설정·문서·데이터 등 지속되는 결과물을 변경하지 않는 작업은 담당자가 직접 확인해 보고 체커를 별도로 호출하지 마세요. 파일 수정 권한이 있는 역할에 이런 작업을 맡길 때는 readOnly: true로 지정하세요.';
+  store.saveAgentInstruction(main);
+  store.state.agents = store.state.agents.filter(agent => agent.id !== 'server');
   const server = { id:'server',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',access:'workspace-write',instructions:'' };
   store.state.agents.push(server);
   server.instructions = '요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요. 파괴적인 명령, 외부 배포, 실제 인프라 변경은 실행하지 말고 필요한 명령을 제안하세요.';
+  store.saveAgentInstruction(server);
   store.save();
   const migrated = new Store(store.directory,process.cwd());
-  assert.equal(migrated.state.version,15);
+  assert.equal(migrated.state.version,17);
   assert.doesNotMatch(migrated.state.agents.find(agent => agent.id === 'main').instructions,/서비스 실행·중지나 단순 상태 확인[\s\S]*?readOnly: true로 지정하세요/);
   assert.match(migrated.state.agents.find(agent => agent.id === 'main').instructions,/서비스를 시작·중지·재시작하는 요청은 프로세스와 로그를 바꾸므로/);
   assert.match(server.instructions,/요청된 범위의 실행·배포 구성을 조사하고 최소 변경으로 작업하세요/);
@@ -834,14 +972,16 @@ test('v11 migration removes contradictory read-only start rule and permits reque
 test('v12 migration distinguishes denied diagnostic logs from a denied service start', t => {
   const { store } = fixture(t);
   store.state.version = 12;
+  store.state.agents = store.state.agents.filter(agent => agent.id !== 'server');
   const server = { id:'server',name:'서버 · 인프라 에이전트',role:'서버 · 인프라',access:'workspace-write',instructions:'기존 서버 지침' };
   store.state.agents.push(server);
   server.instructions += '\n시작·재시작이 EPERM/EACCES/권한 거부로 실패하면 해당 시도에서 멈추세요.';
+  store.saveAgentInstruction(server);
   store.save();
 
   const migrated = new Store(store.directory,process.cwd());
   const updated = migrated.state.agents.find(agent => agent.id === server.id).instructions;
-  assert.equal(migrated.state.version,15);
+  assert.equal(migrated.state.version,17);
   assert.doesNotMatch(updated,/시작·재시작이 EPERM\/EACCES\/권한 거부로 실패하면 해당 시도에서 멈추세요\./);
   assert.match(updated,/진단용 로그 파일 생성 또는 stdout\/stderr 리다이렉션만 거부된 경우에는 그 로그 작업만 포기하세요/);
   assert.match(updated,/출력 리다이렉션 없이 요청한 서비스를 프로젝트 폴더에서 실행해도 됩니다/);
@@ -852,17 +992,18 @@ test('v13 migration adds bounded, evidence-based retries to the saved main agent
   store.state.version = 13;
   const main = store.state.agents.find(agent => agent.id === 'main');
   main.instructions = '사용자 지정 메인 지침';
+  store.saveAgentInstruction(main);
   store.save();
 
   const migrated = new Store(store.directory,process.cwd());
   const savedMain = migrated.state.agents.find(agent => agent.id === 'main');
-  assert.equal(migrated.state.version,15);
+  assert.equal(migrated.state.version,17);
   assert.match(savedMain.instructions,/사용자 지정 메인 지침/);
   assert.match(savedMain.instructions,/실패 분석과 제한 재시도/);
   assert.match(savedMain.instructions,/최대 3회 시도/);
   assert.match(savedMain.instructions,/자격 증명·승인/);
   assert.equal((savedMain.instructions.match(/실패 분석과 제한 재시도:/g) || []).length,1);
-  assert.equal(new Store(store.directory,process.cwd()).state.version,15);
+  assert.equal(new Store(store.directory,process.cwd()).state.version,17);
 });
 
 test('scheduler caps readers and keeps writes exclusive even across tool batches', async t => {

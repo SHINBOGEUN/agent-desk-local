@@ -14,7 +14,7 @@ import { SupabaseManager } from './lib/supabase-manager.mjs';
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.AGENT_DESK_PORT || 4317);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('유효한 포트가 필요합니다.');
-const store = new Store(process.env.AGENT_DESK_DATA || path.join(directory, 'data'), path.dirname(directory));
+const store = new Store(process.env.AGENT_DESK_DATA || path.join(directory, 'data'), path.dirname(directory), path.join(directory, 'agents'));
 const client = new CodexClient({ cwd: directory });
 const supabase = new SupabaseManager({ dataDirectory: store.directory, projects: () => store.state.projects });
 const processManager = new LocalProcessManager({ dataDirectory:store.directory, projects:() => store.state.projects });
