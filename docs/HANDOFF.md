@@ -129,3 +129,11 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: `quota_samples` 테이블(Codex 한도 추적은 4단계), `node:sqlite`가 실험 기능이라 첫 import 때 경고가 한 번 출력됨(동작에는 영향 없음).
 - 다음 사람이 할 일: 2-7 CLI `agent-desk run`·`doctor`.
 
+
+### 2026-11-13 · Claude (9차)
+- 한 일: 2-7. `packages/cli`(`main.ts` run·doctor, `discover.ts` Codex 탐색(Windows `codex.cmd` 셈은 따라가 실제 `codex.exe` 사용)·버전 범위 경고(0.167.x 확인됨), `config.ts` 프로젝트 설정 검증(알 수 없는 키는 오류), `paths.ts` 데이터 폴더·PC별 `machine.json`, `format.ts`). `npm run agent-desk -- run "요청" [--unattended --verify "cmd" --review auto --max-tokens N --max-minutes N --json]`, `doctor`.
+  - 종료 코드: completed 0, failed 1, needs_review 2, needs_user 3, interrupted 4, 사용법 오류 64. `--unattended`는 질문을 하지 않고 `needs_user`로 끝냄.
+  - 실행마다 RunStore에 기록하고 직전 Run Brief를 classify에 전달. doctor는 verify 명령이 없으면 FAIL과 후보(`npm test`)를 안내만 하고 설정 파일은 고치지 않음.
+- 확인한 것: 전체 84개 테스트와 `tsc --noEmit` 통과(FakeRuntime으로 run·doctor·질문·설정 오류·Codex 탐색).
+- 아직 없는 것: 실제 Codex로 실행(2-10, 사용자 PC), AGENTS.md/CLAUDE.md 차이 점검, Claude 실행 파일 탐색(3단계). 출력은 영어(PowerShell 5 인코딩 문제 회피).
+- 다음 사람이 할 일: 2-8 v1 실패 재현 테스트, 2-9 벤치 어댑터.

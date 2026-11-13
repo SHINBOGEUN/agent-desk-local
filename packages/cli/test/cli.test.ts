@@ -1,0 +1,152 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import { FakeRuntime } from '#runtime-fake';
+import type { FakeScript } from '#runtime-fake';
+import { RunStore } from '#store';
+import { main, parseArgs } from '../src/main.ts';
+import type { CliDeps } from '../src/main.ts';
+import { resolveCodexExecutable, versionWarning } from '../src/discover.ts';
+import { validateConfig } from '../src/config.ts';
+
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
+const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
+const answerReport = { workflow: 'answer', requirements: [], reason: 'plain question', answer: 'It listens on 3000.', sources: ['server.js'] };
+
+function harness(project: string, runtime: FakeRuntime, extra: Partial<CliDeps> = {}) {
+  const home = tmp();
+  const out: string[] = [];
+  const err: string[] = [];
+  const deps: CliDeps = {
+    env: { AGENT_DESK_HOME: home }, platform: 'linux', cwd: project,
+    out: t => out.push(t), err: t => err.push(t),
+    createRuntime: () => runtime,
+    ...extra,
+  };
+  return { deps, home, out, err };
+}
+
+test('parseArgs reads options and rejects bad ones', () => {
+  const ok = parseArgs(['run', 'fix', 'the bug', '--unattended', '--verify', 'npm test', '--max-tokens', '5000', '--review', 'auto']);
+  assert.equal(ok.command, 'run');
+  assert.equal(ok.request, 'fix the bug');
+  assert.deepEqual(ok.verify, ['npm test']);
+  assert.equal(ok.maxTokens, 5000);
+  assert.equal(ok.review, 'auto');
+  const bad = parseArgs(['run', 'x', '--review', 'sometimes', '--nope', '--max-tokens', '-1']);
+  assert.equal(bad.errors.length, 3);
+});
+
+test('run answers a question, stores the run and exits 0', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
+  const { deps, home, out } = harness(project, runtime);
+  const code = await main(['run', 'Which port?', '--runtime', 'fake', '--project', project], deps);
+  assert.equal(code, 0);
+  assert.match(out.join(''), /Status: completed/);
+  assert.match(out.join(''), /It listens on 3000\./);
+  const store = new RunStore(path.join(home, 'agent-desk.db'));
+  try {
+    const runs = store.listRuns(project);
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0]?.status, 'completed');
+    assert.ok(store.latestBrief(project));
+  } finally { store.close(); }
+});
+
+test('second run receives the previous run brief', async () => {
+  const project = tmp();
+  const home = tmp();
+  const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
+  const first = make();
+  await main(['run', 'Which port?', '--runtime', 'fake'], { env: { AGENT_DESK_HOME: home }, platform: 'linux', cwd: project, out: () => {}, err: () => {}, createRuntime: () => first });
+  const second = make();
+  await main(['run', 'And the host?', '--runtime', 'fake'], { env: { AGENT_DESK_HOME: home }, platform: 'linux', cwd: project, out: () => {}, err: () => {}, createRuntime: () => second });
+  assert.match(second.turns[0]?.input.text ?? '', /Which port\?/);
+});
+
+test('--unattended turns an agent question into needs_user (exit 3) and never prompts', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ ask: { question: 'Which database?' } }])], builder: [] } });
+  let asked = 0;
+  const { deps } = harness(project, runtime, { ask: async () => { asked++; return 'sqlite'; } });
+  const code = await main(['run', 'Add storage', '--runtime', 'fake', '--unattended'], deps);
+  assert.equal(asked, 0);
+  assert.equal(code, 3);
+});
+
+test('interactive run passes the answer back to the agent', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ ask: { question: 'Which database?', options: ['sqlite', 'postgres'] } }, { report: answerReport }])], builder: [] } });
+  const { deps } = harness(project, runtime, { ask: async () => 'sqlite' });
+  const code = await main(['run', 'Add storage', '--runtime', 'fake'], deps);
+  assert.equal(code, 0);
+});
+
+test('invalid project config stops the run with exit 64', async () => {
+  const project = tmp();
+  fs.mkdirSync(path.join(project, '.agent-desk'));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ verfy: ['x'] }));
+  const { deps, err } = harness(project, new FakeRuntime({ scripts: {} }));
+  assert.equal(await main(['run', 'x', '--runtime', 'fake'], deps), 64);
+  assert.match(err.join(''), /config\.verfy: unknown key/);
+});
+
+test('doctor reports a missing verify command and a healthy fake runtime', async () => {
+  const project = tmp();
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+  const { deps, out } = harness(project, new FakeRuntime({ scripts: {} }));
+  const code = await main(['doctor', '--runtime', 'fake'], deps);
+  assert.equal(code, 1);
+  assert.match(out.join(''), /ok\s+fake runtime/);
+  assert.match(out.join(''), /FAIL verify commands/);
+  assert.match(out.join(''), /candidate: "npm test"/);
+});
+
+test('doctor reports an unhealthy runtime', async () => {
+  const project = tmp();
+  const { deps, out } = harness(project, new FakeRuntime({ scripts: {}, healthy: false }));
+  assert.equal(await main(['doctor', '--runtime', 'fake'], deps), 1);
+  assert.match(out.join(''), /FAIL fake runtime/);
+});
+
+test('doctor without Codex explains the fix; with Codex it saves the path', async () => {
+  const project = tmp();
+  const none = harness(project, new FakeRuntime({ scripts: {} }), {});
+  none.deps.env = { AGENT_DESK_HOME: none.home, PATH: '' };
+  assert.equal(await main(['doctor'], none.deps), 1);
+  assert.match(none.out.join(''), /codex executable: not found/);
+
+  const bin = tmp();
+  const exe = path.join(bin, 'codex');
+  fs.writeFileSync(exe, '#!/bin/sh\n');
+  const found = harness(project, new FakeRuntime({ scripts: {} }), { readVersion: async () => 'codex-cli 0.167.2' });
+  found.deps.env = { AGENT_DESK_HOME: found.home, PATH: bin };
+  await main(['doctor'], found.deps);
+  assert.match(found.out.join(''), /ok\s+codex executable/);
+  assert.match(found.out.join(''), /ok\s+codex version/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(found.home, 'machine.json'), 'utf8')).codex.path, exe);
+});
+
+test('Windows npm shim is followed to the real codex.exe', () => {
+  const root = tmp();
+  fs.writeFileSync(path.join(root, 'codex.cmd'), '@echo off');
+  const real = path.join(root, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'codex.exe');
+  fs.mkdirSync(path.dirname(real), { recursive: true });
+  fs.writeFileSync(real, '');
+  // path.join uses the host separator; the search logic is the same on every platform.
+  const found = resolveCodexExecutable({ env: { PATH: root }, platform: 'win32' });
+  assert.equal(found?.path, real);
+});
+
+test('version warning and config validation', () => {
+  assert.equal(versionWarning('codex-cli 0.167.4'), null);
+  assert.match(versionWarning('codex-cli 0.201.0') ?? '', /not been checked/);
+  assert.match(versionWarning('garbage') ?? '', /could not read/);
+  const bad = validateConfig({ runtime: 'x', verify: [''], review: 'maybe', limits: { redo: -1, foo: 1 } });
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.errors.length, 5);
+  assert.equal(validateConfig({ verify: ['npm test'], review: 'auto', limits: { redo: 1, tokens: 1000 } }).ok, true);
+});

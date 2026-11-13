@@ -12,9 +12,11 @@
     "#tools-mcp": "./packages/tools-mcp/src/index.ts",
     "#runtime-codex": "./packages/runtime-codex/src/index.ts",
     "#orchestrator": "./packages/orchestrator/src/index.ts",
-    "#store": "./packages/store/src/index.ts"
+    "#store": "./packages/store/src/index.ts",
+    "#cli": "./packages/cli/src/main.ts"
   },
   "scripts": {
+    "agent-desk": "node packages/cli/src/bin.ts",
     "test": "node --test \"packages/*/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
     "legacy:start": "npm --prefix legacy start",
