@@ -87,7 +87,7 @@ test('a turn without a report gets one reminder, then fails', async () => {
   assert.match(failed.reason, /twice without an accepted report/);
 });
 
-test('runtime failure, missing runtime script and unsupported workflow end as failed', async () => {
+test('runtime failure and a missing runtime script end as failed', async () => {
   const crash = new FakeRuntime({ scripts: { lead: [script([{ fail: 'spawn EPERM' }])], builder: [] } });
   const crashed = await runRequest('q', { cwd: tmp(), runtime: crash });
   assert.equal(crashed.status, 'failed');
@@ -97,11 +97,6 @@ test('runtime failure, missing runtime script and unsupported workflow end as fa
   const none = await runRequest('q', { cwd: tmp(), runtime: new FakeRuntime({ scripts: {} }) });
   assert.equal(none.status, 'failed');
   assert.match(none.reason, /no script left/);
-
-  const plan = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'plan-build', requirements: [{ id: 'R1', text: 't' }], reason: 'big' } }])], builder: [] } });
-  const unsupported = await runRequest('q', { cwd: tmp(), runtime: plan });
-  assert.equal(unsupported.status, 'failed');
-  assert.match(unsupported.reason, /plan-build/);
 });
 
 test('abort ends the run as interrupted', async () => {

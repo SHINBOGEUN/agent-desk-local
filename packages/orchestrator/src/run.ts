@@ -2,7 +2,7 @@
 // of steps, the roles, access levels, gates, REDO and the final status are all
 // decided here in code. Models only work inside steps.
 
-import type { ApprovalDecision, ApprovalRequest, BuilderReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
+import type { AnswerReport, ApprovalDecision, ApprovalRequest, BuilderReport, PlanReport, ResearchReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
 import { UsageLedger } from '#core';
 import { ReportCollector } from '#tools-mcp';
 import { classifyFailure } from './failure.ts';
@@ -11,7 +11,7 @@ import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gat
 import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
-import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, redoPrompt, reportReminder } from './prompts.ts';
+import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt } from './review.ts';
 import { decideApproval } from './approval.ts';
 import { createRestorePoint } from './restore-point.ts';
@@ -150,11 +150,11 @@ const failedStep = (reason: string, type: FailureType = classifyFailure(reason))
 
 async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder): Promise<Session> {
   const { config } = ctx;
-  const effort = config.effort?.[role] ?? (role === 'lead' ? 'low' : undefined);
+  const effort = config.effort?.[role] ?? (role === 'lead' && step === 'classify' ? 'low' : undefined);
   const model = config.models?.[role];
   return ctx.runtimeFor(role).startSession({
     role, cwd: config.cwd, access: role === 'builder' ? 'workspace-write' : 'read-only', skills: [], tools: toolsFor(ctx, step, role, holder),
-    instructions: instructionsFor(role, config.roleNotes?.[role]),
+    instructions: instructionsFor(role, config.roleNotes?.[role], step),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
@@ -248,7 +248,77 @@ async function runClassify(ctx: RunContext, request: string, lead: LeadCollector
   return failure ? failureResult(ctx, failure) : null;
 }
 
-async function runBuild(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>): Promise<RunResult> {
+
+/** Runs a read-only step body between two snapshots: it may not change files or protected paths. */
+async function guardedReadOnly(ctx: RunContext, step: StepKind, work: () => Promise<StepFailure | null>): Promise<{ failure: StepFailure | null; stop: RunResult | null }> {
+  const before = takeSnapshot(ctx.config.cwd, { mode: 'stat', ignore: ctx.ignore });
+  const failure = await work();
+  const after = takeSnapshot(ctx.config.cwd, { mode: 'stat', ignore: ctx.ignore });
+  const violation = protectedViolation(ctx, before, after);
+  const changes = ctx.recordGate(checkNoChanges({ attempt: 0, step, diff: diffSnapshots(before, after) }));
+  if (violation) return { failure, stop: finish(ctx, 'failed', violation) };
+  if (!changes.ok) return { failure, stop: finish(ctx, 'needs_review', changes.problems[0] ?? 'A read-only step changed files.') };
+  return { failure, stop: null };
+}
+
+async function runPlan(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>): Promise<{ plan: PlanReport } | { stop: RunResult }> {
+  ctx.emit({ type: 'step_started', step: 'plan', role: 'lead' });
+  const collector = new ReportCollector('plan');
+  const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
+  const { failure, stop } = await guardedReadOnly(ctx, 'plan', () => withTransientRetry(ctx, 'plan', async () => {
+    let session: Session | null = null;
+    try {
+      session = await openSession(ctx, 'plan', 'lead', holder);
+      return await playUntilReport(ctx, 'plan', 'lead', session, holder, planPrompt(request, requirements), reportReminder('your plan'));
+    } catch (error) {
+      return failedStep(error instanceof Error ? error.message : String(error));
+    } finally {
+      await session?.close().catch(() => {});
+    }
+  }));
+  ctx.emit({ type: 'step_finished', step: 'plan', ok: !failure && !stop, detail: failure ? 'failed' : 'plan accepted' });
+  if (stop) return { stop };
+  if (failure) return { stop: failureResult(ctx, failure, base) };
+  return { plan: collector.report! };
+}
+
+const MAX_ANGLES = 3;
+
+async function runInvestigate(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>): Promise<RunResult> {
+  const angles = requirements.length ? requirements.slice(0, MAX_ANGLES).map(requirement => requirement.text) : [request];
+  if (requirements.length > MAX_ANGLES) ctx.warnings.push(`Only the first ${MAX_ANGLES} of ${requirements.length} angles were investigated.`);
+  ctx.emit({ type: 'step_started', step: 'research', role: 'researcher' });
+  const collectors = angles.map(() => new ReportCollector('research'));
+  const { failure, stop } = await guardedReadOnly(ctx, 'research', async () => {
+    const outcomes = await Promise.all(angles.map(async (angle, index) => {
+      const collector = collectors[index]!;
+      const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
+      return withTransientRetry(ctx, 'research', async () => {
+        let session: Session | null = null;
+        try {
+          session = await openSession(ctx, 'research', 'researcher', holder);
+          return await playUntilReport(ctx, 'research', 'researcher', session, holder, researchPrompt(request, angle), reportReminder('your research report'));
+        } catch (error) {
+          return failedStep(error instanceof Error ? error.message : String(error));
+        } finally {
+          await session?.close().catch(() => {});
+        }
+      });
+    }));
+    return outcomes.find(outcome => outcome !== null) ?? null;
+  });
+  ctx.emit({ type: 'step_finished', step: 'research', ok: !failure && !stop, detail: failure ? 'failed' : `${angles.length} report(s) accepted` });
+  if (stop) return stop;
+  if (failure) return failureResult(ctx, failure, base);
+  const reports: ResearchReport[] = collectors.map(collector => collector.report!);
+  const text = reports.map((report, index) => [`## ${index + 1}. ${report.angle}`, report.summary, ...report.findings.map(finding => `- ${finding.claim} (${finding.evidence})`)].join('\n')).join('\n\n');
+  const answer: AnswerReport = { answer: text, sources: [...new Set(reports.flatMap(report => report.sources))] };
+  ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
+  ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'investigation assembled' });
+  return finish(ctx, 'completed', `Investigated ${reports.length} angle(s). No files were changed.`, { ...base, answer, research: reports });
+}
+
+async function runBuild(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>, plan?: PlanReport): Promise<RunResult> {
   const { config } = ctx;
   const redoLimit = config.redoLimit ?? DEFAULT_REDO_LIMIT;
   const before = takeSnapshot(config.cwd, { ignore: ctx.ignore, keepContent: true });
@@ -262,7 +332,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
   let session: Session | null = null;
   const closeSession = async () => { await session?.close().catch(() => {}); session = null; };
-  let prompt = buildPrompt(request, requirements);
+  let prompt = buildPrompt(request, requirements, plan);
   let fresh = prompt;
   ctx.emit({ type: 'step_started', step: 'build', role: 'builder' });
   try {
@@ -320,7 +390,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       ctx.redo++;
       const mode = ctx.redo === 1 ? 'same-session' : 'new-session';
       ctx.emit({ type: 'redo', attempt: ctx.redo, mode, reasons });
-      fresh = freshRedoPrompt(request, requirements, reasons, report.summary);
+      fresh = freshRedoPrompt(request, requirements, reasons, report.summary, plan);
       if (mode === 'same-session') prompt = redoPrompt(reasons, ctx.redo);
       else { await closeSession(); prompt = fresh; }
     }
@@ -418,6 +488,15 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
       return finish(ctx, 'completed', 'Answered from the project files. No files were changed.', { ...base, answer: lead.answer! });
     }
     if (classify.workflow === 'build') return await runBuild(ctx, request, classify.requirements, base);
+    if (classify.workflow === 'investigate') return await runInvestigate(ctx, request, classify.requirements, base);
+    if (classify.workflow === 'plan-build') {
+      const planned = await runPlan(ctx, request, classify.requirements, base);
+      if ('stop' in planned) return planned.stop;
+      if (config.confirmPlan && !(await config.confirmPlan(planned.plan, classify.requirements))) {
+        return finish(ctx, 'needs_user', 'You stopped the run after reading the plan. Nothing was changed.', { ...base, plan: planned.plan });
+      }
+      return await runBuild(ctx, request, classify.requirements, { ...base, plan: planned.plan }, planned.plan);
+    }
     return finish(ctx, 'failed', `The "${classify.workflow}" workflow is not available in this version.`, base);
   } catch (error) {
     return finish(ctx, 'failed', error instanceof Error ? error.message : String(error));

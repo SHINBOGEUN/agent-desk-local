@@ -21,6 +21,7 @@ export function summarize(result: RunResult, durationMs: number): string {
   if (result.workflow) lines.push(`Workflow: ${result.workflow}${result.redo ? `, ${result.redo} redo round(s)` : ''}`);
   if (result.gates.length) lines.push(`Gates: ${result.gates.map(gateLine).join(' ')}`);
   if (result.answer) lines.push('', 'Answer:', result.answer.answer, ...(result.answer.sources.length ? ['', `Sources: ${result.answer.sources.join(', ')}`] : []));
+  if (result.plan) lines.push(`Plan: ${result.plan.approach} (${result.plan.steps.length} step(s))`);
   if (result.builder?.changedFiles.length) lines.push(`Changed files: ${result.builder.changedFiles.join(', ')}`);
   if (result.review) lines.push(`Review: ${result.review.verdict}${result.review.optional.length ? ` (${result.review.optional.length} optional suggestion(s))` : ''}`);
   else if (result.reviewSkipped) lines.push(`Review: skipped (${result.reviewSkipped})`);

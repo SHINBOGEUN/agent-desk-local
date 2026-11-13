@@ -161,3 +161,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 112개 테스트와 `tsc --noEmit` 통과(가짜 claude CLI가 실제 MCP 서버를 호출).
 - 아직 없는 것: 실제 Claude Code 확인 — `--tools` 쉼표 목록, `assistant`/`user` 메시지 형태, 권한 질문(`approve`) 호출·응답 형식, Bash 종료 코드(현재 `is_error`로 0/1), `--effort` 같은 추가 플래그는 쓰지 않음. 사용자 PC에서 스모크 스크립트로 확인 필요(아직 작성 안 함).
 - 다음 사람이 할 일: 3-3 `plan-build`·`investigate` 워크플로, 스모크 스크립트 `scripts/smoke/`, 3-4·3-5·3-6 측정(사용자 PC).
+
+### 2026-11-13 · Claude (14차)
+- 한 일: 3-3. 보고 종류 `plan`(approach·steps·files·risks, steps 1개 이상)·`research`(angle·summary·findings·sources) 추가(core 스키마), lead 지침을 4개 워크플로로 확장(investigate는 요구사항 = 조사 관점 최대 3개), 계획 단계용 planner 지침(lead 역할, 읽기 전용)과 researcher 지침, `run.ts`에 `runPlan`·`runInvestigate`(researcher 병렬, 읽기 전용 스냅샷 가드, 결과는 코드가 조립해 `answer`로 제공), `plan-build`는 계획을 builder 프롬프트(REDO 새 세션 포함)에 넣음. `RunConfig.confirmPlan`(CLI 대화형 실행에서는 "계획대로 진행할까요" 질문, `--unattended`는 그대로 진행), `RunResult.plan`·`research`.
+- 확인한 것: 전체 119개 테스트와 `tsc --noEmit`, 벤치 selftest 통과.
+- 아직 없는 것: 실제 모델이 4개 워크플로를 올바르게 고르는지(3-6 분류 정확도 측정), 계획이 실제로 품질·토큰에 도움이 되는지(측정 필요). researcher 병렬 중 한 명이 일시 오류여도 재시도는 단계당 1회 공유.
+- 다음 사람이 할 일: 사용자 PC에서 `scripts/smoke/runtime.ts` 실행(codex, claude) 후 결과 확인, 3-4·3-5·3-6 측정. 코드 쪽 다음 단계는 4단계(서버, 설정·역할 md 파일, `init`, `skills check`).

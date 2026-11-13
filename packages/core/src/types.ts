@@ -74,13 +74,31 @@ export interface VerifierReport {
   optional: string[];            // suggestions; never a reason for REDO
 }
 
-export type ReportKind = 'classify' | 'answer' | 'builder' | 'verifier';
+/** Output of the plan step of `plan-build`: how the builder should approach the work. */
+export interface PlanReport {
+  approach: string;       // the chosen approach, in a few sentences
+  steps: string[];        // ordered implementation steps
+  files: string[];        // files expected to change (a hint, not a limit)
+  risks: string[];        // what could go wrong or is still unknown
+}
+
+/** Output of one researcher in `investigate`. */
+export interface ResearchReport {
+  angle: string;          // the angle this researcher was given
+  summary: string;
+  findings: { claim: string; evidence: string }[];
+  sources: string[];
+}
+
+export type ReportKind = 'classify' | 'answer' | 'builder' | 'verifier' | 'plan' | 'research';
 
 export interface ReportByKind {
   classify: ClassifyReport;
   answer: AnswerReport;
   builder: BuilderReport;
   verifier: VerifierReport;
+  plan: PlanReport;
+  research: ResearchReport;
 }
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
-import { revertToRestorePoint, runRequest } from '#orchestrator';
+import { planText, revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
 import { loadProjectConfig } from './config.ts';
@@ -245,7 +245,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
       cwd: project,
       runtime: runtimeMap,
       ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
-      ...(interactive ? { askUser: interactive } : {}),
+      ...(interactive ? { askUser: interactive, confirmPlan: async (plan: Parameters<typeof planText>[0]) => (await interactive({ question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
       onEvent: event => {
         record(event);
         if (!parsed.json) { const line = describeEvent(event); if (line) deps.err(`${line}\n`); }

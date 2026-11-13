@@ -66,6 +66,18 @@ const schemas: { [K in ReportKind]: Check } = {
     blocking: array(object({ reason: string({ min: 1, max: 2_000 }), evidence: string({ min: 1, max: 4_000 }) }, { file: string({ min: 1, max: 1_000 }), line: integer() }), { max: 50 }),
     optional: array(string({ min: 1, max: 1_000 }), { max: 50 }),
   }),
+  plan: object({
+    approach: string({ min: 1, max: 4_000 }),
+    steps: array(string({ min: 1, max: 1_000 }), { max: 30 }),
+    files: array(string({ min: 1, max: 1_000 }), { max: 100 }),
+    risks: array(string({ min: 1, max: 1_000 }), { max: 30 }),
+  }),
+  research: object({
+    angle: string({ min: 1, max: 1_000 }),
+    summary: string({ min: 1, max: 6_000 }),
+    findings: array(object({ claim: string({ min: 1, max: 1_000 }), evidence: string({ min: 1, max: 2_000 }) }), { max: 50 }),
+    sources: array(string({ min: 1, max: 1_000 }), { max: 50 }),
+  }),
 };
 
 export function validateReport<K extends ReportKind>(kind: K, value: unknown): Validation<ReportByKind[K]> {
@@ -82,6 +94,9 @@ export function reportConsistencyErrors<K extends ReportKind>(kind: K, report: R
     const verifier = report as ReportByKind['verifier'];
     if (verifier.verdict === 'PASS' && verifier.blocking.length) errors.push('verifier.verdict: PASS cannot have blocking findings');
     if (verifier.verdict === 'REDO' && !verifier.blocking.length) errors.push('verifier.blocking: REDO needs at least one blocking finding');
+  }
+  if (kind === 'plan') {
+    if (!(report as ReportByKind['plan']).steps.length) errors.push('plan.steps: give at least one step');
   }
   if (kind === 'classify') {
     const classify = report as ReportByKind['classify'];

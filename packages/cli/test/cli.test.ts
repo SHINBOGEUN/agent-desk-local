@@ -233,3 +233,19 @@ test('config validation covers runtimes and allowCommands', () => {
   assert.equal(bad.ok, false);
   if (!bad.ok) assert.equal(bad.errors.length, 3);
 });
+
+test('plan-build in the CLI: interactive runs ask to confirm the plan; unattended runs go on', async () => {
+  const classify = { workflow: 'plan-build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const plan = { approach: 'edit it', steps: ['edit a.txt'], files: ['a.txt'], risks: [] };
+  const builderReport = { summary: 's', changedFiles: ['a.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'a.txt' }], unverified: [] };
+  const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: classify }]), script([{ report: plan }])], builder: [script([{ writeFile: { path: 'a.txt', content: 'x' } }, { report: builderReport }])] } });
+
+  const questions: string[] = [];
+  const stopped = harness(tmp(), make(), { ask: async q => { questions.push(q.question); return 'stop'; } });
+  assert.equal(await main(['run', 'edit', '--runtime', 'fake'], stopped.deps), 3);
+  assert.match(questions[0] ?? '', /Plan:\nApproach: edit it/);
+
+  const unattended = harness(tmp(), make(), { ask: async () => { throw new Error('must not ask'); } });
+  assert.equal(await main(['run', 'edit', '--runtime', 'fake', '--unattended', '--review', 'never', '--verify', 'node -e "0"'], unattended.deps), 0);
+  assert.match(unattended.out.join(''), /Plan: edit it \(1 step\(s\)\)/);
+});

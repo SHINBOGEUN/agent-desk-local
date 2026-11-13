@@ -8,6 +8,7 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 |---|---|
 | 3-1 `runtime-claude` | stream-json 어댑터, 가짜 claude 테스트 9개. 실제 Claude Code 확인은 사용자 PC |
 | 3-2 승인 정책 | 허용 목록 + 나머지 거부 [ADR 0007](adr/0007-claude-permissions.md), 승인 결과 이벤트 기록 |
+| 3-3 워크플로 | `plan-build`(plan 단계 → 계획을 builder 프롬프트에 포함, `confirmPlan`으로 사용자 확인) · `investigate`(researcher 병렬 최대 3, 모델 호출 없이 코드로 조립) |
 | CLI | `--runtime claude`, `config.runtimes`(역할별 혼합), `allowCommands`, Claude 실행 파일 탐색 |
 
 ## 2026-11-13 · 2단계 진행(2-4~2-9)
