@@ -9,7 +9,8 @@
 | `sample-app/` | 벤치마크 대상인 작은 할 일 서비스 (API·화면·DB·설정, 외부 패키지 없음) |
 | `tasks/T01~T10/` | 고정 과제. `task.json`(요청문), `acceptance.test.mjs`(에이전트에게 보이지 않는 채점 테스트), `solution.mjs`(채점이 공정한지 증명하는 모범 답안) |
 | `validate-tasks.mjs` | 모든 과제가 원본에서는 실패하고 모범 답안에서는 통과하는지 확인 |
-| `run.mjs` | 실행 중인 Agent Desk API로 과제를 실행하고 채점 결과를 저장 |
+| `run.mjs` | 과제 실행·채점·결과 저장 (버전 공통) |
+| `adapters/v1.mjs` | v1(`legacy/`) HTTP API로 과제를 실행하는 어댑터. v2 어댑터는 2단계에서 추가 |
 | `report.mjs` | 라벨(구성)별 지표를 집계하고 비교 |
 | `analyze-history.mjs` | 기존 `data/state.json` 실행 기록 분석 (토큰 누적 기록 보정 포함) |
 | `selftest.mjs` | 가짜 Agent Desk 서버로 러너·채점·리포트를 끝까지 검증 (Codex 사용 없음) |
@@ -43,12 +44,11 @@
 npm run bench:validate          # 과제가 공정한지 확인 (Codex 사용 없음)
 npm run bench:selftest          # 러너 자체 검증 (Codex 사용 없음)
 
-# Agent Desk 서버를 켜고 비교할 에이전트 구성을 적용한 뒤 실행
-node bench/run.mjs --label baseline-13 --usage-limit 20
-# 개선한 구성으로 바꾼 뒤 같은 과제를 실행
-node bench/run.mjs --label improved --usage-limit 20
+# v1 서버를 켠 뒤(legacy\Start-AgentDesk.cmd) 기준선 실행
+node bench/run.mjs --label v1-13 --adapter v1 --repeat 2 --usage-limit 20
 
-node bench/report.mjs baseline-13 improved   # bench/results/benchmark-report.md 생성
+# 다른 구성·버전을 같은 과제로 실행한 뒤 비교
+node bench/report.mjs v1-13 <다른-라벨>   # bench/results/benchmark-report.md 생성
 ```
 
 - 실행 중에는 Agent Desk에서 다른 요청을 보내지 마세요. 계정 전체의 5시간 사용률을 측정하기 때문입니다.
@@ -59,7 +59,7 @@ node bench/report.mjs baseline-13 improved   # bench/results/benchmark-report.md
 ## 기존 기록 분석
 
 ```powershell
-node bench/analyze-history.mjs data\state.json --md bench\results\history.md
+node bench/analyze-history.mjs legacy\data\state.json --md bench\results\history.md
 ```
 
 Agent Desk는 프로젝트마다 메인 AI 스레드를 이어 쓰는데, 스레드 누적 토큰을 요청별 사용량으로 저장해 왔습니다. 그래서 요청이 쌓일수록 대시보드 토큰 수가 부풀려집니다. 분석 스크립트는 같은 스레드의 직전 누적값을 빼서 요청별 증분으로 보정합니다. 결과 JSON에는 요청 원문을 저장하지 않습니다.

@@ -19,6 +19,7 @@ const csrf = 'test-token';
 const state = { settings: { concurrency: 2, maxDelegations: 6, timeoutMinutes: 15, usagePercentLimit: 5 }, agents: [{ id: 'main', name: 'main', enabled: true, model: 'fake', effort: 'low', access: 'read-only' }, { id: 'worker', name: 'worker', enabled: true }, { id: 'verifier', name: 'verifier', enabled: true }], skills: [], projects: [], runs: [] };
 let activeRunId = null;
 let approvals = [];
+let blockRuns = false;
 
 async function simulate(run, project) {
   const task = tasks.find(item => item.prompt === run.message);
@@ -60,6 +61,7 @@ const server = http.createServer(async (request, response) => {
   if (url.pathname === '/api/cancel') return send(200, { ok: true });
   if (url.pathname === '/api/runs') {
     if (activeRunId) return send(400, { error: 'busy' });
+    if (blockRuns) return send(400, { error: '5시간 한도 사용률을 확인할 수 없어 요청을 시작하지 않았습니다.' });
     const project = state.projects.find(item => item.id === input.projectId);
     const run = { id: randomUUID(), projectId: project.id, message: input.message, status: 'running', startedAt: new Date().toISOString(), tasks: [] };
     state.runs.unshift(run); activeRunId = run.id;
@@ -93,10 +95,19 @@ try {
   assert.deepEqual(byTask.T09.grade.changedFiles, []);
   assert.equal(byTask.T01.metrics.agentCount, 2);
   assert.equal(byTask.T01.metrics.usage.uncachedInputTokens, 2400);
+  assert.equal(byTask.T01.adapter, 'v1');
 
   const again = await runBenchmark(['--label', 'selftest', ...common], quiet);
   assert.equal(again.length, 0, 'recorded tasks are skipped on re-run');
   await runBenchmark(['--label', 'selftest-subset', '--tasks', 'T01,T09', ...common], quiet);
+
+  blockRuns = true;
+  const blocked = await runBenchmark(['--label', 'selftest-blocked', '--tasks', 'T01', ...common], quiet);
+  assert.equal(blocked.length, 0, 'a usage-limit refusal stops the batch without recording a result');
+  assert.equal(process.exitCode, 2);
+  process.exitCode = 0;
+  blockRuns = false;
+  assert.ok(!fs.existsSync(path.join(scratch, 'results', 'selftest-blocked', 'T01-r1.json')));
 
   const summaries = loadResults(path.join(scratch, 'results'), ['selftest', 'selftest-subset']).map(summarize);
   assert.equal(summaries[0].runs, tasks.length);
