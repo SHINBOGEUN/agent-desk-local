@@ -149,3 +149,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: v1·v2 `bench/selftest.mjs` 통과, 전체 테스트 통과.
 - 아직 없는 것: 실제 Codex 측정(2-10, 사용자 PC), 5시간 사용률 한도 연동(4단계), 타임아웃 시 CLI를 강제 종료(Windows는 신호 불가).
 - 다음 사람이 할 일: 2-10 사용자 PC에서 `npm run bench:run -- --adapter v2 --label v2-codex-auto --review auto` 등 측정(review always/auto/never 비교).
+
+### 2026-11-13 · Claude (12차)
+- 한 일: 2-11. `orchestrator/restore-point.ts`(`createRestorePoint`, `revertToRestorePoint`), `RunConfig.restorePointDir`·`RunResult.restorePoint`, build 직전 복사(5,000파일·100 MB 초과 시 경고만), CLI `agent-desk revert <run id> [--yes]`(계획 먼저, 적용은 `--yes`), 최근 10개 Run만 보관, `needs_review`/`failed` 종료 시 되돌리기 안내. 결정은 ADR 0006(git 참조는 나중).
+- 확인한 것: 전체 95개 테스트와 `tsc --noEmit` 통과.
+- 아직 없는 것: 대시보드의 되돌리기 버튼(5단계), git 기반 복원 지점.
+- 다음 사람이 할 일: 2-10(사용자 PC 실측). 2단계 코드는 여기까지이며, 다음 구현은 3단계(Claude 런타임, plan-build·investigate).

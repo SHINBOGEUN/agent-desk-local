@@ -150,3 +150,42 @@ test('version warning and config validation', () => {
   if (!bad.ok) assert.equal(bad.errors.length, 5);
   assert.equal(validateConfig({ verify: ['npm test'], review: 'auto', limits: { redo: 1, tokens: 1000 } }).ok, true);
 });
+
+test('revert: needs_review run leaves changes; revert shows a plan, then --yes restores the files', async () => {
+  const project = tmp();
+  fs.writeFileSync(path.join(project, 'keep.txt'), 'original');
+  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const builderReport = { summary: 's', changedFiles: ['keep.txt', 'new.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'keep.txt' }], unverified: [] };
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classify }])], builder: [script([{ writeFile: { path: 'keep.txt', content: 'changed' } }, { writeFile: { path: 'new.txt', content: 'x' } }, { report: builderReport }])] } });
+  const { deps, home, out, err } = harness(project, runtime);
+  const code = await main(['run', 'edit it', '--runtime', 'fake'], deps);
+  assert.equal(code, 2); // no verify command -> needs_review
+  assert.match(err.join(''), /agent-desk revert 1/);
+  assert.equal(fs.readFileSync(path.join(project, 'keep.txt'), 'utf8'), 'changed');
+
+  out.length = 0;
+  assert.equal(await main(['revert', '1'], deps), 0);
+  assert.match(out.join(''), /restore: 1 file\(s\) - keep\.txt/);
+  assert.match(out.join(''), /remove:  1 file\(s\) - new\.txt/);
+  assert.match(out.join(''), /Not applied/);
+  assert.equal(fs.readFileSync(path.join(project, 'keep.txt'), 'utf8'), 'changed');
+
+  assert.equal(await main(['revert', '1', '--yes'], deps), 0);
+  assert.equal(fs.readFileSync(path.join(project, 'keep.txt'), 'utf8'), 'original');
+  assert.ok(!fs.existsSync(path.join(project, 'new.txt')));
+  assert.ok(fs.existsSync(path.join(home, 'restore', '1')));
+  out.length = 0;
+  await main(['revert', '1'], deps);
+  assert.match(out.join(''), /Nothing to undo/);
+});
+
+test('revert of an unknown run or missing restore point fails clearly', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
+  const { deps, err } = harness(project, runtime);
+  assert.equal(await main(['revert', '1'], deps), 64);
+  await main(['run', 'Which port?', '--runtime', 'fake'], deps);
+  assert.equal(await main(['revert', '9'], deps), 64);
+  assert.equal(await main(['revert', '1'], deps), 1); // answer runs make no restore point
+  assert.match(err.join(''), /no restore point/);
+});

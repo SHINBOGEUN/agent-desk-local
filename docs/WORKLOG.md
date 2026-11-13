@@ -2,6 +2,19 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-13 · 2단계 진행(2-4~2-9)
+
+| 항목 | 내용 |
+|---|---|
+| 2-4 게이트 | `41e79c8`. 스냅샷 기반 G2, harness가 직접 실행하는 G3, 예산 G5, REDO 최대 2회, 환경·일시 오류 분류 |
+| 2-5 독립 리뷰 | `86f1058`. G4 verifier, 정책 always/auto/never, 실제 diff 기반 판정 |
+| 2-6 저장소 | `d1e48a5`. SQLite 이벤트·토큰 저장, 비밀값 가리기, 비정상 종료 복구, Run Brief |
+| 2-7 CLI | `bee340d`. `agent-desk run`·`doctor`, Codex 실행 파일 탐색, 프로젝트 설정 검증 |
+| 2-8 실패 재현 | `17b6b10`. v1 실패 사례 7개(거짓 완료·환경 오류·REDO 초과·거짓 경보) 끝-대-끝 테스트 |
+| 2-9 벤치 어댑터 | `25af4bc`. `bench/adapters/v2.mjs`, selftest 확장 |
+| 2-11 복원 지점 | build 전 파일 복사, `agent-desk revert <id> [--yes]`, [ADR 0006](adr/0006-restore-points.md) |
+| 남은 것 | 2-10 실제 Codex 측정(사용자 PC) |
+
 ## 2026-11-13 · 2단계 시작(2-1~2-3)과 설계 개정 3
 
 | 항목 | 내용 |

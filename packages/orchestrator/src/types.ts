@@ -31,6 +31,8 @@ export interface RunConfig {
   review?: ReviewPolicy;
   /** Limits for the "auto" policy. Defaults: 3 files, 60 changed lines. */
   autoReview?: { maxFiles?: number; maxLines?: number };
+  /** Folder where a restore point is written before the build step. Omitted means none is made. */
+  restorePointDir?: string;
   /** Maximum REDO rounds after the first build attempt. Default 2. */
   redoLimit?: number;
   models?: Partial<Record<RoleId, string>>;
@@ -77,6 +79,8 @@ export interface RunResult {
   failureType?: FailureType;
   /** Where a run stopped by a budget can be picked up. */
   resume?: { step: StepKind; redo: number; note: string };
+  /** Present when a restore point was made before the build step. */
+  restorePoint?: { dir: string; files: number; bytes: number };
   usage: TokenUsage;
   usageEntries: readonly UsageEntry[];
   events: RunEvent[];

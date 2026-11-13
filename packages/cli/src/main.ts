@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { DoctorCheck, Runtime, UserQuestion } from '#core';
-import { runRequest } from '#orchestrator';
+import { revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
 import { loadProjectConfig } from './config.ts';
@@ -36,6 +36,7 @@ interface Parsed {
   project?: string | undefined;
   unattended: boolean;
   json: boolean;
+  yes: boolean;
   runtime?: 'codex' | 'fake';
   review?: ReviewPolicy;
   verify: string[];
@@ -47,6 +48,7 @@ interface Parsed {
 
 export const USAGE = `Usage:
   agent-desk run "<request>" [options]   run one request in a project
+  agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
   agent-desk doctor [--project <dir>]    check Codex, settings and project config
 
 Options for run:
@@ -61,7 +63,7 @@ Options for run:
 Exit codes: 0 completed, 1 failed, 2 needs_review, 3 needs_user, 4 interrupted, 64 usage error`;
 
 export function parseArgs(argv: string[]): Parsed {
-  const parsed: Parsed = { command: '', request: '', unattended: false, json: false, verify: [], help: false, errors: [] };
+  const parsed: Parsed = { command: '', request: '', unattended: false, json: false, yes: false, verify: [], help: false, errors: [] };
   const rest: string[] = [];
   const value = (index: number, flag: string): string | undefined => {
     const next = argv[index + 1];
@@ -80,6 +82,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--help': case '-h': parsed.help = true; break;
       case '--unattended': parsed.unattended = true; break;
       case '--json': parsed.json = true; break;
+      case '--yes': parsed.yes = true; break;
       case '--project': parsed.project = value(i, arg); i++; break;
       case '--verify': { const v = value(i, arg); if (v) parsed.verify.push(v); i++; break; }
       case '--max-tokens': parsed.maxTokens = number(value(i, arg), arg); i++; break;
@@ -108,6 +111,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   const project = path.resolve(deps.cwd, parsed.project ?? '.');
   if (parsed.command === 'doctor') return doctor(parsed, project, deps);
   if (parsed.command === 'run') return run(parsed, project, deps);
+  if (parsed.command === 'revert') return revert(parsed, deps);
   deps.err(`unknown command "${parsed.command}"\n\n${USAGE}\n`);
   return 64;
 }
@@ -218,16 +222,57 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
       ...(deps.signal ? { signal: deps.signal } : {}),
       ...(previousBrief ? { previousBrief } : {}),
       verify,
+      restorePointDir: path.join(dir, 'restore', String(runId)),
       ...(config.ignore ? { ignore: config.ignore } : {}),
       ...(maxTokens || maxMinutes ? { budget: { ...(maxTokens ? { maxTokens } : {}), ...(maxMinutes ? { maxMillis: maxMinutes * 60000 } : {}) } } : {}),
       ...((parsed.review ?? config.review) ? { review: (parsed.review ?? config.review)! } : {}),
       ...(config.limits?.redo !== undefined ? { redoLimit: config.limits.redo } : {}),
     });
     store.finishRun(runId, parsed.request, result);
+    pruneRestorePoints(path.join(dir, 'restore'), 10);
     if (parsed.json) deps.out(`${JSON.stringify(result, null, 2)}\n`);
     else deps.out(`${summarize(result, Date.now() - started)}\n`);
+    if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
     if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
     return EXIT_CODES[result.status] ?? 1;
+  } finally {
+    store.close();
+  }
+}
+
+/** Keeps only the newest `keep` restore points. Run ids grow, so the highest numbers are the newest. */
+function pruneRestorePoints(root: string, keep: number): void {
+  try {
+    const ids = fs.readdirSync(root).filter(name => /^\d+$/.test(name)).map(Number).sort((a, b) => b - a);
+    for (const id of ids.slice(keep)) fs.rmSync(path.join(root, String(id)), { recursive: true, force: true });
+  } catch { /* nothing to prune */ }
+}
+
+async function revert(parsed: Parsed, deps: CliDeps): Promise<number> {
+  const runId = Number(parsed.request);
+  if (!Number.isInteger(runId) || runId < 1) { deps.err(`revert needs a run id\n\n${USAGE}\n`); return 64; }
+  const dir = dataDirectory(deps.env, deps.platform);
+  const dbFile = path.join(dir, 'agent-desk.db');
+  if (!fs.existsSync(dbFile)) { deps.err('no runs recorded yet\n'); return 64; }
+  const store = new RunStore(dbFile);
+  try {
+    const row = store.getRun(runId);
+    if (!row) { deps.err(`run ${runId} not found\n`); return 64; }
+    if (row.status === 'running') { deps.err(`run ${runId} is still running\n`); return 64; }
+    const loaded = loadProjectConfig(row.project);
+    const ignore = loaded.ok ? loaded.config.ignore : undefined;
+    const point = path.join(dir, 'restore', String(runId));
+    const plan = revertToRestorePoint(row.project, point, { ...(ignore ? { ignore } : {}), dryRun: true });
+    if (!plan.ok) { deps.err(`${plan.error}\n(restore points are kept for the 10 newest runs, and only for runs that reached the build step)\n`); return 1; }
+    const later = store.listRuns(row.project, 200).filter(other => other.id > runId);
+    deps.out(`Run ${runId} in ${row.project}\n  restore: ${plan.restore.length} file(s)${plan.restore.length ? ` - ${plan.restore.join(', ')}` : ''}\n  remove:  ${plan.remove.length} file(s)${plan.remove.length ? ` - ${plan.remove.join(', ')}` : ''}\n`);
+    if (later.length) deps.out(`  note: ${later.length} later run(s) in this project (${later.map(other => other.id).join(', ')}); their changes are undone too.\n`);
+    if (!plan.restore.length && !plan.remove.length) { deps.out('Nothing to undo.\n'); return 0; }
+    if (!parsed.yes) { deps.out(`Not applied. Re-run with --yes to apply: agent-desk revert ${runId} --yes\n`); return 0; }
+    const done = revertToRestorePoint(row.project, point, { ...(ignore ? { ignore } : {}) });
+    if (!done.ok) { deps.err(`revert failed: ${done.error}\n`); return 1; }
+    deps.out('Reverted.\n');
+    return 0;
   } finally {
     store.close();
   }

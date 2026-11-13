@@ -239,3 +239,40 @@ test('a transient runtime error is retried once per step in a fresh session', as
   assert.equal(failed.status, 'failed');
   assert.equal(failed.failureType, 'transient');
 });
+
+// ---------- restore points ----------
+
+import { createRestorePoint, revertToRestorePoint } from '#orchestrator';
+
+test('restore point: copies files, reverts modified/deleted/created, respects limits and ignore', () => {
+  const cwd = tmp();
+  put(cwd, 'a.txt', 'one'); put(cwd, 'dir/b.txt', 'two'); put(cwd, 'node_modules/x.js', 'dep');
+  const dir = path.join(tmp(), 'point');
+  const made = createRestorePoint(cwd, dir, takeSnapshot(cwd));
+  assert.ok(made.ok && made.files === 2);
+  put(cwd, 'a.txt', 'CHANGED'); fs.rmSync(path.join(cwd, 'dir/b.txt')); put(cwd, 'c.txt', 'new'); put(cwd, 'node_modules/x.js', 'dep2');
+  const plan = revertToRestorePoint(cwd, dir, { dryRun: true });
+  assert.deepEqual(plan.restore, ['a.txt', 'dir/b.txt']);
+  assert.deepEqual(plan.remove, ['c.txt']);
+  assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'CHANGED');
+  assert.ok(revertToRestorePoint(cwd, dir).applied);
+  assert.equal(fs.readFileSync(path.join(cwd, 'a.txt'), 'utf8'), 'one');
+  assert.equal(fs.readFileSync(path.join(cwd, 'dir/b.txt'), 'utf8'), 'two');
+  assert.ok(!fs.existsSync(path.join(cwd, 'c.txt')));
+  assert.equal(fs.readFileSync(path.join(cwd, 'node_modules/x.js'), 'utf8'), 'dep2');
+  const over = createRestorePoint(cwd, path.join(tmp(), 'p2'), takeSnapshot(cwd), { maxFiles: 1, maxBytes: 1000 });
+  assert.equal(over.ok, false);
+  assert.equal(revertToRestorePoint(cwd, path.join(tmp(), 'missing')).ok, false);
+});
+
+test('a run makes a restore point before the build; too large a project only warns', async () => {
+  const cwd = tmp(); put(cwd, 'orig.txt', 'before');
+  const dir = path.join(tmp(), 'rp');
+  const runtime = new FakeRuntime({ scripts: { lead: lead(), builder: [script([write('ok.txt'), { writeFile: { path: 'orig.txt', content: 'after' } }, { report: report(['ok.txt', 'orig.txt']) }])] } });
+  const result = await run(runtime, cwd, { restorePointDir: dir, verify: [NODE_OK] });
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.restorePoint?.files, 1);
+  assert.equal(fs.readFileSync(path.join(dir, 'files', 'orig.txt'), 'utf8'), 'before');
+  const without = new FakeRuntime({ scripts: { lead: lead(), builder: [script([write('ok.txt'), { report: report(['ok.txt']) }])] } });
+  assert.equal((await run(without, tmp(), { verify: [NODE_OK] })).restorePoint, undefined);
+});

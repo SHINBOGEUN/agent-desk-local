@@ -13,6 +13,8 @@ import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, redoPrompt, reportReminder } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt } from './review.ts';
+import { createRestorePoint } from './restore-point.ts';
+import type { RestorePointInfo } from './restore-point.ts';
 import { diffProtected, diffSnapshots, restoreProtected, takeSnapshot } from './snapshot.ts';
 import type { Diff, Snapshot } from './snapshot.ts';
 import type { RunConfig, RunEvent, RunEventBody, RunResult } from './types.ts';
@@ -47,6 +49,7 @@ class RunContext {
   readonly events: RunEvent[] = [];
   readonly gates: GateResult[] = [];
   readonly warnings: string[] = [];
+  restorePoint?: RestorePointInfo;
   readonly ledger = new UsageLedger();
   readonly startedAt = Date.now();
   readonly #turns = new Map<string, number>();
@@ -181,7 +184,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
@@ -243,6 +246,11 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
   const { config } = ctx;
   const redoLimit = config.redoLimit ?? DEFAULT_REDO_LIMIT;
   const before = takeSnapshot(config.cwd, { ignore: ctx.ignore, keepContent: true });
+  if (config.restorePointDir) {
+    const point = createRestorePoint(config.cwd, config.restorePointDir, before);
+    if (point.ok) ctx.restorePoint = { dir: point.dir, files: point.files, bytes: point.bytes };
+    else ctx.warnings.push(`No restore point was made: ${point.reason}. Revert will not be available for this run.`);
+  }
   const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => builderCoverageErrors(requirements, report));
   let collector = newCollector();
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };

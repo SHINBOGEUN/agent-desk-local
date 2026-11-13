@@ -12,3 +12,5 @@ export { decideReview, reviewPrompt, isSecurityPath, DEFAULT_AUTO_LIMITS } from 
 export type { ReviewPolicy, ReviewFacts, ReviewDecision } from './review.ts';
 export { renderDiff } from './diff-text.ts';
 export { buildRunBrief, BRIEF_MAX_CHARS } from './run-brief.ts';
+export { createRestorePoint, revertToRestorePoint, DEFAULT_RESTORE_LIMITS } from './restore-point.ts';
+export type { RestorePointInfo, RevertResult, RestoreLimits } from './restore-point.ts';

@@ -10,7 +10,7 @@
 | `runtime-claude/` | 3단계 | 로컬 Claude Code CLI(헤드리스) 어댑터 |
 | `orchestrator/` | 2단계(2-3~2-5 완료) | 분류 → answer 빠른 경로 / build 워크플로, 게이트 G1·G2·G3·G5, REDO, 실패 유형을 실행하고 Run 상태를 정하는 코드. 독립 리뷰(G4)와 리뷰 정책 `always/auto/never` |
 | `tools-mcp/` | 2단계(2-1 완료) | 하네스 도구(보고 제출·사용자 질문·승인)를 런타임에 주는 로컬 MCP 서버 |
-| `cli/` | 2단계(2-7 완료) | `agent-desk run`·`doctor`: 인자 해석, Codex 실행 파일 탐색(PATH → npm 전역 → 저장값), PC별 설정 저장, 프로젝트 `.agent-desk/config.json` 검증 |
+| `cli/` | 2단계(2-7 완료) | `agent-desk run`·`doctor`·`revert`: 인자 해석, Codex 실행 파일 탐색(PATH → npm 전역 → 저장값), PC별 설정 저장, 프로젝트 `.agent-desk/config.json` 검증 |
 | `store/` | 2단계(2-6 완료) | SQLite(`node:sqlite`) 저장소: Run·단계·이벤트·토큰 증분, 비밀값 가리기, 재시작 시 `interrupted` 복구, 직전 Run Brief |
 | `server/` | 4단계 | HTTP + SSE API, 저장소, 승인 브로커 |
 | `web/` | 5단계 | 대시보드 |
