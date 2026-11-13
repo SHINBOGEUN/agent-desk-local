@@ -8,7 +8,7 @@ import type { FakeScript } from '#runtime-fake';
 import { RunStore } from '#store';
 import { main, parseArgs } from '../src/main.ts';
 import type { CliDeps } from '../src/main.ts';
-import { resolveCodexExecutable, versionWarning } from '../src/discover.ts';
+import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from '../src/discover.ts';
 import { validateConfig } from '../src/config.ts';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
@@ -188,4 +188,48 @@ test('revert of an unknown run or missing restore point fails clearly', async ()
   assert.equal(await main(['revert', '9'], deps), 64);
   assert.equal(await main(['revert', '1'], deps), 1); // answer runs make no restore point
   assert.match(err.join(''), /no restore point/);
+});
+
+test('mixed runtimes: config.runtimes picks a runtime per role, each found by its own discovery', async () => {
+  const project = tmp();
+  fs.mkdirSync(path.join(project, '.agent-desk'));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtime: 'codex', runtimes: { verifier: 'claude' } }));
+  const bin = tmp();
+  for (const name of ['codex', 'claude']) fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n');
+  const created: Array<[string, string | undefined]> = [];
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
+  const { deps, home } = harness(project, runtime, { createRuntime: (kind, command) => { created.push([kind, command]); return runtime; } });
+  deps.env = { AGENT_DESK_HOME: home, PATH: bin };
+  assert.equal(await main(['run', 'Which port?'], deps), 0);
+  assert.deepEqual(created.map(([kind]) => kind).sort(), ['claude', 'codex']);
+  assert.equal(created.find(([kind]) => kind === 'claude')?.[1], path.join(bin, 'claude'));
+  created.length = 0;
+  await main(['run', 'Which port?', '--runtime', 'fake'], deps);
+  assert.deepEqual(created, [['fake', undefined]]);
+});
+
+test('doctor checks every runtime in use; claude is found in ~/.local/bin', async () => {
+  const project = tmp();
+  fs.mkdirSync(path.join(project, '.agent-desk'));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtimes: { verifier: 'claude' }, verify: ['npm test'] }));
+  const bin = tmp();
+  fs.writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\n');
+  const home = tmp();
+  fs.mkdirSync(path.join(home, '.local', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.local', 'bin', 'claude'), '#!/bin/sh\n');
+  const found = resolveClaudeExecutable({ env: { PATH: '' }, platform: 'linux', home });
+  assert.equal(found?.source, '~/.local/bin');
+  const { deps, out } = harness(project, new FakeRuntime({ scripts: {} }), { readVersion: async exe => (exe.endsWith('claude') ? '2.1.322 (Claude Code)' : 'codex-cli 0.167.2') });
+  deps.env = { AGENT_DESK_HOME: tmp(), PATH: bin, HOME: home };
+  await main(['doctor'], deps);
+  assert.match(out.join(''), /ok\s+codex executable/);
+  assert.match(out.join(''), /ok\s+claude executable/);
+  assert.match(out.join(''), /ok\s+claude version: 2\.1\.322/);
+});
+
+test('config validation covers runtimes and allowCommands', () => {
+  assert.equal(validateConfig({ runtimes: { builder: 'codex', verifier: 'claude' }, allowCommands: ['make test'] }).ok, true);
+  const bad = validateConfig({ runtimes: { boss: 'codex', builder: 'gpt' }, allowCommands: [1] });
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.errors.length, 3);
 });

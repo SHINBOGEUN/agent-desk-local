@@ -6,15 +6,18 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import type { DoctorCheck, Runtime, UserQuestion } from '#core';
+import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
 import { loadProjectConfig } from './config.ts';
 import type { ProjectConfig } from './config.ts';
-import { resolveCodexExecutable, versionWarning } from './discover.ts';
+import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from './discover.ts';
+import type { Found } from './discover.ts';
 import { EXIT_CODES, describeEvent, summarize } from './format.ts';
 import { dataDirectory, readMachineSettings, writeMachineSettings } from './paths.ts';
+
+export type RuntimeKind = 'codex' | 'claude' | 'fake';
 
 export interface CliDeps {
   env: NodeJS.ProcessEnv;
@@ -24,7 +27,7 @@ export interface CliDeps {
   err(text: string): void;
   /** Interactive answer to an agent question; omitted when stdin is not a terminal. */
   ask?: (question: UserQuestion) => Promise<string>;
-  createRuntime(kind: 'codex' | 'fake', command?: string): Runtime;
+  createRuntime(kind: RuntimeKind, command?: string): Runtime;
   signal?: AbortSignal;
   /** Returns the output of `<exe> --version`. */
   readVersion?: (exe: string) => Promise<string>;
@@ -37,7 +40,7 @@ interface Parsed {
   unattended: boolean;
   json: boolean;
   yes: boolean;
-  runtime?: 'codex' | 'fake';
+  runtime?: RuntimeKind | undefined;
   review?: ReviewPolicy;
   verify: string[];
   maxTokens?: number | undefined;
@@ -87,7 +90,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--verify': { const v = value(i, arg); if (v) parsed.verify.push(v); i++; break; }
       case '--max-tokens': parsed.maxTokens = number(value(i, arg), arg); i++; break;
       case '--max-minutes': parsed.maxMinutes = number(value(i, arg), arg); i++; break;
-      case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex or fake'); i++; break; }
+      case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
       case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto or never'); i++; break; }
       default:
         if (arg.startsWith('--')) parsed.errors.push(`unknown option ${arg}`);
@@ -116,42 +119,65 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   return 64;
 }
 
+function locate(kind: 'codex' | 'claude', deps: CliDeps, saved: ReturnType<typeof readMachineSettings>): Found | null {
+  const common = { env: deps.env, platform: deps.platform };
+  return kind === 'codex'
+    ? resolveCodexExecutable({ ...common, ...(saved.codex?.path ? { saved: saved.codex.path } : {}) })
+    : resolveClaudeExecutable({ ...common, ...(saved.claude?.path ? { saved: saved.claude.path } : {}) });
+}
+
+/** Runtime kind for every role: --runtime wins, then config.runtimes per role, then config.runtime, then codex. */
+function assignRuntimes(parsed: Parsed, config: ProjectConfig): Record<RoleId, RuntimeKind> {
+  const base: RuntimeKind = parsed.runtime ?? config.runtime ?? 'codex';
+  const pick = (role: 'lead' | 'builder' | 'verifier' | 'researcher'): RuntimeKind => (parsed.runtime ? parsed.runtime : config.runtimes?.[role] ?? base);
+  return { lead: pick('lead'), builder: pick('builder'), verifier: pick('verifier'), researcher: pick('researcher') };
+}
+
+function kindsOf(config: ProjectConfig): RuntimeKind[] {
+  return [...new Set(Object.values(assignRuntimes({ runtime: undefined } as Parsed, config)))];
+}
+
 async function doctor(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
   const checks: DoctorCheck[] = [];
   const dir = dataDirectory(deps.env, deps.platform);
   const saved = readMachineSettings(dir);
-  const kind = parsed.runtime ?? 'codex';
-  let command: string | undefined;
+  const early = loadProjectConfig(project);
+  const kinds = parsed.runtime ? [parsed.runtime] : early.ok ? kindsOf(early.config) : (['codex'] as RuntimeKind[]);
 
-  if (kind === 'codex') {
-    const found = resolveCodexExecutable({ env: deps.env, platform: deps.platform, ...(saved.codex?.path ? { saved: saved.codex.path } : {}) });
-    if (!found) {
-      checks.push({ name: 'codex executable', ok: false, detail: 'not found on PATH or in the npm global folder', fix: 'install Codex (npm i -g @openai/codex) or set AGENT_DESK_CODEX to codex.exe' });
-    } else {
+  for (const kind of kinds) {
+    let command: string | undefined;
+    if (kind !== 'fake') {
+      const found = locate(kind, deps, saved);
+      if (!found) {
+        checks.push(kind === 'codex'
+          ? { name: 'codex executable', ok: false, detail: 'not found on PATH or in the npm global folder', fix: 'install Codex (npm i -g @openai/codex) or set AGENT_DESK_CODEX to codex.exe' }
+          : { name: 'claude executable', ok: false, detail: 'not found on PATH or in ~/.local/bin', fix: 'install Claude Code and sign in, or set AGENT_DESK_CLAUDE to claude.exe' });
+        continue;
+      }
       command = found.path;
-      checks.push({ name: 'codex executable', ok: true, detail: `${found.path} (${found.source})` });
+      checks.push({ name: `${kind} executable`, ok: true, detail: `${found.path} (${found.source})` });
       let version = '';
       try {
         version = await (deps.readVersion ?? defaultVersion)(found.path);
-        const warning = versionWarning(version);
-        checks.push({ name: 'codex version', ok: warning === null, detail: warning ?? version });
+        const warning = kind === 'codex' ? versionWarning(version) : null;
+        checks.push({ name: `${kind} version`, ok: warning === null, detail: warning ?? version });
       } catch (error) {
-        checks.push({ name: 'codex version', ok: false, detail: `could not run --version: ${error instanceof Error ? error.message : String(error)}`, fix: 'run the executable by hand and check it starts' });
+        checks.push({ name: `${kind} version`, ok: false, detail: `could not run --version: ${error instanceof Error ? error.message : String(error)}`, fix: 'run the executable by hand and check it starts' });
       }
       try {
-        writeMachineSettings(dir, { ...saved, codex: { path: found.path, ...(version ? { version } : {}), checkedAt: new Date().toISOString() } });
-        checks.push({ name: 'machine settings', ok: true, detail: `saved in ${dir}` });
+        writeMachineSettings(dir, { ...readMachineSettings(dir), [kind]: { path: found.path, ...(version ? { version } : {}), checkedAt: new Date().toISOString() } });
+        checks.push({ name: 'machine settings', ok: true, detail: `${kind} saved in ${dir}` });
       } catch (error) {
         checks.push({ name: 'machine settings', ok: false, detail: `could not write ${dir}: ${error instanceof Error ? error.message : String(error)}`, fix: 'set AGENT_DESK_HOME to a writable folder' });
       }
     }
-  }
-  if (kind === 'fake' || command) {
-    try {
-      const result = await deps.createRuntime(kind, command).doctor();
-      checks.push(...result.checks);
-    } catch (error) {
-      checks.push({ name: `${kind} runtime`, ok: false, detail: error instanceof Error ? error.message : String(error) });
+    if (kind === 'fake' || command) {
+      try {
+        const result = await deps.createRuntime(kind, command).doctor();
+        checks.push(...result.checks);
+      } catch (error) {
+        checks.push({ name: `${kind} runtime`, ok: false, detail: error instanceof Error ? error.message : String(error) });
+      }
     }
   }
 
@@ -187,15 +213,19 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
   const loaded = loadProjectConfig(project);
   if (!loaded.ok) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
   const config: ProjectConfig = loaded.config;
-  const kind = parsed.runtime ?? config.runtime ?? 'codex';
-
   const dir = dataDirectory(deps.env, deps.platform);
-  let command: string | undefined;
-  if (kind === 'codex') {
-    const found = resolveCodexExecutable({ env: deps.env, platform: deps.platform, ...(readMachineSettings(dir).codex?.path ? { saved: readMachineSettings(dir).codex!.path } : {}) });
-    if (!found) { deps.err('Codex was not found. Run "agent-desk doctor" for details.\n'); return 1; }
-    command = found.path;
+  const assignment = assignRuntimes(parsed, config);
+  const instances = new Map<RuntimeKind, Runtime>();
+  for (const kind of new Set(Object.values(assignment))) {
+    let command: string | undefined;
+    if (kind !== 'fake') {
+      const found = locate(kind, deps, readMachineSettings(dir));
+      if (!found) { deps.err(`${kind === 'codex' ? 'Codex' : 'Claude'} was not found. Run "agent-desk doctor" for details.\n`); return 1; }
+      command = found.path;
+    }
+    instances.set(kind, deps.createRuntime(kind, command));
   }
+  const runtimeMap = Object.fromEntries(Object.entries(assignment).map(([role, kind]) => [role, instances.get(kind)!])) as Partial<Record<RoleId, Runtime>>;
 
   fs.mkdirSync(dir, { recursive: true });
   const store = new RunStore(path.join(dir, 'agent-desk.db'));
@@ -213,7 +243,8 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
 
     const result = await runRequest(parsed.request, {
       cwd: project,
-      runtime: deps.createRuntime(kind, command),
+      runtime: runtimeMap,
+      ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
       ...(interactive ? { askUser: interactive } : {}),
       onEvent: event => {
         record(event);

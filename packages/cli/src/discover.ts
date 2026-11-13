@@ -63,3 +63,22 @@ export function versionWarning(versionText: string): string | null {
   const minor = `${match[1]}.${match[2]}`;
   return minor === VERIFIED_CODEX_MINOR ? null : `Codex ${match[0]} has not been checked with this adapter (checked: ${VERIFIED_CODEX_MINOR}.x). The App Server protocol is experimental, so re-run the smoke test.`;
 }
+
+/** Claude Code: env override, saved path, PATH, then the installer's default folder (~/.local/bin). */
+export function resolveClaudeExecutable(input: { env: NodeJS.ProcessEnv; platform: NodeJS.Platform; home?: string; saved?: string }): Found | null {
+  const { env, platform } = input;
+  const win = platform === 'win32';
+  const name = win ? 'claude.exe' : 'claude';
+  if (env.AGENT_DESK_CLAUDE && isFile(env.AGENT_DESK_CLAUDE)) return { path: env.AGENT_DESK_CLAUDE, source: 'AGENT_DESK_CLAUDE' };
+  if (input.saved && isFile(input.saved)) return { path: input.saved, source: 'saved settings' };
+  for (const directory of (env.PATH ?? env.Path ?? '').split(win ? ';' : ':').filter(Boolean)) {
+    const candidate = path.join(directory, name);
+    if (isFile(candidate)) return { path: candidate, source: 'PATH' };
+  }
+  const home = input.home ?? env.USERPROFILE ?? env.HOME;
+  if (home) {
+    const candidate = path.join(home, '.local', 'bin', name);
+    if (isFile(candidate)) return { path: candidate, source: '~/.local/bin' };
+  }
+  return null;
+}

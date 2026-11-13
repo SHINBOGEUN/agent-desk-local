@@ -155,3 +155,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 95개 테스트와 `tsc --noEmit` 통과.
 - 아직 없는 것: 대시보드의 되돌리기 버튼(5단계), git 기반 복원 지점.
 - 다음 사람이 할 일: 2-10(사용자 PC 실측). 2단계 코드는 여기까지이며, 다음 구현은 3단계(Claude 런타임, plan-build·investigate).
+
+### 2026-11-13 · Claude (13차)
+- 한 일: 3-1·3-2. `packages/runtime-claude`(`claude -p` stream-json 세션, `--tools`로 도구 제한, `--permission-prompt-tool`, MCP 설정 임시 파일, 어시스턴트 메시지 id별 토큰 증분과 result 합계 보정, 중단은 control_request 후 유예 시간 뒤 강제 종료, `doctor`), `orchestrator/approval.ts`(허용 목록 + 거부 정책, `RunConfig.allowCommands`, 승인 결과 이벤트), CLI `--runtime claude`·`config.runtimes`·Claude 실행 파일 탐색(PATH → `~/.local/bin`). 결정은 ADR 0007.
+- 확인한 것: 전체 112개 테스트와 `tsc --noEmit` 통과(가짜 claude CLI가 실제 MCP 서버를 호출).
+- 아직 없는 것: 실제 Claude Code 확인 — `--tools` 쉼표 목록, `assistant`/`user` 메시지 형태, 권한 질문(`approve`) 호출·응답 형식, Bash 종료 코드(현재 `is_error`로 0/1), `--effort` 같은 추가 플래그는 쓰지 않음. 사용자 PC에서 스모크 스크립트로 확인 필요(아직 작성 안 함).
+- 다음 사람이 할 일: 3-3 `plan-build`·`investigate` 워크플로, 스모크 스크립트 `scripts/smoke/`, 3-4·3-5·3-6 측정(사용자 PC).

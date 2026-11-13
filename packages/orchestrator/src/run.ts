@@ -2,7 +2,7 @@
 // of steps, the roles, access levels, gates, REDO and the final status are all
 // decided here in code. Models only work inside steps.
 
-import type { BuilderReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
+import type { ApprovalDecision, ApprovalRequest, BuilderReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
 import { UsageLedger } from '#core';
 import { ReportCollector } from '#tools-mcp';
 import { classifyFailure } from './failure.ts';
@@ -13,6 +13,7 @@ import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, redoPrompt, reportReminder } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt } from './review.ts';
+import { decideApproval } from './approval.ts';
 import { createRestorePoint } from './restore-point.ts';
 import type { RestorePointInfo } from './restore-point.ts';
 import { diffProtected, diffSnapshots, restoreProtected, takeSnapshot } from './snapshot.ts';
@@ -114,6 +115,11 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
       const result = await holder.current.submit(report);
       ctx.emit({ type: 'report', step, kind: role, accepted: result.ok, detail: result.message.split('\n')[0] ?? '' });
       return result;
+    },
+    async approve(request: ApprovalRequest): Promise<ApprovalDecision> {
+      const decision = decideApproval(request, { cwd: ctx.config.cwd, canWrite: role === 'builder', ...(ctx.config.allowCommands ? { allowCommands: ctx.config.allowCommands } : {}) });
+      ctx.emit({ type: 'runtime', step, role, event: { type: 'approval_request', id: request.toolUseId ?? request.toolName, kind: request.toolName, detail: { input: request.input, decision: decision.behavior, ...(decision.behavior === 'deny' ? { message: decision.message } : {}) } } });
+      return decision;
     },
     async requestUserInput(question: UserQuestion) {
       const ask = ctx.config.askUser;

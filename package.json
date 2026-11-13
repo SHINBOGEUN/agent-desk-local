@@ -11,6 +11,7 @@
     "#runtime-fake": "./packages/runtime-fake/src/index.ts",
     "#tools-mcp": "./packages/tools-mcp/src/index.ts",
     "#runtime-codex": "./packages/runtime-codex/src/index.ts",
+    "#runtime-claude": "./packages/runtime-claude/src/index.ts",
     "#orchestrator": "./packages/orchestrator/src/index.ts",
     "#store": "./packages/store/src/index.ts",
     "#cli": "./packages/cli/src/main.ts"

@@ -1,3 +1,4 @@
+import { ClaudeRuntime } from '#runtime-claude';
 import { CodexRuntime } from '#runtime-codex';
 import { main, terminalAsk } from './main.ts';
 
@@ -13,7 +14,7 @@ const code = await main(process.argv.slice(2), {
   ...(process.stdin.isTTY ? { ask: terminalAsk(process.stdin, process.stdout) } : {}),
   createRuntime: (kind, command) => {
     if (kind === 'fake') throw new Error('the fake runtime is for tests only');
-    return new CodexRuntime(command ? { command } : {});
+    return kind === 'claude' ? new ClaudeRuntime(command ? { command } : {}) : new CodexRuntime(command ? { command } : {});
   },
   signal: controller.signal,
 });

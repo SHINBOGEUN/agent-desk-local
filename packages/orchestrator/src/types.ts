@@ -33,6 +33,8 @@ export interface RunConfig {
   autoReview?: { maxFiles?: number; maxLines?: number };
   /** Folder where a restore point is written before the build step. Omitted means none is made. */
   restorePointDir?: string;
+  /** Extra shell command prefixes sessions may run without asking (runtimes that use the approval broker). */
+  allowCommands?: string[];
   /** Maximum REDO rounds after the first build attempt. Default 2. */
   redoLimit?: number;
   models?: Partial<Record<RoleId, string>>;

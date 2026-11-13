@@ -13,6 +13,7 @@ export function dataDirectory(env: NodeJS.ProcessEnv, platform: NodeJS.Platform 
 
 export interface MachineSettings {
   codex?: { path: string; version?: string; checkedAt: string };
+  claude?: { path: string; version?: string; checkedAt: string };
 }
 
 export function readMachineSettings(dir: string): MachineSettings {

@@ -2,6 +2,14 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-13 · 3단계 시작(3-1~3-2)
+
+| 항목 | 내용 |
+|---|---|
+| 3-1 `runtime-claude` | stream-json 어댑터, 가짜 claude 테스트 9개. 실제 Claude Code 확인은 사용자 PC |
+| 3-2 승인 정책 | 허용 목록 + 나머지 거부 [ADR 0007](adr/0007-claude-permissions.md), 승인 결과 이벤트 기록 |
+| CLI | `--runtime claude`, `config.runtimes`(역할별 혼합), `allowCommands`, Claude 실행 파일 탐색 |
+
 ## 2026-11-13 · 2단계 진행(2-4~2-9)
 
 | 항목 | 내용 |
