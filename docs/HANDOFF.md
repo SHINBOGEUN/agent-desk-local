@@ -143,3 +143,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 91개 테스트와 `tsc --noEmit` 통과.
 - 아직 없는 것: 실제 모델에서 같은 결과가 나오는지는 2-10 측정에서 확인.
 - 다음 사람이 할 일: 2-9 `bench/adapters/v2.mjs`(`bench/selftest.mjs` 통과 필요).
+
+### 2026-11-13 · Claude (11차)
+- 한 일: 2-9. `bench/adapters/v2.mjs`(과제마다 `agent-desk run --json --unattended --verify "npm test"` 실행, RunResult → 공통 지표: 에이전트 수는 builder·verifier 등 lead 제외 역할, 검증자 판정 PASS/REDO→FAIL/BLOCKED→NOT_VERIFIED, REDO·게이트 결과 추가), `bench/run.mjs`에 `--adapter v2`와 `--review/--runtime/--verify/--max-tokens/--max-minutes/--cli` 옵션, `bench/selftest.mjs`에 가짜 CLI로 v2 어댑터 검증(거짓 완료 판정, 인자 전달, 지표) 추가.
+- 확인한 것: v1·v2 `bench/selftest.mjs` 통과, 전체 테스트 통과.
+- 아직 없는 것: 실제 Codex 측정(2-10, 사용자 PC), 5시간 사용률 한도 연동(4단계), 타임아웃 시 CLI를 강제 종료(Windows는 신호 불가).
+- 다음 사람이 할 일: 2-10 사용자 PC에서 `npm run bench:run -- --adapter v2 --label v2-codex-auto --review auto` 등 측정(review always/auto/never 비교).

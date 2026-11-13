@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTasks } from './lib/evaluate.mjs';
 import { main as runBenchmark } from './run.mjs';
 import { loadResults, summarize, toMarkdown } from './report.mjs';
@@ -118,6 +118,55 @@ try {
   assert.match(markdown, /거짓 완료 비율/);
   assert.match(markdown, /selftest 대비 변화/);
   console.log(markdown);
+
+  // ---- v2 adapter: a fake CLI stands in for `agent-desk run` (no Codex usage) ----
+  const evaluateUrl = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'evaluate.mjs')).href;
+  const fakeCli = path.join(scratch, 'fake-cli.mjs');
+  const argsLog = path.join(scratch, 'v2-args.jsonl');
+  fs.writeFileSync(fakeCli, `
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+const { loadTasks } = await import(${JSON.stringify(evaluateUrl)});
+const argv = process.argv.slice(2);
+if (argv[0] === 'doctor') { console.log('ok   fake runtime: ready\\nFAIL verify commands: none configured'); process.exit(1); }
+fs.appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(argv) + '\\n');
+const prompt = argv[1];
+const project = argv[argv.indexOf('--project') + 1];
+const task = loadTasks().find(item => item.prompt === prompt);
+if (task.kind === 'code' && task.id !== 'T02') (await import(pathToFileURL(path.join(task.directory, 'solution.mjs')).href)).apply(project);
+const usage = total => ({ inputTokens: total * 0.9, cachedInputTokens: total * 0.6, outputTokens: total * 0.1, reasoningTokens: 0, totalTokens: total });
+const code = task.kind === 'code';
+const entries = [{ stepId: 'classify', turn: 1, delta: usage(1000) }, ...(code ? [{ stepId: 'build', turn: 1, delta: usage(5000) }, { stepId: 'review', turn: 1, delta: usage(2000) }] : [])];
+const total = entries.reduce((sum, entry) => sum + entry.delta.totalTokens, 0);
+console.log(JSON.stringify({ status: 'completed', reason: 'ok', gates: code ? [{ gate: 'G3', ok: true, attempt: 0, detail: '', problems: [] }] : [], redo: 0, warnings: [], unverified: [], usage: usage(total), usageEntries: entries, review: code ? { verdict: 'PASS', blocking: [], optional: [] } : undefined, answer: task.kind === 'answer' ? { answer: '기본 포트는 3100이고 데이터 파일은 data\\\\todos.json 입니다.', sources: [] } : undefined, events: [] }));
+`);
+  const v2common = ['--adapter', 'v2', '--cli', JSON.stringify([process.execPath, fakeCli]), '--work-dir', path.join(scratch, 'work2'), '--results-dir', path.join(scratch, 'results2'), '--review', 'auto'];
+  const second = await runBenchmark(['--label', 'selftest-v2', ...v2common], quiet);
+  assert.equal(second.length, tasks.length);
+  const v2ByTask = Object.fromEntries(second.map(result => [result.taskId, result]));
+  for (const task of tasks) {
+    const result = v2ByTask[task.id];
+    assert.equal(result.adapter, 'v2');
+    if (task.id === 'T02') { assert.equal(result.falseCompletion, true); assert.equal(result.falseVerifierPass, true); }
+    else assert.equal(result.grade.success, true, `v2 ${task.id} should pass: ${JSON.stringify(result.grade)}`);
+  }
+  assert.equal(v2ByTask.T01.metrics.agentCount, 2);
+  assert.deepEqual(v2ByTask.T01.metrics.agents, ['builder', 'verifier']);
+  assert.equal(v2ByTask.T01.metrics.usage.totalTokens, 8000);
+  assert.equal(v2ByTask.T01.metrics.usage.uncachedInputTokens, 8000 * 0.9 - 8000 * 0.6);
+  assert.equal(v2ByTask.T09.metrics.agentCount, 0);
+  assert.deepEqual(v2ByTask.T09.grade.changedFiles, []);
+  const logged = fs.readFileSync(argsLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(logged.length, tasks.length);
+  for (const argv of logged) {
+    assert.ok(argv.includes('--unattended') && argv.includes('--json'));
+    assert.equal(argv[argv.indexOf('--verify') + 1], 'npm test');
+    assert.equal(argv[argv.indexOf('--review') + 1], 'auto');
+  }
+  const config = JSON.parse(fs.readFileSync(path.join(scratch, 'results2', 'selftest-v2', '_config.json'), 'utf8'));
+  assert.equal(config.adapter, 'v2');
+  assert.equal(loadResults(path.join(scratch, 'results2'), ['selftest-v2']).map(summarize)[0].falseCompletions, 1);
   console.log('Benchmark self-test passed.');
 } finally {
   server.close();
