@@ -10,7 +10,7 @@ import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
 import { planText, revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
-import { assignRuntimes, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
+import { addMemory, assignRuntimes, checkSkills, loadMemory, memoryFacts, memoryPath, newSuggestions, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
 import type { LoadedProject, RuntimeKind } from '#project';
 import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from './discover.ts';
 import type { Found } from './discover.ts';
@@ -50,6 +50,8 @@ interface Parsed {
 export const USAGE = `Usage:
   agent-desk run "<request>" [options]   run one request in a project
   agent-desk init [--project <dir>] [--yes]  look at a project and draft .agent-desk/ settings (writes only with --yes, never overwrites)
+  agent-desk skills check [--project <dir>]  check .agent-desk/skills/*/SKILL.md structure and descriptions
+  agent-desk memory [add "<fact>"]          show project memory, or add a fact to .agent-desk/memory.md
   agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
   agent-desk doctor [--project <dir>]    check Codex, settings and project config
 
@@ -115,6 +117,8 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   if (parsed.command === 'run') return run(parsed, project, deps);
   if (parsed.command === 'revert') return revert(parsed, deps);
   if (parsed.command === 'init') return init(parsed, project, deps);
+  if (parsed.command === 'skills') return skills(parsed, project, deps);
+  if (parsed.command === 'memory') return memory(parsed, project, deps);
   deps.err(`unknown command "${parsed.command}"\n\n${USAGE}\n`);
   return 64;
 }
@@ -245,6 +249,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
       models: settings.models,
       roleNotes: settings.roleNotes,
       ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
+      ...(loadMemory(project) ? { projectMemory: loadMemory(project) } : {}),
       ...(interactive ? { askUser: interactive, confirmPlan: async (plan: Parameters<typeof planText>[0]) => (await interactive({ question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
       onEvent: event => {
         record(event);
@@ -261,8 +266,18 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     });
     store.finishRun(runId, parsed.request, result);
     pruneRestorePoints(path.join(dir, 'restore'), 10);
+    const suggestions = newSuggestions(project, result.memorySuggestions ?? []);
     if (parsed.json) deps.out(`${JSON.stringify(result, null, 2)}\n`);
     else deps.out(`${summarize(result, Date.now() - started)}\n`);
+    if (suggestions.length && !parsed.json) {
+      deps.out(`\nMemory suggestions (nothing was saved):\n${suggestions.map(fact => `  - ${fact}`).join('\n')}\n`);
+      if (interactive) {
+        for (const fact of suggestions) {
+          const choice = await interactive({ question: `Add to project memory?\n  ${fact}`, options: ['add', 'skip'] });
+          if (choice.trim().toLowerCase() === 'add') { const added = addMemory(project, fact); deps.out(added.ok ? 'Added.\n' : `Not added: ${added.error}\n`); }
+        }
+      } else deps.out('Add one with: agent-desk memory add "<fact>"\n');
+    }
     if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
     if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
     return EXIT_CODES[result.status] ?? 1;
@@ -277,6 +292,33 @@ function pruneRestorePoints(root: string, keep: number): void {
     const ids = fs.readdirSync(root).filter(name => /^\d+$/.test(name)).map(Number).sort((a, b) => b - a);
     for (const id of ids.slice(keep)) fs.rmSync(path.join(root, String(id)), { recursive: true, force: true });
   } catch { /* nothing to prune */ }
+}
+
+async function memory(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
+  const [action, ...factWords] = parsed.request.split(/\s+/).filter(Boolean);
+  if (!action) {
+    const facts = memoryFacts(loadMemory(project));
+    deps.out(facts.length ? `${memoryPath(project)}\n${facts.map(fact => `- ${fact}`).join('\n')}\n` : `No project memory yet (${memoryPath(project)}). Add a fact with: agent-desk memory add "<fact>"\n`);
+    return 0;
+  }
+  if (action !== 'add') { deps.err('usage: agent-desk memory [add "<fact>"]\n'); return 64; }
+  const added = addMemory(project, factWords.join(' '));
+  if (!added.ok) { deps.err(`${added.error}\n`); return 1; }
+  deps.out(`Added. Memory is now ${added.chars} characters.\n`);
+  return 0;
+}
+
+async function skills(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
+  if (parsed.request !== 'check') { deps.err(`usage: agent-desk skills check [--project <dir>]\n`); return 64; }
+  const loaded = loadProject(project);
+  if (loaded.errors.length) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
+  const report = checkSkills(project, loaded.config, loaded.roles);
+  deps.out(`${report.skills.length} skill(s) in ${path.join(project, '.agent-desk', 'skills')}\n`);
+  for (const finding of report.findings) deps.out(`${finding.level.toUpperCase().padEnd(5)} ${finding.skill}: ${finding.message}\n`);
+  const errors = report.findings.filter(finding => finding.level === 'error').length;
+  const warnings = report.findings.filter(finding => finding.level === 'warn').length;
+  deps.out(errors || warnings ? `\n${errors} error(s), ${warnings} warning(s)\n` : report.skills.length ? '\nNo problems found.\n' : '\nNo skills yet. A skill is a folder .agent-desk/skills/<id>/ with a SKILL.md.\n');
+  return errors ? 1 : 0;
 }
 
 async function init(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {

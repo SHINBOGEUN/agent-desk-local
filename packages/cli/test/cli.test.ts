@@ -278,3 +278,48 @@ test('init previews by default, writes with --yes, never overwrites, and doctor 
   assert.match(out.join(''), /ok\s+role files: all 4 present/);
   assert.match(out.join(''), /ok\s+verify commands: 1 configured/);
 });
+
+test('skills check prints findings and exits 1 on errors', async () => {
+  const project = tmp();
+  const { deps, out } = harness(project, new FakeRuntime({ scripts: {} }));
+  assert.equal(await main(['skills', 'check'], deps), 0);
+  assert.match(out.join(''), /No skills yet/);
+  fs.mkdirSync(path.join(project, '.agent-desk', 'skills', 'broken'), { recursive: true });
+  out.length = 0;
+  assert.equal(await main(['skills', 'check'], deps), 1);
+  assert.match(out.join(''), /ERROR broken: missing SKILL\.md/);
+  assert.equal(await main(['skills'], deps), 64);
+});
+
+test('memory: builder suggestions are printed, saved only on approval, and memory reaches every role', async () => {
+  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const builderReport = { summary: 's', changedFiles: ['a.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'a.txt' }], unverified: [], memorySuggestions: ['Emulator port is 8081', 'Tests need Docker'] };
+  const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: classify }])], builder: [script([{ writeFile: { path: 'a.txt', content: 'x' } }, { report: builderReport }])] } });
+  const project = tmp();
+  fs.mkdirSync(path.join(project, '.agent-desk'));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'memory.md'), '# Project memory\n\n- Migrations are applied by the user\n');
+
+  const unattended = make();
+  const first = harness(project, unattended);
+  await main(['run', 'edit', '--runtime', 'fake', '--unattended', '--review', 'never', '--verify', 'node -e "0"'], first.deps);
+  assert.match(first.out.join(''), /Memory suggestions \(nothing was saved\)/);
+  assert.match(first.out.join(''), /agent-desk memory add/);
+  assert.ok(!fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8').includes('8081'));
+  assert.match(unattended.turns[0]?.options.instructions ?? '', /Project memory[^]*Migrations are applied by the user/);
+  assert.match(unattended.turns.find(turn => turn.role === 'builder')?.options.instructions ?? '', /Migrations are applied/);
+
+  const answers: string[] = [];
+  const second = harness(project, make(), { ask: async q => { answers.push(q.question); return q.question.includes('8081') ? 'add' : 'skip'; } });
+  await main(['run', 'edit', '--runtime', 'fake', '--review', 'never', '--verify', 'node -e "0"'], second.deps);
+  assert.equal(answers.filter(question => /Add to project memory/.test(question)).length, 2);
+  const memory = fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8');
+  assert.match(memory, /Emulator port is 8081/);
+  assert.ok(!memory.includes('Docker'));
+
+  const cli = harness(project, new FakeRuntime({ scripts: {} }));
+  assert.equal(await main(['memory'], cli.deps), 0);
+  assert.match(cli.out.join(''), /- Emulator port is 8081/);
+  assert.equal(await main(['memory', 'add', 'Tests need Docker'], cli.deps), 0);
+  assert.equal(await main(['memory', 'add', 'Tests need Docker'], cli.deps), 1);
+  assert.equal(await main(['memory', 'wipe'], cli.deps), 64);
+});

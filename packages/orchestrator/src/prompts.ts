@@ -39,6 +39,7 @@ const BUILDER = [
   'Report shape: { "summary": string, "changedFiles": [paths relative to the project folder], "commandsRun": [{ "command": string, "exitCode": number }], "requirements": [{ "id": "R1", "status": "done" | "not_done" | "unverified", "evidence": string }], "unverified": [strings] }.',
   '- changedFiles must list every file you added, changed or deleted, and nothing else.',
   '- Include one "requirements" entry for every requirement id you were given. Use "unverified" when you could not check it, and say what you could not check in "unverified".',
+  '- Optional "memorySuggestions": up to 3 short facts about the PROJECT (not about this change) that a future run would need and could not easily find, such as a non-obvious command, a rule that is not written down, or a port. Skip it when there are none.',
 ].join('\n');
 
 const VERIFIER = [
@@ -52,9 +53,9 @@ const VERIFIER = [
   '- PASS has an empty "blocking" list.',
 ].join('\n');
 
-export function instructionsFor(role: RoleId, notes?: string, step?: StepKind): string {
+export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
-  return [COMMON, body, notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
+  return [COMMON, body, memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
 export function classifyPrompt(request: string, previousBrief?: string): string {

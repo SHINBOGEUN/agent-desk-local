@@ -42,3 +42,5 @@ export function roleSettings(loaded: LoadedProject): { access: Partial<Record<Ro
   return { access, effort, models, roleNotes };
 }
 export * from './init.ts';
+export * from './skills.ts';
+export * from './memory.ts';

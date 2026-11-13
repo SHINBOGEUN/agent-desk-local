@@ -173,3 +173,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 129개 테스트와 `tsc --noEmit` 통과.
 - 아직 없는 것: 스킬 배치·검증(4-8), 프로젝트 메모(4-9), 서버(4-1), 5시간 한도(4-3), 사용자 숙련도 감지는 테스트·CI·커밋 수로 리뷰 정책 제안만 함(별도 감지 없음).
 - 다음 사람이 할 일: 4-8 `skills check`.
+
+### 2026-11-13 · Claude (16차)
+- 한 일: 4-8·4-9. `project/skills.ts`(`checkSkills`), CLI `agent-desk skills check`(오류 있으면 종료 코드 1). `project/memory.ts`(`addMemory`·`newSuggestions`·상한), `BuilderReport.memorySuggestions`(선택, 최대 5개 스키마·지침은 3개), `RunConfig.projectMemory`(모든 역할 지침에 포함), `RunResult.memorySuggestions`, CLI `agent-desk memory [add "<fact>"]`와 run 종료 시 제안 출력·대화형 승인.
+- 확인한 것: 전체 135개 테스트와 `tsc --noEmit` 통과.
+- 아직 없는 것: 스킬을 런타임에 실제로 배치(`.agents/skills`, `.claude/skills`)하고 세션에 `SkillRef`로 전달하는 부분 — 지금은 검증만 하고 `config.skills`/역할 파일의 `skills`는 아직 세션에 전달되지 않음. 트리거 검증·with/without 비교(6단계).
+- 다음 사람이 할 일: 4-1 서버(HTTP + SSE, v1 보안 장치 이식).

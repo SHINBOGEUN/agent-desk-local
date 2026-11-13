@@ -51,6 +51,7 @@ class RunContext {
   readonly gates: GateResult[] = [];
   readonly warnings: string[] = [];
   restorePoint?: RestorePointInfo;
+  memorySuggestions: string[] = [];
   readonly ledger = new UsageLedger();
   readonly startedAt = Date.now();
   readonly #turns = new Map<string, number>();
@@ -161,7 +162,7 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
   const model = config.models?.[role];
   return ctx.runtimeFor(role).startSession({
     role, cwd: config.cwd, access: accessFor(ctx, role), skills: [], tools: toolsFor(ctx, step, role, holder),
-    instructions: instructionsFor(role, config.roleNotes?.[role], step),
+    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
@@ -197,7 +198,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
@@ -362,6 +363,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
         return failureResult(ctx, failure, base);
       }
       const report = collector.report!;
+      ctx.memorySuggestions = report.memorySuggestions ?? [];
       const after = takeSnapshot(config.cwd, { ignore: ctx.ignore });
       const violation = protectedViolation(ctx, before, after);
       if (violation) {

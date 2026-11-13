@@ -59,6 +59,8 @@ export interface BuilderReport {
   commandsRun: { command: string; exitCode: number }[];
   requirements: { id: string; status: RequirementStatus; evidence: string }[];
   unverified: string[];                                     // what could not be checked, stated openly
+  /** Optional: facts about the project (not about this change) that later runs should know. The user decides whether they are kept. */
+  memorySuggestions?: string[];
 }
 
 export interface VerifierFinding {

@@ -115,3 +115,77 @@ test('init: a project without tests gets review always and a note about verify; 
   assert.equal(draft.config.verify, undefined);
   assert.ok(draft.rationale.some(line => /No test command/.test(line)));
 });
+
+import { checkSkills, referencedFiles } from '#project';
+
+const GOOD = `---
+name: api-conventions
+description: Use when the user asks to add or change an HTTP endpoint, to check naming, status codes and error shapes against the project's API rules. Do not use for database or UI work.
+---
+
+Follow [the rules](references/rules.md) because clients depend on stable error shapes.
+`;
+
+test('skills check: a well-formed skill has no findings', () => {
+  const project = tmp();
+  put(project, '.agent-desk/skills/api-conventions/SKILL.md', GOOD);
+  put(project, '.agent-desk/skills/api-conventions/references/rules.md', '# rules');
+  const report = checkSkills(project, { skills: ['api-conventions'] });
+  assert.deepEqual(report.findings, []);
+  assert.equal(report.skills[0]?.path, '.agent-desk/skills/api-conventions/SKILL.md');
+});
+
+test('skills check: structure errors and description weaknesses are reported', () => {
+  const project = tmp();
+  put(project, '.agent-desk/skills/Bad_Name/SKILL.md', '---\nname: other\n---\n');
+  put(project, '.agent-desk/skills/no-file/notes.txt', 'x');
+  put(project, '.agent-desk/skills/vague/SKILL.md', '---\nname: vague\ndescription: Helps with stuff\nextra: 1\n---\nBody with [missing](references/gone.md).\n');
+  put(project, '.agent-desk/skills/vague/orphan.md', 'never linked');
+  put(project, '.agent-desk/skills/shouty/SKILL.md', `---\nname: shouty\ndescription: ${'x'.repeat(10)}\n---\n${'ALWAYS do this. NEVER do that. MUST obey.\n'.repeat(2)}`);
+  const messages = checkSkills(project, { skills: ['ghost'] }, { builder: { role: 'builder', file: 'f', skills: ['phantom'], body: '' } }).findings.map(finding => `${finding.level} ${finding.skill}: ${finding.message}`);
+  const has = (pattern: RegExp) => assert.ok(messages.some(message => pattern.test(message)), `missing: ${pattern}\n${messages.join('\n')}`);
+  has(/error Bad_Name: folder name must be lowercase/);
+  has(/error Bad_Name: name "other" must match/);
+  has(/error no-file: missing SKILL\.md/);
+  has(/warn vague: unknown frontmatter key "extra"/);
+  has(/warn vague: description is very short/);
+  has(/warn vague: description does not say when to use/);
+  has(/warn vague: description does not say when NOT to use/);
+  has(/error vague: body refers to "references\/gone\.md"/);
+  has(/warn vague: "orphan\.md" is never mentioned/);
+  has(/info shouty: 6 absolute rules/);
+  has(/error project: config\.skills lists "ghost"/);
+  has(/error project: \.agent-desk\/agents\/builder\.md lists skill "phantom"/);
+  has(/info vague: exists but is not listed in config\.skills/);
+});
+
+test('skills check: duplicate descriptions and body references', () => {
+  const project = tmp();
+  const same = 'Use when the user asks to review a change for security problems. Do not use for style review.';
+  put(project, '.agent-desk/skills/a/SKILL.md', `---\nname: a\ndescription: ${same}\n---\nbody`);
+  put(project, '.agent-desk/skills/b/SKILL.md', `---\nname: b\ndescription: ${same}\n---\nbody`);
+  assert.ok(checkSkills(project, {}).findings.some(finding => /identical to "a"/.test(finding.message)));
+  assert.deepEqual(referencedFiles('See [x](./references/x.md), [web](https://e.com/a), `scripts/run.sh`, [top](#a).').sort(), ['references/x.md', 'scripts/run.sh']);
+  assert.deepEqual(checkSkills(tmp(), {}).skills, []);
+});
+
+import { MEMORY_MAX_CHARS, addMemory, loadMemory, memoryFacts, newSuggestions } from '#project';
+
+test('memory: add, dedupe, size cap, secrets refused, suggestions filtered', () => {
+  const project = tmp();
+  assert.equal(loadMemory(project), '');
+  assert.deepEqual(addMemory(project, 'Migrations are applied by the user.'), { ok: true, chars: loadMemory(project).length });
+  assert.deepEqual(memoryFacts(loadMemory(project)), ['Migrations are applied by the user.']);
+  assert.match(fs.readFileSync(path.join(project, '.agent-desk/memory.md'), 'utf8'), /^# Project memory/);
+  assert.equal(addMemory(project, 'migrations are  applied by the USER.').ok, false);
+  assert.equal(addMemory(project, '').ok, false);
+  assert.match((addMemory(project, 'x'.repeat(300)) as { error: string }).error, /at most 240/);
+  assert.match((addMemory(project, 'the key is sk-abcdefghijklmnopqrstuvwxyz') as { error: string }).error, /secret/);
+  assert.match((addMemory(project, 'password: hunter2') as { error: string }).error, /secret/);
+  assert.deepEqual(newSuggestions(project, ['Migrations are applied by the user.', 'Emulator port is 8081', 'emulator port is 8081', '', 'y'.repeat(500)]), ['Emulator port is 8081']);
+  let last = addMemory(project, 'fact 0');
+  for (let i = 1; last.ok && i < 200; i++) last = addMemory(project, `fact number ${i} padding padding padding`);
+  assert.equal(last.ok, false);
+  assert.match((last as { error: string }).error, new RegExp(`exceed ${MEMORY_MAX_CHARS}`));
+  assert.ok(loadMemory(project).length <= MEMORY_MAX_CHARS);
+});

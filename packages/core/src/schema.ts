@@ -60,7 +60,7 @@ const schemas: { [K in ReportKind]: Check } = {
     commandsRun: array(object({ command: string({ min: 1, max: 2_000 }), exitCode: integer() })),
     requirements: array(object({ id: requirementId, status: oneOf(['done', 'not_done', 'unverified']), evidence: string({ max: 2_000 }) }), { max: 30 }),
     unverified: array(string({ min: 1, max: 1_000 }), { max: 50 }),
-  }),
+  }, { memorySuggestions: array(string({ min: 1, max: 1_000 }), { max: 5 }) }),
   verifier: object({
     verdict: oneOf(['PASS', 'REDO', 'BLOCKED']),
     blocking: array(object({ reason: string({ min: 1, max: 2_000 }), evidence: string({ min: 1, max: 4_000 }) }, { file: string({ min: 1, max: 1_000 }), line: integer() }), { max: 50 }),

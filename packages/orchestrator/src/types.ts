@@ -33,6 +33,8 @@ export interface RunConfig {
   autoReview?: { maxFiles?: number; maxLines?: number };
   /** Folder where a restore point is written before the build step. Omitted means none is made. */
   restorePointDir?: string;
+  /** Contents of .agent-desk/memory.md, added to every role's instructions. */
+  projectMemory?: string;
   /** Extra shell command prefixes sessions may run without asking (runtimes that use the approval broker). */
   allowCommands?: string[];
   /** plan-build: called with the plan before the build starts; returning false stops the run (needs_user). Omitted means the plan is accepted. */
@@ -70,6 +72,8 @@ export interface RunResult {
   classify?: ClassifyReport;
   answer?: AnswerReport;
   builder?: BuilderReport;
+  /** Facts the builder proposed for .agent-desk/memory.md; nothing is written automatically. */
+  memorySuggestions?: string[];
   plan?: PlanReport;
   research?: ResearchReport[];
   review?: VerifierReport;
