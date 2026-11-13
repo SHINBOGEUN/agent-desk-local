@@ -8,7 +8,8 @@
   "imports": {
     "#core": "./packages/core/src/index.ts",
     "#core/*": "./packages/core/src/*",
-    "#runtime-fake": "./packages/runtime-fake/src/index.ts"
+    "#runtime-fake": "./packages/runtime-fake/src/index.ts",
+    "#tools-mcp": "./packages/tools-mcp/src/index.ts"
   },
   "scripts": {
     "test": "node --test \"packages/*/test/*.test.ts\"",

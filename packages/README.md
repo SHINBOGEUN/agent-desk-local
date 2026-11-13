@@ -8,7 +8,7 @@
 | `runtime-fake/` | 1단계 | 스크립트로 동작하는 테스트용 런타임 |
 | `runtime-codex/` | 2단계 | Codex App Server 어댑터 |
 | `runtime-claude/` | 3단계 | 로컬 Claude Code CLI(헤드리스) 어댑터 |
-| `tools-mcp/` | 2단계 | 하네스 도구(보고 제출·사용자 질문·승인)를 런타임에 주는 로컬 MCP 서버 |
+| `tools-mcp/` | 2단계(2-1 완료) | 하네스 도구(보고 제출·사용자 질문·승인)를 런타임에 주는 로컬 MCP 서버 |
 | `server/` | 4단계 | HTTP + SSE API, 저장소, 승인 브로커 |
 | `web/` | 5단계 | 대시보드 |
 | `cli/` | 2단계 | `agent-desk run`, `agent-desk doctor` |
@@ -19,6 +19,6 @@
 
 - Node.js 22.18 이상이 TypeScript를 바로 실행합니다(타입 제거). 빌드 단계가 없습니다.
 - 그래서 지워지는 문법만 씁니다: `enum`, `namespace`, 생성자 매개변수 속성은 쓰지 않습니다. import 경로에는 `.ts`를 붙입니다.
-- 패키지 사이 import는 루트 `package.json`의 `imports`(`#core`, `#runtime-fake`)를 씁니다. 설치 없이 동작합니다.
+- 패키지 사이 import는 루트 `package.json`의 `imports`(`#core`, `#runtime-fake`, `#tools-mcp`)를 씁니다. 설치 없이 동작합니다.
 - 타입 검사: `npm install` 후 `npm run typecheck`. 테스트: `npm test`.
 - 런타임 의존성은 두지 않습니다. 보고 스키마 검증도 `core/src/schema.ts`의 작은 검증기로 합니다.

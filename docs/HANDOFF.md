@@ -78,3 +78,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: `node bench/validate-tasks.mjs` 통과(과제 15개 모두 원본 실패·모범 답안 통과), `node bench/selftest.mjs` 통과.
 - 확인하지 못한 것: `v1-13-hard` 측정 결과(진행 중), 이 작업의 커밋(사용자가 커밋·push 예정).
 - 다음 사람이 할 일: 2-1 `tools-mcp`부터. 측정이 끝나기 전에는 실제 Codex·Claude를 호출하는 확인은 하지 않기.
+
+### 2026-11-13 · Claude (2차)
+- 한 일: 2-1 `packages/tools-mcp` 구현. 도구 3개(`submit_report`, `request_user_input`, `approve`), stdio MCP 서버(`bin.ts`), 세션별 토큰을 쓰는 127.0.0.1 HTTP 브리지(`ToolEndpoint`), 보고 검증기(`ReportCollector`, 거절 시 필드 경로 반환). `HarnessTools`에 `approve?` 추가.
+- 확인한 것: 테스트 23개 통과(실제 자식 프로세스 e2e 포함), `tsc --noEmit` 통과.
+- 확인하지 못한 것: 실제 Codex·Claude가 이 서버를 띄워 호출하는 것(2-2에서 확인).
+- 다음 사람이 할 일: 2-2 `runtime-codex`. `mcpServerCommand(registration)`이 MCP 서버 실행 명령을 준다. Codex에는 ADR 0003대로 `default_tools_approval_mode = "approve"` 설정.

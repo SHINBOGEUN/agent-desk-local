@@ -105,6 +105,17 @@ export interface ToolResult {
   message: string;   // shown to the model; explains what to fix when ok is false
 }
 
+/** A permission question from a runtime that asks the harness to decide (Claude's permission prompt tool). */
+export interface ApprovalRequest {
+  toolName: string;
+  input: unknown;
+  toolUseId?: string;
+}
+
+export type ApprovalDecision =
+  | { behavior: 'allow'; updatedInput?: unknown }
+  | { behavior: 'deny'; message: string };
+
 /**
  * Harness tools a session may call. Real runtimes reach these through the
  * local MCP server (tools-mcp); the fake runtime calls them directly.
@@ -112,6 +123,8 @@ export interface ToolResult {
 export interface HarnessTools {
   submitReport(report: unknown): Promise<ToolResult>;
   requestUserInput(question: UserQuestion): Promise<string>;
+  /** Optional: runtimes that delegate permission prompts call this. Missing means deny. */
+  approve?(request: ApprovalRequest): Promise<ApprovalDecision>;
 }
 
 export interface SkillRef {
