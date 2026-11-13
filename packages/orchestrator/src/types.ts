@@ -5,7 +5,7 @@
 import type { FailureType } from './failure.ts';
 import type { Budget, GateResult } from './gates.ts';
 import type { ReviewPolicy } from './review.ts';
-import type { AnswerReport, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
+import type { Access, AnswerReport, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
 
 export interface RunConfig {
   /** Project folder the run works in. */
@@ -39,6 +39,8 @@ export interface RunConfig {
   confirmPlan?: (plan: PlanReport, requirements: Requirement[]) => Promise<boolean>;
   /** Maximum REDO rounds after the first build attempt. Default 2. */
   redoLimit?: number;
+  /** Per-role access from role files. Only the builder can be restricted; other roles are always read-only. */
+  access?: Partial<Record<RoleId, Access>>;
   models?: Partial<Record<RoleId, string>>;
   effort?: Partial<Record<RoleId, Effort>>;
   /** Extra text appended to a role's instructions (project rules). */

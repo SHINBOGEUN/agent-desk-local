@@ -9,7 +9,7 @@ import { RunStore } from '#store';
 import { main, parseArgs } from '../src/main.ts';
 import type { CliDeps } from '../src/main.ts';
 import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from '../src/discover.ts';
-import { validateConfig } from '../src/config.ts';
+import { validateConfig } from '#project';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
@@ -193,7 +193,7 @@ test('revert of an unknown run or missing restore point fails clearly', async ()
 test('mixed runtimes: config.runtimes picks a runtime per role, each found by its own discovery', async () => {
   const project = tmp();
   fs.mkdirSync(path.join(project, '.agent-desk'));
-  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtime: 'codex', runtimes: { verifier: 'claude' } }));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtimes: { primary: 'codex', review: 'claude' } }));
   const bin = tmp();
   for (const name of ['codex', 'claude']) fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n');
   const created: Array<[string, string | undefined]> = [];
@@ -211,7 +211,7 @@ test('mixed runtimes: config.runtimes picks a runtime per role, each found by it
 test('doctor checks every runtime in use; claude is found in ~/.local/bin', async () => {
   const project = tmp();
   fs.mkdirSync(path.join(project, '.agent-desk'));
-  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtimes: { verifier: 'claude' }, verify: ['npm test'] }));
+  fs.writeFileSync(path.join(project, '.agent-desk', 'config.json'), JSON.stringify({ runtimes: { primary: 'codex', review: 'claude' }, verify: ['npm test'] }));
   const bin = tmp();
   fs.writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\n');
   const home = tmp();
@@ -227,11 +227,11 @@ test('doctor checks every runtime in use; claude is found in ~/.local/bin', asyn
   assert.match(out.join(''), /ok\s+claude version: 2\.1\.322/);
 });
 
-test('config validation covers runtimes and allowCommands', () => {
-  assert.equal(validateConfig({ runtimes: { builder: 'codex', verifier: 'claude' }, allowCommands: ['make test'] }).ok, true);
-  const bad = validateConfig({ runtimes: { boss: 'codex', builder: 'gpt' }, allowCommands: [1] });
+test('config validation covers runtimes, roles and allowCommands', () => {
+  assert.equal(validateConfig({ runtimes: { primary: 'codex', review: 'claude' }, roles: { verifier: { runtime: 'review' } }, allowCommands: ['make test'], skills: ['api'] }).ok, true);
+  const bad = validateConfig({ runtimes: { primary: 'gpt', extra: 'codex' }, roles: { boss: { runtime: 'primary' }, builder: { effort: 'high' } }, allowCommands: [1] });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.errors.length, 3);
+  if (!bad.ok) { assert.equal(bad.errors.length, 5); assert.ok(bad.errors.some(error => /agents\/builder\.md/.test(error))); }
 });
 
 test('plan-build in the CLI: interactive runs ask to confirm the plan; unattended runs go on', async () => {
@@ -248,4 +248,33 @@ test('plan-build in the CLI: interactive runs ask to confirm the plan; unattende
   const unattended = harness(tmp(), make(), { ask: async () => { throw new Error('must not ask'); } });
   assert.equal(await main(['run', 'edit', '--runtime', 'fake', '--unattended', '--review', 'never', '--verify', 'node -e "0"'], unattended.deps), 0);
   assert.match(unattended.out.join(''), /Plan: edit it \(1 step\(s\)\)/);
+});
+
+test('init previews by default, writes with --yes, never overwrites, and doctor then sees the role files', async () => {
+  const project = tmp();
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+  const bin = tmp();
+  fs.writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\n');
+  const { deps, out } = harness(project, new FakeRuntime({ scripts: {} }));
+  deps.env = { AGENT_DESK_HOME: tmp(), PATH: bin };
+  assert.equal(await main(['init'], deps), 0);
+  assert.match(out.join(''), /Stack: Node\.js/);
+  assert.match(out.join(''), /runtimes\.primary = codex/);
+  assert.match(out.join(''), /Not written/);
+  assert.ok(!fs.existsSync(path.join(project, '.agent-desk')));
+
+  out.length = 0;
+  assert.equal(await main(['init', '--yes'], deps), 0);
+  assert.match(out.join(''), /Created 5 file\(s\)/);
+  assert.ok(fs.existsSync(path.join(project, '.agent-desk', 'agents', 'builder.md')));
+  const config = JSON.parse(fs.readFileSync(path.join(project, '.agent-desk', 'config.json'), 'utf8'));
+  assert.deepEqual(config.verify, ['npm test']);
+
+  out.length = 0;
+  assert.equal(await main(['init', '--yes'], deps), 0);
+  assert.match(out.join(''), /Nothing to create/);
+  out.length = 0;
+  await main(['doctor', '--runtime', 'fake'], deps);
+  assert.match(out.join(''), /ok\s+role files: all 4 present/);
+  assert.match(out.join(''), /ok\s+verify commands: 1 configured/);
 });

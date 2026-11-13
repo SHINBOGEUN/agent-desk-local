@@ -10,14 +10,12 @@ import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
 import { planText, revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
-import { loadProjectConfig } from './config.ts';
-import type { ProjectConfig } from './config.ts';
+import { assignRuntimes, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
+import type { LoadedProject, RuntimeKind } from '#project';
 import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from './discover.ts';
 import type { Found } from './discover.ts';
 import { EXIT_CODES, describeEvent, summarize } from './format.ts';
 import { dataDirectory, readMachineSettings, writeMachineSettings } from './paths.ts';
-
-export type RuntimeKind = 'codex' | 'claude' | 'fake';
 
 export interface CliDeps {
   env: NodeJS.ProcessEnv;
@@ -51,6 +49,7 @@ interface Parsed {
 
 export const USAGE = `Usage:
   agent-desk run "<request>" [options]   run one request in a project
+  agent-desk init [--project <dir>] [--yes]  look at a project and draft .agent-desk/ settings (writes only with --yes, never overwrites)
   agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
   agent-desk doctor [--project <dir>]    check Codex, settings and project config
 
@@ -115,6 +114,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   if (parsed.command === 'doctor') return doctor(parsed, project, deps);
   if (parsed.command === 'run') return run(parsed, project, deps);
   if (parsed.command === 'revert') return revert(parsed, deps);
+  if (parsed.command === 'init') return init(parsed, project, deps);
   deps.err(`unknown command "${parsed.command}"\n\n${USAGE}\n`);
   return 64;
 }
@@ -126,23 +126,12 @@ function locate(kind: 'codex' | 'claude', deps: CliDeps, saved: ReturnType<typeo
     : resolveClaudeExecutable({ ...common, ...(saved.claude?.path ? { saved: saved.claude.path } : {}) });
 }
 
-/** Runtime kind for every role: --runtime wins, then config.runtimes per role, then config.runtime, then codex. */
-function assignRuntimes(parsed: Parsed, config: ProjectConfig): Record<RoleId, RuntimeKind> {
-  const base: RuntimeKind = parsed.runtime ?? config.runtime ?? 'codex';
-  const pick = (role: 'lead' | 'builder' | 'verifier' | 'researcher'): RuntimeKind => (parsed.runtime ? parsed.runtime : config.runtimes?.[role] ?? base);
-  return { lead: pick('lead'), builder: pick('builder'), verifier: pick('verifier'), researcher: pick('researcher') };
-}
-
-function kindsOf(config: ProjectConfig): RuntimeKind[] {
-  return [...new Set(Object.values(assignRuntimes({ runtime: undefined } as Parsed, config)))];
-}
-
 async function doctor(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
   const checks: DoctorCheck[] = [];
   const dir = dataDirectory(deps.env, deps.platform);
   const saved = readMachineSettings(dir);
-  const early = loadProjectConfig(project);
-  const kinds = parsed.runtime ? [parsed.runtime] : early.ok ? kindsOf(early.config) : (['codex'] as RuntimeKind[]);
+  const loaded = loadProject(project);
+  const kinds = [...new Set(Object.values(assignRuntimes(loaded.config, parsed.runtime)))];
 
   for (const kind of kinds) {
     let command: string | undefined;
@@ -181,11 +170,16 @@ async function doctor(parsed: Parsed, project: string, deps: CliDeps): Promise<n
     }
   }
 
-  const config = loadProjectConfig(project);
-  if (!config.ok) checks.push({ name: 'project config', ok: false, detail: config.errors.join('; '), fix: `fix ${path.join(project, '.agent-desk', 'config.json')}` });
-  else {
-    checks.push({ name: 'project config', ok: true, detail: config.exists ? 'valid' : 'none (defaults)' });
-    const verifyCount = config.config.verify?.length ?? 0;
+  checks.push(loaded.errors.length
+    ? { name: 'project config', ok: false, detail: loaded.errors.join('; '), fix: `fix the files under ${path.join(project, '.agent-desk')}` }
+    : { name: 'project config', ok: true, detail: loaded.configExists ? 'valid' : 'none (defaults)' });
+  const inspection = inspectProject(project);
+  if (inspection.instructionFilesDiffer) checks.push({ name: 'instruction files', ok: false, detail: 'AGENTS.md and CLAUDE.md differ, so Codex and Claude would follow different rules', fix: 'make them say the same (for example CLAUDE.md containing "@AGENTS.md")' });
+  checks.push(loaded.missingRoles.length
+    ? { name: 'role files', ok: false, detail: `missing: ${loaded.missingRoles.join(', ')} (built-in defaults are used)`, fix: 'run "agent-desk init" to create .agent-desk/agents/*.md' }
+    : { name: 'role files', ok: true, detail: 'all 4 present' });
+  if (!loaded.errors.length) {
+    const verifyCount = loaded.config.verify?.length ?? 0;
     checks.push(verifyCount > 0
       ? { name: 'verify commands', ok: true, detail: `${verifyCount} configured` }
       : { name: 'verify commands', ok: false, detail: 'none configured; build runs will end as needs_review', fix: `add "verify": ["<test command>"] to ${path.join(project, '.agent-desk', 'config.json')}${suggestVerify(project)}` });
@@ -210,11 +204,13 @@ function suggestVerify(project: string): string {
 async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
   if (!parsed.request) { deps.err(`run needs a request\n\n${USAGE}\n`); return 64; }
   if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) { deps.err(`project folder not found: ${project}\n`); return 64; }
-  const loaded = loadProjectConfig(project);
-  if (!loaded.ok) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
-  const config: ProjectConfig = loaded.config;
+  const loaded: LoadedProject = loadProject(project);
+  if (loaded.errors.length) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
+  const config = loaded.config;
+  for (const warning of loaded.warnings) deps.err(`note: ${warning}\n`);
+  const settings = roleSettings(loaded);
   const dir = dataDirectory(deps.env, deps.platform);
-  const assignment = assignRuntimes(parsed, config);
+  const assignment = assignRuntimes(config, parsed.runtime);
   const instances = new Map<RuntimeKind, Runtime>();
   for (const kind of new Set(Object.values(assignment))) {
     let command: string | undefined;
@@ -244,6 +240,10 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     const result = await runRequest(parsed.request, {
       cwd: project,
       runtime: runtimeMap,
+      access: settings.access,
+      effort: settings.effort,
+      models: settings.models,
+      roleNotes: settings.roleNotes,
       ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
       ...(interactive ? { askUser: interactive, confirmPlan: async (plan: Parameters<typeof planText>[0]) => (await interactive({ question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
       onEvent: event => {
@@ -279,6 +279,27 @@ function pruneRestorePoints(root: string, keep: number): void {
   } catch { /* nothing to prune */ }
 }
 
+async function init(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
+  if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) { deps.err(`project folder not found: ${project}\n`); return 64; }
+  const saved = readMachineSettings(dataDirectory(deps.env, deps.platform));
+  const available = (['codex', 'claude'] as const).filter(kind => locate(kind, deps, saved) !== null);
+  const inspection = inspectProject(project);
+  const draft = draftFromInspection(inspection, available);
+  deps.out(`Project: ${project}\nStack: ${inspection.stack.join(', ') || 'unknown'}\nTests: ${inspection.hasTests ? 'yes' : 'none found'}, CI: ${inspection.hasCi ? 'yes' : 'none found'}${inspection.gitCommits !== null ? `, commits: ${inspection.gitCommits}` : ''}\n`);
+  for (const note of inspection.notes) deps.out(`Note: ${note}\n`);
+  deps.out('\nDraft:\n');
+  for (const line of draft.rationale) deps.out(`  - ${line}\n`);
+  deps.out('\nFiles:\n');
+  for (const file of draft.files) deps.out(`  ${file.willWrite ? 'create' : 'keep  '} ${file.path} (${file.reason})\n`);
+  const config = draft.files.find(file => file.path === '.agent-desk/config.json');
+  if (config?.willWrite) deps.out(`\n.agent-desk/config.json would contain:\n${config.content}`);
+  if (!draft.files.some(file => file.willWrite)) { deps.out('\nNothing to create.\n'); return 0; }
+  if (!parsed.yes) { deps.out('\nNot written. Review the draft, then run again with --yes to create the files.\n'); return 0; }
+  const written = writeDraft(project, draft);
+  deps.out(`\nCreated ${written.length} file(s): ${written.join(', ')}\n`);
+  return 0;
+}
+
 async function revert(parsed: Parsed, deps: CliDeps): Promise<number> {
   const runId = Number(parsed.request);
   if (!Number.isInteger(runId) || runId < 1) { deps.err(`revert needs a run id\n\n${USAGE}\n`); return 64; }
@@ -290,8 +311,7 @@ async function revert(parsed: Parsed, deps: CliDeps): Promise<number> {
     const row = store.getRun(runId);
     if (!row) { deps.err(`run ${runId} not found\n`); return 64; }
     if (row.status === 'running') { deps.err(`run ${runId} is still running\n`); return 64; }
-    const loaded = loadProjectConfig(row.project);
-    const ignore = loaded.ok ? loaded.config.ignore : undefined;
+    const ignore = loadProject(row.project).config.ignore;
     const point = path.join(dir, 'restore', String(runId));
     const plan = revertToRestorePoint(row.project, point, { ...(ignore ? { ignore } : {}), dryRun: true });
     if (!plan.ok) { deps.err(`${plan.error}\n(restore points are kept for the 10 newest runs, and only for runs that reached the build step)\n`); return 1; }

@@ -2,7 +2,15 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
-## 2026-11-13 · 3단계 시작(3-1~3-2)
+## 2026-11-13 · 4단계 시작(4-2, 4-6, 4-7)
+
+| 항목 | 내용 |
+|---|---|
+| 4-2 설정 | `packages/project`: `config.json` 스키마(`runtimes.primary/review`, `roles.<role>.runtime`, `skills`, `verify`, `review`, `limits`), 알 수 없는 키는 오류. v1식 `runtime`·역할별 맵 형식은 폐기 |
+| 4-6 역할 파일 | `.agent-desk/agents/<role>.md`(프론트매터 access·effort·model·skills·description + 본문은 프로젝트 지침으로 내장 지침에 추가). 읽기 전용 역할에 쓰기 권한 부여 시도는 오류, builder는 제한만 가능. 파일이 없으면 기본값 + `doctor` FAIL로 알림 |
+| 4-7 `init` | 프로젝트 검사(스택, verify 후보, 기존 에이전트 파일, 테스트·CI·커밋 수, AGENTS/CLAUDE 불일치) → 초안과 근거 출력, `--yes`로만 작성, 기존 파일은 덮어쓰지 않음 |
+
+## 2026-11-13 · 3단계 진행(3-1~3-3)
 
 | 항목 | 내용 |
 |---|---|

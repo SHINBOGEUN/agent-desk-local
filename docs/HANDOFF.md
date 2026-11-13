@@ -167,3 +167,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 119개 테스트와 `tsc --noEmit`, 벤치 selftest 통과.
 - 아직 없는 것: 실제 모델이 4개 워크플로를 올바르게 고르는지(3-6 분류 정확도 측정), 계획이 실제로 품질·토큰에 도움이 되는지(측정 필요). researcher 병렬 중 한 명이 일시 오류여도 재시도는 단계당 1회 공유.
 - 다음 사람이 할 일: 사용자 PC에서 `scripts/smoke/runtime.ts` 실행(codex, claude) 후 결과 확인, 3-4·3-5·3-6 측정. 코드 쪽 다음 단계는 4단계(서버, 설정·역할 md 파일, `init`, `skills check`).
+
+### 2026-11-13 · Claude (15차)
+- 한 일: 4-2·4-6·4-7. `packages/project`(config 검증, 역할 파일 파서, 런타임 배정, `init` 검사·초안), CLI가 이 패키지를 사용(`cli/src/config.ts` 삭제). **설정 형식 변경**: 이전의 `runtime`·역할별 `runtimes` 맵 대신 설계서대로 `runtimes: {primary, review}`와 `roles.<role>.runtime`. 역할 파일의 effort·model·본문이 `RunConfig.effort/models/roleNotes`로, access는 `RunConfig.access`(builder 제한만)로 전달. `agent-desk init [--yes]`, `doctor`에 역할 파일 4개·AGENTS/CLAUDE 불일치 점검 추가.
+- 확인한 것: 전체 129개 테스트와 `tsc --noEmit` 통과.
+- 아직 없는 것: 스킬 배치·검증(4-8), 프로젝트 메모(4-9), 서버(4-1), 5시간 한도(4-3), 사용자 숙련도 감지는 테스트·CI·커밋 수로 리뷰 정책 제안만 함(별도 감지 없음).
+- 다음 사람이 할 일: 4-8 `skills check`.

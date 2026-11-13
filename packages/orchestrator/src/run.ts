@@ -2,7 +2,7 @@
 // of steps, the roles, access levels, gates, REDO and the final status are all
 // decided here in code. Models only work inside steps.
 
-import type { AnswerReport, ApprovalDecision, ApprovalRequest, BuilderReport, PlanReport, ResearchReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
+import type { Access, AnswerReport, ApprovalDecision, ApprovalRequest, BuilderReport, PlanReport, ResearchReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
 import { UsageLedger } from '#core';
 import { ReportCollector } from '#tools-mcp';
 import { classifyFailure } from './failure.ts';
@@ -109,6 +109,13 @@ class RunContext {
   }
 }
 
+/** Roles are read-only except the builder; a role file may only restrict that, never widen it. */
+function accessFor(ctx: RunContext, role: RoleId): Access {
+  const configured = ctx.config.access?.[role];
+  if (role !== 'builder') return 'read-only';
+  return configured ?? 'workspace-write';
+}
+
 function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder): HarnessTools {
   return {
     async submitReport(report) {
@@ -117,7 +124,7 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
       return result;
     },
     async approve(request: ApprovalRequest): Promise<ApprovalDecision> {
-      const decision = decideApproval(request, { cwd: ctx.config.cwd, canWrite: role === 'builder', ...(ctx.config.allowCommands ? { allowCommands: ctx.config.allowCommands } : {}) });
+      const decision = decideApproval(request, { cwd: ctx.config.cwd, canWrite: accessFor(ctx, role) === 'workspace-write', ...(ctx.config.allowCommands ? { allowCommands: ctx.config.allowCommands } : {}) });
       ctx.emit({ type: 'runtime', step, role, event: { type: 'approval_request', id: request.toolUseId ?? request.toolName, kind: request.toolName, detail: { input: request.input, decision: decision.behavior, ...(decision.behavior === 'deny' ? { message: decision.message } : {}) } } });
       return decision;
     },
@@ -153,7 +160,7 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
   const effort = config.effort?.[role] ?? (role === 'lead' && step === 'classify' ? 'low' : undefined);
   const model = config.models?.[role];
   return ctx.runtimeFor(role).startSession({
-    role, cwd: config.cwd, access: role === 'builder' ? 'workspace-write' : 'read-only', skills: [], tools: toolsFor(ctx, step, role, holder),
+    role, cwd: config.cwd, access: accessFor(ctx, role), skills: [], tools: toolsFor(ctx, step, role, holder),
     instructions: instructionsFor(role, config.roleNotes?.[role], step),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),

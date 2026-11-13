@@ -98,3 +98,10 @@ test('investigate: a failing researcher fails the run; a researcher that changes
   const writing = new FakeRuntime({ scripts: { lead: [script([{ report: classifyInvestigate(['a']) }])], researcher: [script([{ writeFile: { path: 'x.txt', content: 'x' } }, { report: research('a') }])] } });
   assert.equal((await go(writing, tmp())).status, 'needs_review');
 });
+
+test('a role file can restrict the builder to read-only but nothing can widen the other roles', async () => {
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'build', requirements: [{ id: 'R1', text: 'x' }], reason: 'r' } }])], builder: [script([{ report: { summary: 's', changedFiles: [], commandsRun: [], requirements: [{ id: 'R1', status: 'not_done', evidence: '' }], unverified: [] } }])] } });
+  await go(runtime, tmp(), { access: { builder: 'read-only', lead: 'workspace-write' } });
+  assert.equal(runtime.turns.find(turn => turn.role === 'builder')?.options.access, 'read-only');
+  assert.equal(runtime.turns.find(turn => turn.role === 'lead')?.options.access, 'read-only');
+});
