@@ -228,6 +228,19 @@ export class CodexRuntime implements Runtime {
     }
   }
 
+  /** Reads the account's rate limits through a short-lived app-server. The raw response goes to normalizeRateLimits. */
+  async readRateLimits(timeoutMs = 15_000): Promise<unknown> {
+    const child = spawn(this.command, this.#options.serverArgs ?? ['app-server', '--stdio', '-c', 'agents.enabled=false'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const peer = new RpcPeer(child);
+    try {
+      await peer.request('initialize', { clientInfo: { name: 'agent_desk', title: 'Agent Desk', version: '0.2.0' }, capabilities: { experimentalApi: true } }, timeoutMs);
+      peer.notify('initialized', {});
+      return await peer.request('account/rateLimits/read', {}, timeoutMs);
+    } finally {
+      await peer.close(500);
+    }
+  }
+
   async close(): Promise<void> {
     if (this.#ownsEndpoint && this.#endpoint) { await this.#endpoint.close(); this.#endpoint = undefined; this.#ownsEndpoint = false; }
   }

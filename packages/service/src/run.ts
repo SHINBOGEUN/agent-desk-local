@@ -12,6 +12,8 @@ import { assignRuntimes, loadMemory, loadProject, newSuggestions, roleSettings }
 import type { RuntimeKind } from '#project';
 import { RunStore } from '#store';
 import { locate } from './discover.ts';
+import { startUsageGuard } from './usage-limits.ts';
+import type { UsageGuard } from './usage-limits.ts';
 import { dataDirectory, readMachineSettings } from './paths.ts';
 
 export interface ExecuteOptions {
@@ -25,6 +27,11 @@ export interface ExecuteOptions {
   review?: ReviewPolicy | undefined;
   maxTokens?: number | undefined;
   maxMinutes?: number | undefined;
+  /** Stop when the 5-hour Codex limit grows by this many percentage points during the run (default: config.limits.codexUsagePercent). */
+  maxUsagePercent?: number | undefined;
+  /** Test hook: replaces reading `account/rateLimits/read` from the Codex runtime. */
+  readRateLimits?: () => Promise<unknown>;
+  pollUsageMs?: number;
   /** Answers agent questions and confirms plans. Omitted: unattended, a question ends the run as needs_user. */
   ask?: ((question: UserQuestion) => Promise<string>) | undefined;
   onEvent?: (event: RunEvent) => void;
@@ -107,6 +114,16 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       ...(review ? { review } : {}),
       ...(config.limits?.redo !== undefined ? { redoLimit: config.limits.redo } : {}),
     };
+    const usageLimit = options.maxUsagePercent ?? config.limits?.codexUsagePercent;
+    const codex = instances.get('codex') as (Runtime & { readRateLimits?: () => Promise<unknown> }) | undefined;
+    const reader = options.readRateLimits ?? (codex?.readRateLimits ? () => codex.readRateLimits!() : undefined);
+    let guard: UsageGuard | undefined;
+    let usageStop: string | null = null;
+    if (usageLimit && reader) {
+      const usageController = new AbortController();
+      runConfig.signal = runConfig.signal ? AbortSignal.any([runConfig.signal, usageController.signal]) : usageController.signal;
+      guard = await startUsageGuard({ read: reader, limitPercent: usageLimit, ...(options.pollUsageMs ? { intervalMs: options.pollUsageMs } : {}), onTrip: reason => { usageStop = reason; usageController.abort(); } });
+    } else if (usageLimit) options.onNote?.('note: limits.codexUsagePercent is set but no Codex runtime is in use, so it is ignored');
     let result: RunResult;
     try {
       result = await runRequest(options.request, runConfig);
@@ -115,6 +132,8 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       const message = error instanceof Error ? error.message : String(error);
       result = { status: 'failed', reason: message, requirements: [], gates: [], redo: 0, warnings: [], unverified: [], usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, totalTokens: 0 }, usageEntries: [], events: [] };
     }
+    guard?.stop();
+    if (usageStop) result = { ...result, status: 'interrupted', reason: usageStop };
     store.finishRun(runId, options.request, result);
     pruneRestorePoints(path.join(dir, 'restore'), 10);
     return { ok: true, runId, result, suggestions: newSuggestions(project, result.memorySuggestions ?? []), durationMs: Date.now() - started, dataDir: dir };

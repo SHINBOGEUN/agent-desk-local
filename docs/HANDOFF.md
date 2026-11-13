@@ -186,3 +186,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: 정적 대시보드 파일 서빙(5단계), 폴더 선택 창, 5시간 사용량(4-3), 프로세스 관리·Supabase(4-4). SSE는 저장소를 0.4초마다 읽는 방식(단순·재접속 안전), 실시간 푸시가 필요하면 나중에 교체.
 - 다음 사람이 할 일: 4-3 Codex 5시간 사용량 이식, 4-4, 이후 5단계 대시보드.
 
+### 2026-11-13 · Claude (18차)
+- 한 일: 4-3. `packages/service/src/usage-limits.ts`(정규화·증가분·가드), `CodexRuntime.readRateLimits()`, `executeRun`이 `limits.codexUsagePercent`/`--max-usage-percent`로 가드를 켜고 한도에 닿으면 실행을 중단해 `interrupted`로 기록.
+- 확인한 것: 전체 147개 테스트와 `tsc` 통과(가짜 app-server·가짜 한도 응답).
+- 아직 없는 것: 실제 Codex의 `account/rateLimits/read` 응답 형태 확인(v1에서 쓰던 형태 그대로 가정, 스모크 스크립트에는 아직 없음), 조회 주기 15초 기본값 조정, 대시보드 표시(5단계).
+- 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정(모여Go 운영에 필요한지), 사용자 PC에서 4-5.
+

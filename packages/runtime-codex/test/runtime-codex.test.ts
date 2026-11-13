@@ -143,3 +143,10 @@ test('startSession fails cleanly when the executable is missing', async () => {
   await assert.rejects(runtime.startSession(options(noTools())), /cannot start Codex|not running/);
   await runtime.close();
 });
+
+test('readRateLimits asks a short-lived app-server for the account limits', async () => {
+  const runtime = runtimeWithFake();
+  const raw = await runtime.readRateLimits() as { rateLimitsByLimitId: { codex: { primary: { usedPercent: number } } } };
+  assert.equal(raw.rateLimitsByLimitId.codex.primary.usedPercent, 12);
+  await runtime.close();
+});

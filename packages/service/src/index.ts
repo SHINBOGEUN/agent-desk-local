@@ -4,3 +4,5 @@ export { locate, resolveClaudeExecutable, resolveCodexExecutable, versionWarning
 export type { Found } from './discover.ts';
 export { dataDirectory, readMachineSettings, writeMachineSettings } from './paths.ts';
 export type { MachineSettings } from './paths.ts';
+export { normalizeRateLimits, startUsageGuard, usageSince } from './usage-limits.ts';
+export type { Limits, LimitWindow, Reading, UsageGuard } from './usage-limits.ts';

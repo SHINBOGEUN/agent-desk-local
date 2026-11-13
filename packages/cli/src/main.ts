@@ -44,6 +44,7 @@ interface Parsed {
   maxTokens?: number | undefined;
   maxMinutes?: number | undefined;
   port?: number | undefined;
+  maxUsagePercent?: number | undefined;
   help: boolean;
   errors: string[];
 }
@@ -64,6 +65,7 @@ Options for run:
   --review <policy>     always | auto | never
   --max-tokens <n>      stop when total tokens exceed n (resumable)
   --max-minutes <n>     stop after n minutes (resumable)
+  --max-usage-percent <n>  stop when the 5-hour Codex limit grows by n percentage points during the run
   --json                print the full result as JSON
 
 Exit codes: 0 completed, 1 failed, 2 needs_review, 3 needs_user, 4 interrupted, 64 usage error`;
@@ -92,6 +94,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--project': parsed.project = value(i, arg); i++; break;
       case '--verify': { const v = value(i, arg); if (v) parsed.verify.push(v); i++; break; }
       case '--max-tokens': parsed.maxTokens = number(value(i, arg), arg); i++; break;
+      case '--max-usage-percent': parsed.maxUsagePercent = number(value(i, arg), arg); i++; break;
       case '--port': { const n = number(value(i, arg), arg); if (n !== undefined && (!Number.isInteger(n) || n < 1024 || n > 65535)) parsed.errors.push('--port expects 1024-65535'); else parsed.port = n; i++; break; }
       case '--max-minutes': parsed.maxMinutes = number(value(i, arg), arg); i++; break;
       case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
@@ -220,6 +223,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     review: parsed.review,
     maxTokens: parsed.maxTokens,
     maxMinutes: parsed.maxMinutes,
+    maxUsagePercent: parsed.maxUsagePercent,
     ask: interactive,
     signal: deps.signal,
     onNote: text => deps.err(`${text}\n`),

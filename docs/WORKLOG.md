@@ -2,6 +2,12 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-13 · 4단계 진행(4-3)
+
+| 항목 | 내용 |
+|---|---|
+| 4-3 5시간 한도 | `service/usage-limits.ts`: v1의 `normalizeRateLimits`·창 식별(리셋 시각 5분 미만 흔들림 무시)·`usageSince`를 타입 붙여 이식, `startUsageGuard`(주기 조회, 시작 대비 증가분이 한도 이상이면 중단, 창이 넘어가면 0부터 다시 셈). 한도를 못 읽으면 중단(시작 때 즉시, 실행 중에는 연속 3회 실패). `CodexRuntime.readRateLimits()`(짧게 뜨는 app-server로 `account/rateLimits/read`). 설정은 `limits.codexUsagePercent` 또는 `--max-usage-percent`, 중단되면 status `interrupted`와 사유. 다른 Codex 작업의 사용도 포함되므로 정지 조건일 뿐 정확한 회계가 아님 |
+
 ## 2026-11-13 · 4단계 진행(4-1)
 
 | 항목 | 내용 |
