@@ -91,3 +91,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인하지 못한 것: 실제 Codex와의 연결. `item/completed`의 `agentMessage`·`commandExecution`·`fileChange` 필드 이름(`text`, `command`, `aggregatedOutput`, `exitCode`, `changes[].kind.type`)과 `turn/completed`의 `turn.error.message`는 알려진 프로토콜을 바탕으로 한 가정입니다. 사용자 PC에서 `scripts/proto`식 실행으로 확인 필요(2-7 `doctor`/2-10에서).
 - 다음 사람이 할 일: 2-3 오케스트레이터(answer/build).
 
+### 2026-11-13 · Claude (4차)
+- 한 일: 2-3 `packages/orchestrator`. `runRequest(request, config)`: lead 세션(읽기 전용, effort low)이 분류하고, `answer`면 같은 보고에 담긴 답으로 바로 끝(빠른 경로, builder 세션 없음), `build`면 builder 세션(workspace-write)이 보고를 제출. builder 보고는 Run 요구사항 id를 빠짐없이·중복 없이 다뤄야 하며(`ReportCollector`에 `check` 추가), 열린 요구사항(`not_done`/`unverified`)이 있으면 `needs_review`. 보고 없이 턴이 끝나면 1회 재요청 후 실패, 사용자 질문은 `askUser`로 전달(없으면 `needs_user`), 중단 신호는 `interrupted`, 역할별 런타임 지정 가능, 이벤트는 `onEvent`·`RunResult.events`로 기록, 토큰은 단계별 증분으로 `UsageLedger`에 기록.
+- 확인한 것: 전체 41개 테스트 통과, `tsc --noEmit` 통과(가짜 런타임으로만).
+- 아직 없는 것: G2·G3·G5, REDO, 실패 유형 분류와 일시 오류 재시도(2-4), 리뷰(2-5), `investigate`·`plan-build`(3단계, 지금은 failed로 끝남), 사용자가 대시보드에서 워크플로를 직접 고르는 기능.
+- 다음 사람이 할 일: 2-4 게이트와 REDO.
+

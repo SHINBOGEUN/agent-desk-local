@@ -7,14 +7,19 @@ import { reportConsistencyErrors, validateReport } from '#core';
 
 const MAX_LISTED_ERRORS = 12;
 
+/** Extra rules that depend on the run (for example: the report must cover every requirement id). */
+export type ReportCheck<K extends ReportKind> = (report: ReportByKind[K]) => string[];
+
 export class ReportCollector<K extends ReportKind> {
   readonly kind: K;
+  readonly #check: ReportCheck<K> | undefined;
   #report: ReportByKind[K] | null = null;
   #invalidAttempts = 0;
   #lastErrors: string[] = [];
 
-  constructor(kind: K) {
+  constructor(kind: K, check?: ReportCheck<K>) {
     this.kind = kind;
+    this.#check = check;
   }
 
   get report(): ReportByKind[K] | null {
@@ -33,7 +38,7 @@ export class ReportCollector<K extends ReportKind> {
   readonly submit = async (raw: unknown): Promise<ToolResult> => {
     if (this.#report) return { ok: false, message: 'A report was already accepted for this step. Do not submit another one.' };
     const checked = validateReport(this.kind, raw);
-    const errors = checked.ok ? reportConsistencyErrors(this.kind, checked.value) : checked.errors;
+    const errors = checked.ok ? [...reportConsistencyErrors(this.kind, checked.value), ...(this.#check?.(checked.value) ?? [])] : checked.errors;
     if (!checked.ok || errors.length) {
       this.#invalidAttempts++;
       this.#lastErrors = errors;

@@ -8,6 +8,7 @@ export type { McpServerOptions, ToolBridge, ToolCallOutcome } from './stdio-serv
 export { ENV_TOKEN, ENV_URL, ToolEndpoint, dispatchTool } from './endpoint.ts';
 export type { ToolRegistration } from './endpoint.ts';
 export { ReportCollector } from './report-tool.ts';
+export type { ReportCheck } from './report-tool.ts';
 
 export interface McpServerCommand {
   command: string;

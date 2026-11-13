@@ -10,7 +10,8 @@
     "#core/*": "./packages/core/src/*",
     "#runtime-fake": "./packages/runtime-fake/src/index.ts",
     "#tools-mcp": "./packages/tools-mcp/src/index.ts",
-    "#runtime-codex": "./packages/runtime-codex/src/index.ts"
+    "#runtime-codex": "./packages/runtime-codex/src/index.ts",
+    "#orchestrator": "./packages/orchestrator/src/index.ts"
   },
   "scripts": {
     "test": "node --test \"packages/*/test/*.test.ts\"",
