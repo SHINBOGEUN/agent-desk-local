@@ -323,3 +323,14 @@ test('memory: builder suggestions are printed, saved only on approval, and memor
   assert.equal(await main(['memory', 'add', 'Tests need Docker'], cli.deps), 1);
   assert.equal(await main(['memory', 'wipe'], cli.deps), 64);
 });
+
+test('serve starts the local server, reports its port and stops on abort', async () => {
+  const controller = new AbortController();
+  const { deps, out } = harness(tmp(), new FakeRuntime({ scripts: {} }), { signal: controller.signal });
+  const done = main(['serve', '--port', '45123'], deps);
+  for (let i = 0; i < 100 && !out.join('').includes('listening'); i++) await new Promise(r => setTimeout(r, 30));
+  assert.match(out.join(''), /listening on http:\/\/127\.0\.0\.1:\d+/);
+  controller.abort();
+  assert.equal(await done, 0);
+  assert.ok(parseArgs(['serve', '--port', '80']).errors.length === 1);
+});

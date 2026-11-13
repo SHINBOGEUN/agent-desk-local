@@ -179,3 +179,10 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 135개 테스트와 `tsc --noEmit` 통과.
 - 아직 없는 것: 스킬을 런타임에 실제로 배치(`.agents/skills`, `.claude/skills`)하고 세션에 `SkillRef`로 전달하는 부분 — 지금은 검증만 하고 `config.skills`/역할 파일의 `skills`는 아직 세션에 전달되지 않음. 트리거 검증·with/without 비교(6단계).
 - 다음 사람이 할 일: 4-1 서버(HTTP + SSE, v1 보안 장치 이식).
+
+### 2026-11-13 · Claude (17차)
+- 한 일: 4-1. `packages/service`(`executeRun`, 실행 파일 탐색, 데이터 폴더)로 CLI 실행 로직 추출, `packages/server`(HTTP + SSE, v1 보안 장치 이식), CLI `serve`. 취소하면 대기 중인 질문도 함께 풀림.
+- 확인한 것: 전체 141개 테스트와 `tsc` 통과(보안 헤더·Host/Origin·CSRF, 실행 시작·SSE·afterSeq, 409·400, 질문 응답·취소).
+- 아직 없는 것: 정적 대시보드 파일 서빙(5단계), 폴더 선택 창, 5시간 사용량(4-3), 프로세스 관리·Supabase(4-4). SSE는 저장소를 0.4초마다 읽는 방식(단순·재접속 안전), 실시간 푸시가 필요하면 나중에 교체.
+- 다음 사람이 할 일: 4-3 Codex 5시간 사용량 이식, 4-4, 이후 5단계 대시보드.
+

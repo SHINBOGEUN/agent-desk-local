@@ -14,6 +14,7 @@ import { addMemory, assignRuntimes, checkSkills, loadMemory, memoryFacts, memory
 import type { LoadedProject, RuntimeKind } from '#project';
 import { dataDirectory, executeRun, locate as locateExecutable, readMachineSettings, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, writeMachineSettings } from '#service';
 import type { Found } from '#service';
+import { createServer } from '#server';
 import { EXIT_CODES, describeEvent, summarize } from './format.ts';
 
 export interface CliDeps {
@@ -42,6 +43,7 @@ interface Parsed {
   verify: string[];
   maxTokens?: number | undefined;
   maxMinutes?: number | undefined;
+  port?: number | undefined;
   help: boolean;
   errors: string[];
 }
@@ -52,6 +54,7 @@ export const USAGE = `Usage:
   agent-desk skills check [--project <dir>]  check .agent-desk/skills/*/SKILL.md structure and descriptions
   agent-desk memory [add "<fact>"]          show project memory, or add a fact to .agent-desk/memory.md
   agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
+  agent-desk serve [--port <n>]          start the local dashboard server (127.0.0.1 only, default port 4317)
   agent-desk doctor [--project <dir>]    check Codex, settings and project config
 
 Options for run:
@@ -89,6 +92,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--project': parsed.project = value(i, arg); i++; break;
       case '--verify': { const v = value(i, arg); if (v) parsed.verify.push(v); i++; break; }
       case '--max-tokens': parsed.maxTokens = number(value(i, arg), arg); i++; break;
+      case '--port': { const n = number(value(i, arg), arg); if (n !== undefined && (!Number.isInteger(n) || n < 1024 || n > 65535)) parsed.errors.push('--port expects 1024-65535'); else parsed.port = n; i++; break; }
       case '--max-minutes': parsed.maxMinutes = number(value(i, arg), arg); i++; break;
       case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
       case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto or never'); i++; break; }
@@ -114,6 +118,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   const project = path.resolve(deps.cwd, parsed.project ?? '.');
   if (parsed.command === 'doctor') return doctor(parsed, project, deps);
   if (parsed.command === 'run') return run(parsed, project, deps);
+  if (parsed.command === 'serve') return serve(parsed, deps);
   if (parsed.command === 'revert') return revert(parsed, deps);
   if (parsed.command === 'init') return init(parsed, project, deps);
   if (parsed.command === 'skills') return skills(parsed, project, deps);
@@ -236,6 +241,23 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
   if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
   if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
   return EXIT_CODES[result.status] ?? 1;
+}
+
+async function serve(parsed: Parsed, deps: CliDeps): Promise<number> {
+  const server = createServer({ env: deps.env, platform: deps.platform, createRuntime: deps.createRuntime, port: parsed.port ?? Number(deps.env.AGENT_DESK_PORT || 4317) });
+  try {
+    const { port } = await server.listen();
+    deps.out(`agent-desk server listening on http://127.0.0.1:${port} (Ctrl+C to stop)\n`);
+  } catch (error) {
+    deps.err(`could not start the server: ${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+  await new Promise<void>(resolve => {
+    if (deps.signal?.aborted) return resolve();
+    deps.signal?.addEventListener('abort', () => resolve(), { once: true });
+  });
+  await server.close();
+  return 0;
 }
 
 async function memory(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {

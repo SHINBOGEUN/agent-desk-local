@@ -2,6 +2,13 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-13 · 4단계 진행(4-1)
+
+| 항목 | 내용 |
+|---|---|
+| 서비스 분리 | `packages/service`: CLI의 run 오케스트레이션(프로젝트 로드, 런타임 배정·탐색, 저장소, RunConfig 조립, 복원 지점 정리)을 `executeRun`으로 추출. CLI와 서버가 공유. 실행 파일 탐색·데이터 폴더도 여기로 이동 |
+| 4-1 서버 | `packages/server`: `127.0.0.1`만 바인드, Host·Origin 검사, 시작마다 새 CSRF 토큰(POST는 `X-Agent-Desk-Token` 필수, 상수 시간 비교), CSP·nosniff·no-referrer, 요청 본문 256KB 상한, 질문·요청·메모의 비밀값 마스킹. 한 번에 한 실행. 경로: `GET /api/health·state·runs·runs/:id·runs/:id/events(SSE, afterSeq/Last-Event-ID)·project`, `POST /api/runs·runs/active/cancel·runs/active/answer·runs/:id/revert`. CLI `agent-desk serve [--port]` |
+
 ## 2026-11-13 · 4단계 시작(4-2, 4-6, 4-7)
 
 | 항목 | 내용 |
