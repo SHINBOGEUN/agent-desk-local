@@ -4,8 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Local agent harness for Codex and Claude (v2 in progress; v1 lives in legacy/)",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.18" },
+  "imports": {
+    "#core": "./packages/core/src/index.ts",
+    "#core/*": "./packages/core/src/*",
+    "#runtime-fake": "./packages/runtime-fake/src/index.ts"
+  },
   "scripts": {
+    "test": "node --test \"packages/*/test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
     "legacy:start": "npm --prefix legacy start",
     "legacy:check": "npm --prefix legacy run check",
     "legacy:test": "npm --prefix legacy test",
@@ -14,5 +21,9 @@
     "bench:run": "node bench/run.mjs",
     "bench:report": "node bench/report.mjs",
     "bench:history": "node bench/analyze-history.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
   }
 }
