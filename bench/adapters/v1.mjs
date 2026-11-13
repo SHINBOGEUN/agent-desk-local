@@ -83,7 +83,10 @@ export function createAdapter({ url = 'http://127.0.0.1:4317', pollMs = 3000 } =
     name: 'v1',
     async connect() {
       const health = await desk.get('/api/health').catch(error => { throw new Error(`Agent Desk v1 is not reachable at ${url}: ${error.message}`); });
-      if (health.connection !== 'connected') throw new Error(`Agent Desk is not connected to Codex (${health.connection})`);
+      if (health.connection !== 'connected') {
+        const reason = await desk.state().then(state => state.connection?.message).catch(() => null);
+        throw new Error(`Agent Desk is not connected to Codex (${health.connection}${reason ? `: ${reason}` : ''}). Check the dashboard at ${url} or run "codex login status".`);
+      }
       lastState = await waitForIdle(10 * 60_000);
     },
     async configure({ usageLimit } = {}) {
