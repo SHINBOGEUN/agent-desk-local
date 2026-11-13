@@ -1,18 +1,18 @@
 {
-  "name": "agent-desk-local",
-  "version": "0.1.0",
+  "name": "agent-desk",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local Codex agent team and live dashboard",
+  "description": "Local agent harness for Codex and Claude (v2 in progress; v1 lives in legacy/)",
   "engines": { "node": ">=22" },
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node --test test/*.test.mjs",
+    "legacy:start": "npm --prefix legacy start",
+    "legacy:check": "npm --prefix legacy run check",
+    "legacy:test": "npm --prefix legacy test",
     "bench:validate": "node bench/validate-tasks.mjs",
     "bench:selftest": "node bench/selftest.mjs",
     "bench:run": "node bench/run.mjs",
     "bench:report": "node bench/report.mjs",
-    "bench:history": "node bench/analyze-history.mjs",
-    "check": "node --check server.mjs && node --check lib/codex.mjs && node --check lib/hub.mjs && node --check lib/agent-router.mjs && node --check lib/agent-instruction-files.mjs && node --check lib/images.mjs && node --check lib/usage-limits.mjs && node --check lib/supabase-manager.mjs && node --check lib/local-process-manager.mjs && node --check public/app.js"
+    "bench:history": "node bench/analyze-history.mjs"
   }
 }
