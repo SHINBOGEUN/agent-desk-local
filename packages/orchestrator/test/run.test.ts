@@ -16,6 +16,7 @@ const answerReport = { workflow: 'answer', requirements: [], reason: 'plain ques
 const buildClassify = { workflow: 'build', requirements: [{ id: 'R1', text: 'add GET /api/ping returning {ok:true}' }, { id: 'R2', text: 'cover it with a test' }], reason: 'one change' };
 const doneReport = { summary: 'added ping', changedFiles: ['ping.js', 'ping.test.js'], commandsRun: [{ command: 'node --test', exitCode: 0 }], requirements: [{ id: 'R1', status: 'done', evidence: 'ping.js' }, { id: 'R2', status: 'done', evidence: 'ping.test.js' }], unverified: [] };
 const write = (file: string) => ({ writeFile: { path: file, content: 'x' } });
+const files = [write('ping.js'), write('ping.test.js')];
 
 test('answer fast path: one lead session, no builder, files untouched', async () => {
   const cwd = tmp();
@@ -60,7 +61,7 @@ test('a rejected report is corrected inside the same turn', async () => {
   assert.deepEqual(runtime.turns[0]?.toolResults.map(item => item.ok), [false, true]);
   assert.match(runtime.turns[0]?.toolResults[0]?.message ?? '', /report\.answer/);
 
-  const second = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([{ report: missingR2 }, { report: doneReport }])] } });
+  const second = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([...files, { report: missingR2 }, { report: doneReport }])] } });
   const built = await runRequest('x', { cwd: tmp(), runtime: second });
   assert.equal(built.status, 'completed');
   assert.match(second.turns[1]?.toolResults[0]?.message ?? '', /missing an entry for R2/);
@@ -68,10 +69,10 @@ test('a rejected report is corrected inside the same turn', async () => {
 
 test('builder reporting open requirements ends as needs_review', async () => {
   const partial = { ...doneReport, requirements: [doneReport.requirements[0], { id: 'R2', status: 'unverified', evidence: '' }], unverified: ['test not run'] };
-  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([{ report: partial }])] } });
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([...files, { report: partial }])] } });
   const result = await runRequest('x', { cwd: tmp(), runtime });
   assert.equal(result.status, 'needs_review');
-  assert.match(result.reason, /R2 \(unverified\)/);
+  assert.match(result.reason, /could not verify R2/);
 });
 
 test('a turn without a report gets one reminder, then fails', async () => {
@@ -90,7 +91,8 @@ test('runtime failure, missing runtime script and unsupported workflow end as fa
   const crash = new FakeRuntime({ scripts: { lead: [script([{ fail: 'spawn EPERM' }])], builder: [] } });
   const crashed = await runRequest('q', { cwd: tmp(), runtime: crash });
   assert.equal(crashed.status, 'failed');
-  assert.equal(crashed.reason, 'spawn EPERM');
+  assert.match(crashed.reason, /spawn EPERM/);
+  assert.equal(crashed.failureType, 'environment');
 
   const none = await runRequest('q', { cwd: tmp(), runtime: new FakeRuntime({ scripts: {} }) });
   assert.equal(none.status, 'failed');
@@ -126,7 +128,7 @@ test('questions go to askUser; without it the run waits for the user', async () 
 
 test('roles can use different runtimes', async () => {
   const lead = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])] } });
-  const builder = new FakeRuntime({ scripts: { builder: [script([{ report: doneReport }])] } });
+  const builder = new FakeRuntime({ scripts: { builder: [script([...files, { report: doneReport }])] } });
   const result = await runRequest('x', { cwd: tmp(), runtime: { lead, builder } });
   assert.equal(result.status, 'completed');
   assert.equal(lead.turns.length, 1);

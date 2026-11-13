@@ -1,4 +1,10 @@
 export { runRequest, builderCoverageErrors } from './run.ts';
+export { checkBudget, checkChangeReport, checkNoChanges, isTestPath, runVerify } from './gates.ts';
+export type { Budget, GateId, GateResult } from './gates.ts';
+export { classifyFailure } from './failure.ts';
+export type { FailureType } from './failure.ts';
+export { takeSnapshot, diffSnapshots, diffProtected, restoreProtected, isProtectedPath } from './snapshot.ts';
+export type { Diff, Snapshot } from './snapshot.ts';
 export { LeadCollector } from './lead-report.ts';
 export { instructionsFor } from './prompts.ts';
 export type { RunConfig, RunEvent, RunEventBody, RunResult } from './types.ts';

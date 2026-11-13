@@ -8,7 +8,7 @@
 | `runtime-fake/` | 1단계 | 스크립트로 동작하는 테스트용 런타임 |
 | `runtime-codex/` | 2단계(2-2 구현, 실제 Codex 확인은 2-10) | Codex App Server 어댑터 |
 | `runtime-claude/` | 3단계 | 로컬 Claude Code CLI(헤드리스) 어댑터 |
-| `orchestrator/` | 2단계(2-3 완료) | 분류 → answer 빠른 경로 / build 워크플로를 실행하고 Run 상태를 정하는 코드. 게이트·REDO·리뷰는 2-4, 2-5에서 추가 |
+| `orchestrator/` | 2단계(2-3·2-4 완료) | 분류 → answer 빠른 경로 / build 워크플로, 게이트 G1·G2·G3·G5, REDO, 실패 유형을 실행하고 Run 상태를 정하는 코드. 리뷰(G4)는 2-5 |
 | `tools-mcp/` | 2단계(2-1 완료) | 하네스 도구(보고 제출·사용자 질문·승인)를 런타임에 주는 로컬 MCP 서버 |
 | `server/` | 4단계 | HTTP + SSE API, 저장소, 승인 브로커 |
 | `web/` | 5단계 | 대시보드 |

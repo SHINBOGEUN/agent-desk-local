@@ -44,3 +44,12 @@ export function buildPrompt(request: string, requirements: Requirement[]): strin
   const list = requirements.map(requirement => `- ${requirement.id}: ${requirement.text}`).join('\n');
   return `Step: build.\nUser request:\n${request}\n\nRequirements (report on each by id):\n${list}\n\nImplement the change, check it, and submit your builder report.`;
 }
+
+export function redoPrompt(reasons: string[], attempt: number): string {
+  return `Step: build (redo ${attempt}).\nThe harness checked your work and found problems:\n${reasons.map(reason => `- ${reason}`).join('\n')}\n\nFix them, run the checks again, and submit a NEW complete builder report. changedFiles must list every file changed since the start of the task, across all attempts.`;
+}
+
+export function freshRedoPrompt(request: string, requirements: Requirement[], reasons: string[], previousSummary: string): string {
+  const list = requirements.map(requirement => `- ${requirement.id}: ${requirement.text}`).join('\n');
+  return `Step: build (new session after earlier attempts failed).\nUser request:\n${request}\n\nRequirements (report on each by id):\n${list}\n\nEarlier work is already in the project folder; inspect its current state before changing anything. A previous builder reported: ${previousSummary}\nThe harness found these problems with it:\n${reasons.map(reason => `- ${reason}`).join('\n')}\n\nFix them, check your work, and submit a complete builder report. changedFiles must list every file changed since the start of the task, including the earlier attempts' files.`;
+}

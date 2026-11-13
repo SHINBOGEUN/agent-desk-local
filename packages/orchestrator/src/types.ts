@@ -2,6 +2,8 @@
 // it ends. The orchestrator is the "harness": it decides step order, which
 // role runs which step, and when a run is over. Models only work inside steps.
 
+import type { FailureType } from './failure.ts';
+import type { Budget, GateResult } from './gates.ts';
 import type { AnswerReport, BuilderReport, ClassifyReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, WorkflowId } from '#core';
 
 export interface RunConfig {
@@ -14,6 +16,16 @@ export interface RunConfig {
   /** Receives every event as it happens. */
   onEvent?: (event: RunEvent) => void;
   signal?: AbortSignal;
+  /** Gate G3: commands the harness runs itself; all must exit 0. Empty means no automatic verification. */
+  verify?: string[];
+  /** Time limit per verify command. Default 120 000 ms. */
+  verifyTimeoutMs?: number;
+  /** Gate G2: extra paths ignored when comparing changes ("dir/", "*.ext" or a path prefix). node_modules/ is always ignored. */
+  ignore?: string[];
+  /** Gate G5. */
+  budget?: Budget;
+  /** Maximum REDO rounds after the first build attempt. Default 2. */
+  redoLimit?: number;
   models?: Partial<Record<RoleId, string>>;
   effort?: Partial<Record<RoleId, Effort>>;
   /** Extra text appended to a role's instructions (project rules). */
@@ -26,6 +38,9 @@ export type RunEventBody =
   | { type: 'runtime'; step: StepKind; role: RoleId; event: RuntimeEvent }
   | { type: 'report'; step: StepKind; kind: string; accepted: boolean; detail: string }
   | { type: 'user_question'; step: StepKind; question: string; answered: boolean }
+  | { type: 'gate'; result: GateResult }
+  | { type: 'retry'; step: StepKind; reason: string }
+  | { type: 'redo'; attempt: number; mode: 'same-session' | 'new-session'; reasons: string[] }
   | { type: 'step_finished'; step: StepKind; ok: boolean; detail: string }
   | { type: 'run_finished'; status: RunStatus; reason: string };
 
@@ -40,6 +55,18 @@ export interface RunResult {
   classify?: ClassifyReport;
   answer?: AnswerReport;
   builder?: BuilderReport;
+  /** Every gate evaluation in order. */
+  gates: GateResult[];
+  /** REDO rounds used. */
+  redo: number;
+  /** Things the user should know although the run ended: no verify commands, changed test files. */
+  warnings: string[];
+  /** What the builder could not check, passed through unchanged. */
+  unverified: string[];
+  /** Why a failed run failed, when the harness can tell. */
+  failureType?: FailureType;
+  /** Where a run stopped by a budget can be picked up. */
+  resume?: { step: StepKind; redo: number; note: string };
   usage: TokenUsage;
   usageEntries: readonly UsageEntry[];
   events: RunEvent[];

@@ -103,3 +103,14 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인하지 못한 것: 책 내용 자체의 정확성은 사용자 노트를 근거로만 반영함(원문 확인 안 함).
 - 다음 사람이 할 일: 2-4 게이트 G2·G3·G5와 REDO(ADR 0005 기준).
 
+### 2026-11-13 · Claude (6차)
+- 한 일: 2-4. `snapshot.ts`(변경 대조용 스냅샷, 보호 경로 복원), `gates.ts`(G2 변경 대조·읽기 전용 0건, G3 verify 실행·제한 시간, G5 총 토큰·시간), `failure.ts`(환경·일시·기타 분류), `run.ts` 갱신. 정책은 ADR 0005를 따름.
+  - build: 보고 → G2·G3 → 요구사항 `not_done` 확인 → 실패 사유가 있으면 REDO(최대 2회, 첫 번째는 같은 세션, 두 번째는 실패 요약을 담은 새 세션), 그래도 실패면 `needs_review`.
+  - 보호 경로(`.agent-desk/`, `.git`의 HEAD·config·refs) 변경은 복원하고 `failed`. 읽기 전용 단계(classify)에서 파일이 바뀌면 `needs_review`.
+  - verify 명령이 실행 불가(명령 없음)면 REDO가 아니라 환경 오류로 즉시 실패. 일시 오류는 단계당 1회 새 세션으로 재시도.
+  - `unverified`: G3 통과 시 `completed` + `RunResult.unverified`, verify 명령이 없으면 `needs_review`. 테스트 파일이 바뀌면 `RunResult.warnings`에 표시(2-5에서 리뷰 생략 금지에 사용).
+  - 예산은 usage 이벤트마다 검사해 넘으면 턴을 중단하고 `interrupted` + `resume` 기록.
+- 확인한 것: 전체 58개 테스트와 `tsc --noEmit` 통과(가짜 런타임, 실제 명령 실행 포함).
+- 아직 없는 것: G4 리뷰(2-5). `RunResult.warnings`의 테스트 파일 변경 표시는 아직 리뷰 정책과 연결되지 않음. 사용률(Codex 5시간 한도) 기반 G5는 4단계.
+- 다음 사람이 할 일: 2-5 verifier와 G4, 리뷰 정책 `always/auto/never`.
+
