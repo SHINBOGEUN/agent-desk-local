@@ -2,6 +2,17 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-13 · 2단계 시작(2-1~2-3)과 설계 개정 3
+
+| 항목 | 내용 |
+|---|---|
+| 2-1 `tools-mcp` | `5f270cd`. 도구 3개, stdio MCP 서버, 세션별 토큰 HTTP 브리지, 보고 검증 |
+| 2-2 `runtime-codex` | `e2ce324`. app-server 어댑터, 가짜 서버 테스트. 실제 Codex 확인은 2-10 |
+| 2-3 `orchestrator` | `88581cd`. answer 빠른 경로, build 워크플로, 요구사항 id 검사, 보고 재요청 1회 |
+| 개정 3 | Notion 책 정리 노트 반영. 팀 구조 선택 기준(6패턴 대응), 스킬 점진적 공개 3층과 검증 절차, 역할 정의 md 분리, `init`·`skills check`, 개선 루프, 독립 리뷰 근거 가설. [ADR 0004](adr/0004-book-notes-revision.md) |
+| 정책 결정 | `unverified`·G2 불일치·G5 기준 [ADR 0005](adr/0005-gate-policies.md). REDO 초과는 `needs_review` 유지(책의 '경고 PASS' 미채택) |
+| 로드맵 탭 | 2-1~2-3 체크, 2-10 리뷰 정책 비교·2-11 스냅샷, 3-5 독립 리뷰 비교·3-6 분류 정확도, 4-6~4-9(역할 파일, init, skills check, 프로젝트 메모), 6-4~6-5(스킬 트리거 검증, 실패 분석 보고서) 추가 |
+
 ## 2026-11-13 · 기준선 측정 완료, 어려운 과제, 1단계 프로토타입
 
 | 항목 | 내용 |
