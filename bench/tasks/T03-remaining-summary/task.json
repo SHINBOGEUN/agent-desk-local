@@ -1,0 +1,7 @@
+{
+  "id": "T03",
+  "title": "남은 할 일 수 표시",
+  "category": "frontend",
+  "kind": "code",
+  "prompt": "화면에서 목록 위에 '남은 할 일 N개'를 보여줘. 완료되지 않은 항목 수를 세서 표시하면 돼. public/render.js에 renderSummary(todos) 함수를 만들어 그 문구를 돌려주게 하고, index.html의 id=\"summary\" 요소에 목록이 갱신될 때마다 표시해줘."
+}

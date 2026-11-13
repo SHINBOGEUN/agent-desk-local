@@ -1,0 +1,2951 @@
+{
+  "period": {
+    "from": "2026-10-22T10:38:16.884Z",
+    "to": "2026-10-27T05:41:47.413Z"
+  },
+  "runs": 60,
+  "statusCounts": {
+    "needs_review": 19,
+    "completed": 41
+  },
+  "tokens": {
+    "reportedSum": 2165000142,
+    "correctedSum": 203270309,
+    "correctedUncachedInput": 9480153,
+    "correctedOutput": 1359820,
+    "mainContextGrowth": {
+      "firstHalfDirectMean": 197440.35714285713,
+      "secondHalfDirectMean": 1900802.5
+    }
+  },
+  "buckets": [
+    {
+      "bucket": "0 (메인 단독)",
+      "runs": 18,
+      "meanTokens": 575965.2777777778,
+      "medianTokens": 86815.5,
+      "meanUncachedInput": 11183.222222222223,
+      "meanAccountPercent": 0,
+      "meanWorkTasks": 0,
+      "meanConsultations": 0,
+      "needsReviewRate": 0,
+      "complaintAfterCompleted": 0.3888888888888889,
+      "meanDurationMin": 0.32527129629629625
+    },
+    {
+      "bucket": "1명",
+      "runs": 13,
+      "meanTokens": 713365.0769230769,
+      "medianTokens": 532978,
+      "meanUncachedInput": 40782.07692307692,
+      "meanAccountPercent": 0.3076923076923077,
+      "meanWorkTasks": 1.0769230769230769,
+      "meanConsultations": 0,
+      "needsReviewRate": 0,
+      "complaintAfterCompleted": 0.23076923076923078,
+      "meanDurationMin": 1.5710807692307693
+    },
+    {
+      "bucket": "2~3명",
+      "runs": 15,
+      "meanTokens": 5636327.466666667,
+      "medianTokens": 3670048,
+      "meanUncachedInput": 210021.4,
+      "meanAccountPercent": 1.7333333333333334,
+      "meanWorkTasks": 3.533333333333333,
+      "meanConsultations": 0.26666666666666666,
+      "needsReviewRate": 0.4,
+      "complaintAfterCompleted": 0.2222222222222222,
+      "meanDurationMin": 5.958772222222223
+    },
+    {
+      "bucket": "4명 이상",
+      "runs": 14,
+      "meanTokens": 7077448.285714285,
+      "medianTokens": 5959750.5,
+      "meanUncachedInput": 399883.35714285716,
+      "meanAccountPercent": 2.857142857142857,
+      "meanWorkTasks": 6.285714285714286,
+      "meanConsultations": 2.7857142857142856,
+      "needsReviewRate": 0.9285714285714286,
+      "complaintAfterCompleted": 0,
+      "meanDurationMin": 11.526371428571428
+    }
+  ],
+  "agents": [
+    {
+      "id": "main",
+      "name": "메인 AI",
+      "calls": 60,
+      "tokens": 120309876,
+      "failed": 0,
+      "share": 0.5918713686808043
+    },
+    {
+      "id": "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "name": "프론트엔드 에이전트",
+      "calls": 21,
+      "tokens": 31121753,
+      "failed": 2,
+      "share": 0.1531052574923768
+    },
+    {
+      "id": "verifier",
+      "name": "체커",
+      "calls": 41,
+      "tokens": 15369878,
+      "failed": 2,
+      "share": 0.0756130006178128
+    },
+    {
+      "id": "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "name": "DB 에이전트",
+      "calls": 25,
+      "tokens": 14489581,
+      "failed": 0,
+      "share": 0.07128232879303588
+    },
+    {
+      "id": "worker",
+      "name": "빌더",
+      "calls": 13,
+      "tokens": 9412187,
+      "failed": 2,
+      "share": 0.04630379638966358
+    },
+    {
+      "id": "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "name": "백엔드 에이전트",
+      "calls": 13,
+      "tokens": 5245485,
+      "failed": 1,
+      "share": 0.025805465765292853
+    },
+    {
+      "id": "researcher",
+      "name": "리서처",
+      "calls": 15,
+      "tokens": 3932960,
+      "failed": 1,
+      "share": 0.01934842338435172
+    },
+    {
+      "id": "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "name": "서버 · 인프라 에이전트",
+      "calls": 9,
+      "tokens": 1670509,
+      "failed": 0,
+      "share": 0.008218165300275113
+    },
+    {
+      "id": "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "name": "보안 리뷰 에이전트",
+      "calls": 5,
+      "tokens": 1183522,
+      "failed": 1,
+      "share": 0.005822404687740205
+    },
+    {
+      "id": "prompt_refiner",
+      "name": "프롬프트 정리 AI",
+      "calls": 13,
+      "tokens": 107102,
+      "failed": 0,
+      "share": 0.0005268944615024913
+    }
+  ],
+  "verification": {
+    "verdictCounts": {
+      "PASS": 6,
+      "FAIL": 17,
+      "NOT_VERIFIED": 16,
+      "NONE": 2
+    },
+    "writeRuns": 26,
+    "firstVerdictPassRate": 0,
+    "firstVerdicts": 23,
+    "firstVerdictCounts": {
+      "PASS": 0,
+      "FAIL": 14,
+      "NOT_VERIFIED": 8,
+      "NONE": 1
+    }
+  },
+  "delegation": {
+    "delegatedRuns": 42,
+    "meanAgentsWhenDelegated": 2.7857142857142856,
+    "runsWithConsultations": 14,
+    "consultationTurns": 43,
+    "retryTasks": 17,
+    "failedTasks": 9,
+    "totalWorkTasks": 155
+  },
+  "repeatChains": [
+    {
+      "message": "3번뺴고 순차적으로 다 진행해줘!",
+      "runs": 7,
+      "finalStatus": "completed",
+      "tokens": 39578401,
+      "accountPercent": 34
+    },
+    {
+      "message": "지출 기록한거는 좋은데 어디 여행에 지출기록인지도 적으면 좋을거같은데? 각 여행 상세에 들어가서 최근 변경 ",
+      "runs": 2,
+      "finalStatus": "completed",
+      "tokens": 8322620,
+      "accountPercent": 2
+    }
+  ],
+  "complaintsAfterCompleted": {
+    "completed": 41,
+    "complaints": 12
+  },
+  "perRun": [
+    {
+      "id": "980a8dcb-b62c-4c81-9e5f-b31a0cc4a696",
+      "startedAt": "2026-10-22T10:38:16.884Z",
+      "finishedAt": "2026-10-22T10:52:42.786Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 8554505,
+        "inputTokens": 8483907,
+        "cachedInputTokens": 7867776,
+        "outputTokens": 70598
+      },
+      "corrected": {
+        "totalTokens": 8554505,
+        "inputTokens": 8483907,
+        "cachedInputTokens": 7867776,
+        "outputTokens": 70598
+      },
+      "mainDelta": {
+        "totalTokens": 3171084,
+        "inputTokens": 3154292,
+        "cachedInputTokens": 2921984,
+        "outputTokens": 16792
+      },
+      "team": {
+        "totalTokens": 5383421,
+        "inputTokens": 5329615,
+        "cachedInputTokens": 4945792,
+        "outputTokens": 53806
+      },
+      "accountPercent": 2,
+      "durationSec": 865.902,
+      "agentCount": 6,
+      "agents": [
+        "prompt_refiner",
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "worker"
+      ],
+      "workTasks": 7,
+      "consultations": 5,
+      "discussions": 5,
+      "retries": 1,
+      "failedTasks": 1,
+      "verifierVerdicts": [],
+      "wroteFiles": true
+    },
+    {
+      "id": "65e457ac-8a45-4e82-bb92-aaa45006bc2f",
+      "startedAt": "2026-10-22T10:56:06.788Z",
+      "finishedAt": "2026-10-22T11:09:25.246Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 8252955,
+        "inputTokens": 8176656,
+        "cachedInputTokens": 7527552,
+        "outputTokens": 76299
+      },
+      "corrected": {
+        "totalTokens": 5081871,
+        "inputTokens": 5022364,
+        "cachedInputTokens": 4605568,
+        "outputTokens": 59507
+      },
+      "mainDelta": {
+        "totalTokens": 1775288,
+        "inputTokens": 1767946,
+        "cachedInputTokens": 1746944,
+        "outputTokens": 7342
+      },
+      "team": {
+        "totalTokens": 3306583,
+        "inputTokens": 3254418,
+        "cachedInputTokens": 2858624,
+        "outputTokens": 52165
+      },
+      "accountPercent": 5,
+      "durationSec": 798.458,
+      "agentCount": 6,
+      "agents": [
+        "prompt_refiner",
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 7,
+      "consultations": 5,
+      "discussions": 5,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "81bf92d8-2951-4507-8cba-6ebed73159e1",
+      "startedAt": "2026-10-22T11:28:20.995Z",
+      "finishedAt": "2026-10-22T11:28:45.142Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 5166573,
+        "inputTokens": 5140914,
+        "cachedInputTokens": 4870016,
+        "outputTokens": 25659
+      },
+      "corrected": {
+        "totalTokens": 220201,
+        "inputTokens": 218676,
+        "cachedInputTokens": 201088,
+        "outputTokens": 1525
+      },
+      "mainDelta": {
+        "totalTokens": 146143,
+        "inputTokens": 145702,
+        "cachedInputTokens": 143872,
+        "outputTokens": 441
+      },
+      "team": {
+        "totalTokens": 74058,
+        "inputTokens": 72974,
+        "cachedInputTokens": 57216,
+        "outputTokens": 1084
+      },
+      "accountPercent": 0,
+      "durationSec": 24.147,
+      "agentCount": 1,
+      "agents": [
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "c8de2f31-9de5-4291-8819-b29685462acb",
+      "startedAt": "2026-10-22T11:43:17.529Z",
+      "finishedAt": "2026-10-22T11:47:05.653Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 6715514,
+        "inputTokens": 6672566,
+        "cachedInputTokens": 6310400,
+        "outputTokens": 42948
+      },
+      "corrected": {
+        "totalTokens": 1622999,
+        "inputTokens": 1604626,
+        "cachedInputTokens": 1497600,
+        "outputTokens": 18373
+      },
+      "mainDelta": {
+        "totalTokens": 684661,
+        "inputTokens": 681924,
+        "cachedInputTokens": 676224,
+        "outputTokens": 2737
+      },
+      "team": {
+        "totalTokens": 938338,
+        "inputTokens": 922702,
+        "cachedInputTokens": 821376,
+        "outputTokens": 15636
+      },
+      "accountPercent": 1,
+      "durationSec": 228.124,
+      "agentCount": 2,
+      "agents": [
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 2,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "b108f4fe-48f1-47eb-a079-ab7b949b2fa7",
+      "startedAt": "2026-10-22T12:11:27.631Z",
+      "finishedAt": "2026-10-22T12:12:48.820Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 6402887,
+        "inputTokens": 6370137,
+        "cachedInputTokens": 6086400,
+        "outputTokens": 32750
+      },
+      "corrected": {
+        "totalTokens": 625711,
+        "inputTokens": 620273,
+        "cachedInputTokens": 597376,
+        "outputTokens": 5438
+      },
+      "mainDelta": {
+        "totalTokens": 557905,
+        "inputTokens": 555543,
+        "cachedInputTokens": 550656,
+        "outputTokens": 2362
+      },
+      "team": {
+        "totalTokens": 67806,
+        "inputTokens": 64730,
+        "cachedInputTokens": 46720,
+        "outputTokens": 3076
+      },
+      "accountPercent": 0,
+      "durationSec": 81.189,
+      "agentCount": 1,
+      "agents": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "53a43dd0-788d-44de-a5a1-2bb288db9a5d",
+      "startedAt": "2026-10-22T12:16:07.276Z",
+      "finishedAt": "2026-10-22T12:16:20.616Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 6417149,
+        "inputTokens": 6386605,
+        "cachedInputTokens": 6120320,
+        "outputTokens": 30544
+      },
+      "corrected": {
+        "totalTokens": 82068,
+        "inputTokens": 81198,
+        "cachedInputTokens": 80640,
+        "outputTokens": 870
+      },
+      "mainDelta": {
+        "totalTokens": 82068,
+        "inputTokens": 81198,
+        "cachedInputTokens": 80640,
+        "outputTokens": 870
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 13.34,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "0a38a693-1177-4466-9fb5-8e9d4640fb27",
+      "startedAt": "2026-10-22T12:18:35.199Z",
+      "finishedAt": "2026-10-22T12:18:40.753Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 6499491,
+        "inputTokens": 6468691,
+        "cachedInputTokens": 6201344,
+        "outputTokens": 30800
+      },
+      "corrected": {
+        "totalTokens": 82342,
+        "inputTokens": 82086,
+        "cachedInputTokens": 81024,
+        "outputTokens": 256
+      },
+      "mainDelta": {
+        "totalTokens": 82342,
+        "inputTokens": 82086,
+        "cachedInputTokens": 81024,
+        "outputTokens": 256
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 5.554,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "09fb29cb-af27-408c-ba93-4af3ad69775b",
+      "startedAt": "2026-10-22T12:24:09.712Z",
+      "finishedAt": "2026-10-22T12:24:21.264Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 6582820,
+        "inputTokens": 6551069,
+        "cachedInputTokens": 6283264,
+        "outputTokens": 31751
+      },
+      "corrected": {
+        "totalTokens": 83329,
+        "inputTokens": 82378,
+        "cachedInputTokens": 81920,
+        "outputTokens": 951
+      },
+      "mainDelta": {
+        "totalTokens": 83329,
+        "inputTokens": 82378,
+        "cachedInputTokens": 81920,
+        "outputTokens": 951
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 11.552,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "709fabc3-e2e2-487e-bd85-9d4eccca1878",
+      "startedAt": "2026-10-22T12:29:58.092Z",
+      "finishedAt": "2026-10-22T12:48:19.534Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 16160730,
+        "inputTokens": 16045404,
+        "cachedInputTokens": 15297664,
+        "outputTokens": 115326
+      },
+      "corrected": {
+        "totalTokens": 9577910,
+        "inputTokens": 9494335,
+        "cachedInputTokens": 9014400,
+        "outputTokens": 83575
+      },
+      "mainDelta": {
+        "totalTokens": 3033161,
+        "inputTokens": 3025522,
+        "cachedInputTokens": 3002368,
+        "outputTokens": 7639
+      },
+      "team": {
+        "totalTokens": 6544749,
+        "inputTokens": 6468813,
+        "cachedInputTokens": 6012032,
+        "outputTokens": 75936
+      },
+      "accountPercent": 5,
+      "durationSec": 1101.442,
+      "agentCount": 5,
+      "agents": [
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 8,
+      "discussions": 8,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "677cdd8e-135b-4d89-8409-850f177f9d1a",
+      "startedAt": "2026-10-22T12:59:08.440Z",
+      "finishedAt": "2026-10-22T13:01:32.849Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 10663066,
+        "inputTokens": 10611869,
+        "cachedInputTokens": 10261248,
+        "outputTokens": 51197
+      },
+      "corrected": {
+        "totalTokens": 1047085,
+        "inputTokens": 1035278,
+        "cachedInputTokens": 975616,
+        "outputTokens": 11807
+      },
+      "mainDelta": {
+        "totalTokens": 643866,
+        "inputTokens": 641079,
+        "cachedInputTokens": 630016,
+        "outputTokens": 2787
+      },
+      "team": {
+        "totalTokens": 403219,
+        "inputTokens": 394199,
+        "cachedInputTokens": 345600,
+        "outputTokens": 9020
+      },
+      "accountPercent": 0,
+      "durationSec": 144.409,
+      "agentCount": 1,
+      "agents": [
+        "verifier"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": false
+    },
+    {
+      "id": "814e2435-c1f3-44b2-82e4-80ce33236c71",
+      "startedAt": "2026-10-22T13:02:29.312Z",
+      "finishedAt": "2026-10-22T13:02:42.388Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 10370998,
+        "inputTokens": 10328107,
+        "cachedInputTokens": 10024960,
+        "outputTokens": 42891
+      },
+      "corrected": {
+        "totalTokens": 111151,
+        "inputTokens": 110437,
+        "cachedInputTokens": 109312,
+        "outputTokens": 714
+      },
+      "mainDelta": {
+        "totalTokens": 111151,
+        "inputTokens": 110437,
+        "cachedInputTokens": 109312,
+        "outputTokens": 714
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 13.076,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "654f952c-f7fd-421d-9053-d753ad6408ec",
+      "startedAt": "2026-10-22T13:04:13.861Z",
+      "finishedAt": "2026-10-22T13:04:25.402Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 10483071,
+        "inputTokens": 10439278,
+        "cachedInputTokens": 10135168,
+        "outputTokens": 43793
+      },
+      "corrected": {
+        "totalTokens": 112073,
+        "inputTokens": 111171,
+        "cachedInputTokens": 110208,
+        "outputTokens": 902
+      },
+      "mainDelta": {
+        "totalTokens": 112073,
+        "inputTokens": 111171,
+        "cachedInputTokens": 110208,
+        "outputTokens": 902
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 11.541,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "f62f9928-c295-4193-9669-cf226549b704",
+      "startedAt": "2026-10-22T13:05:35.834Z",
+      "finishedAt": "2026-10-22T13:18:04.897Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 15767432,
+        "inputTokens": 15669628,
+        "cachedInputTokens": 15031168,
+        "outputTokens": 97804
+      },
+      "corrected": {
+        "totalTokens": 5284361,
+        "inputTokens": 5230350,
+        "cachedInputTokens": 4896000,
+        "outputTokens": 54011
+      },
+      "mainDelta": {
+        "totalTokens": 2610453,
+        "inputTokens": 2602882,
+        "cachedInputTokens": 2585728,
+        "outputTokens": 7571
+      },
+      "team": {
+        "totalTokens": 2673908,
+        "inputTokens": 2627468,
+        "cachedInputTokens": 2310272,
+        "outputTokens": 46440
+      },
+      "accountPercent": 2,
+      "durationSec": 749.063,
+      "agentCount": 5,
+      "agents": [
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "cdc33225-1517-4095-a737-c59be5411d68",
+      "startedAt": "2026-10-22T13:28:08.119Z",
+      "finishedAt": "2026-10-22T13:30:22.884Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 14623118,
+        "inputTokens": 14569414,
+        "cachedInputTokens": 14241536,
+        "outputTokens": 53704
+      },
+      "corrected": {
+        "totalTokens": 1529594,
+        "inputTokens": 1527254,
+        "cachedInputTokens": 1520640,
+        "outputTokens": 2340
+      },
+      "mainDelta": {
+        "totalTokens": 1529594,
+        "inputTokens": 1527254,
+        "cachedInputTokens": 1520640,
+        "outputTokens": 2340
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 134.765,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "778f614f-ef6d-4d62-bbd7-db685ba0ec08",
+      "startedAt": "2026-10-22T13:31:08.183Z",
+      "finishedAt": "2026-10-22T13:31:19.164Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 14753837,
+        "inputTokens": 14699359,
+        "cachedInputTokens": 14370304,
+        "outputTokens": 54478
+      },
+      "corrected": {
+        "totalTokens": 130719,
+        "inputTokens": 129945,
+        "cachedInputTokens": 128768,
+        "outputTokens": 774
+      },
+      "mainDelta": {
+        "totalTokens": 130719,
+        "inputTokens": 129945,
+        "cachedInputTokens": 128768,
+        "outputTokens": 774
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 10.981,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "e105051e-05c7-4055-95fa-eefaff1a5892",
+      "startedAt": "2026-10-22T13:34:13.473Z",
+      "finishedAt": "2026-10-22T13:39:19.521Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 16755844,
+        "inputTokens": 16682593,
+        "cachedInputTokens": 16221952,
+        "outputTokens": 73251
+      },
+      "corrected": {
+        "totalTokens": 2002007,
+        "inputTokens": 1983234,
+        "cachedInputTokens": 1851648,
+        "outputTokens": 18773
+      },
+      "mainDelta": {
+        "totalTokens": 1330275,
+        "inputTokens": 1327852,
+        "cachedInputTokens": 1321472,
+        "outputTokens": 2423
+      },
+      "team": {
+        "totalTokens": 671732,
+        "inputTokens": 655382,
+        "cachedInputTokens": 530176,
+        "outputTokens": 16350
+      },
+      "accountPercent": 1,
+      "durationSec": 306.048,
+      "agentCount": 2,
+      "agents": [
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier"
+      ],
+      "workTasks": 2,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "9e60501b-2939-440c-bdd1-6c7d649fb35e",
+      "startedAt": "2026-10-22T14:00:01.858Z",
+      "finishedAt": "2026-10-22T14:09:50.912Z",
+      "status": "completed",
+      "qualityGate": "passed",
+      "reported": {
+        "totalTokens": 19754160,
+        "inputTokens": 19665089,
+        "cachedInputTokens": 19031168,
+        "outputTokens": 89071
+      },
+      "corrected": {
+        "totalTokens": 3670048,
+        "inputTokens": 3637878,
+        "cachedInputTokens": 3339392,
+        "outputTokens": 32170
+      },
+      "mainDelta": {
+        "totalTokens": 1829554,
+        "inputTokens": 1825716,
+        "cachedInputTokens": 1792384,
+        "outputTokens": 3838
+      },
+      "team": {
+        "totalTokens": 1840494,
+        "inputTokens": 1812162,
+        "cachedInputTokens": 1547008,
+        "outputTokens": 28332
+      },
+      "accountPercent": 1,
+      "durationSec": 589.054,
+      "agentCount": 3,
+      "agents": [
+        "researcher",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 5,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "PASS"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "fe9d5431-5bec-4e53-a848-c1e4dd5d5700",
+      "startedAt": "2026-10-22T14:11:31.555Z",
+      "finishedAt": "2026-10-22T14:11:42.767Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 17968678,
+        "inputTokens": 17907499,
+        "cachedInputTokens": 17533952,
+        "outputTokens": 61179
+      },
+      "corrected": {
+        "totalTokens": 55012,
+        "inputTokens": 54572,
+        "cachedInputTokens": 49792,
+        "outputTokens": 440
+      },
+      "mainDelta": {
+        "totalTokens": 55012,
+        "inputTokens": 54572,
+        "cachedInputTokens": 49792,
+        "outputTokens": 440
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 11.212,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "6434e3db-b747-4095-9cad-306c8592e8f3",
+      "startedAt": "2026-10-22T14:15:53.773Z",
+      "finishedAt": "2026-10-22T14:15:59.565Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 17998559,
+        "inputTokens": 17937115,
+        "cachedInputTokens": 17563136,
+        "outputTokens": 61444
+      },
+      "corrected": {
+        "totalTokens": 29881,
+        "inputTokens": 29616,
+        "cachedInputTokens": 29184,
+        "outputTokens": 265
+      },
+      "mainDelta": {
+        "totalTokens": 29881,
+        "inputTokens": 29616,
+        "cachedInputTokens": 29184,
+        "outputTokens": 265
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 5.792,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "16b04c85-dff0-4208-a3a2-eeab442607e9",
+      "startedAt": "2026-10-22T14:20:10.602Z",
+      "finishedAt": "2026-10-22T14:20:18.079Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 18028749,
+        "inputTokens": 17967017,
+        "cachedInputTokens": 17592576,
+        "outputTokens": 61732
+      },
+      "corrected": {
+        "totalTokens": 30190,
+        "inputTokens": 29902,
+        "cachedInputTokens": 29440,
+        "outputTokens": 288
+      },
+      "mainDelta": {
+        "totalTokens": 30190,
+        "inputTokens": 29902,
+        "cachedInputTokens": 29440,
+        "outputTokens": 288
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 7.477,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "8a12c975-43c3-47fa-9a81-acd840b3ffce",
+      "startedAt": "2026-10-22T14:20:33.465Z",
+      "finishedAt": "2026-10-22T14:21:27.116Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 18310792,
+        "inputTokens": 18247711,
+        "cachedInputTokens": 17869312,
+        "outputTokens": 63081
+      },
+      "corrected": {
+        "totalTokens": 282043,
+        "inputTokens": 280694,
+        "cachedInputTokens": 276736,
+        "outputTokens": 1349
+      },
+      "mainDelta": {
+        "totalTokens": 282043,
+        "inputTokens": 280694,
+        "cachedInputTokens": 276736,
+        "outputTokens": 1349
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 53.651,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "18c5a418-a2b1-4562-8194-da0c3b1c4dea",
+      "startedAt": "2026-10-22T14:23:08.386Z",
+      "finishedAt": "2026-10-22T14:28:25.936Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 19418291,
+        "inputTokens": 19341188,
+        "cachedInputTokens": 18869376,
+        "outputTokens": 77103
+      },
+      "corrected": {
+        "totalTokens": 1107499,
+        "inputTokens": 1093477,
+        "cachedInputTokens": 1000064,
+        "outputTokens": 14022
+      },
+      "mainDelta": {
+        "totalTokens": 456415,
+        "inputTokens": 453295,
+        "cachedInputTokens": 446208,
+        "outputTokens": 3120
+      },
+      "team": {
+        "totalTokens": 651084,
+        "inputTokens": 640182,
+        "cachedInputTokens": 553856,
+        "outputTokens": 10902
+      },
+      "accountPercent": 0,
+      "durationSec": 317.55,
+      "agentCount": 2,
+      "agents": [
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 2,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "3947445d-391b-4aed-b624-342d53ccc53b",
+      "startedAt": "2026-10-22T14:30:09.974Z",
+      "finishedAt": "2026-10-22T14:30:32.954Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 18805057,
+        "inputTokens": 18738813,
+        "cachedInputTokens": 18352384,
+        "outputTokens": 66244
+      },
+      "corrected": {
+        "totalTokens": 37850,
+        "inputTokens": 37807,
+        "cachedInputTokens": 36864,
+        "outputTokens": 43
+      },
+      "mainDelta": {
+        "totalTokens": 37850,
+        "inputTokens": 37807,
+        "cachedInputTokens": 36864,
+        "outputTokens": 43
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 22.98,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "6ebb5b35-77b8-4881-9736-a91b36389fb4",
+      "startedAt": "2026-10-23T07:05:44.721Z",
+      "finishedAt": "2026-10-23T07:05:52.667Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 18843600,
+        "inputTokens": 18776791,
+        "cachedInputTokens": 18352384,
+        "outputTokens": 66809
+      },
+      "corrected": {
+        "totalTokens": 38543,
+        "inputTokens": 37978,
+        "cachedInputTokens": 0,
+        "outputTokens": 565
+      },
+      "mainDelta": {
+        "totalTokens": 38543,
+        "inputTokens": 37978,
+        "cachedInputTokens": 0,
+        "outputTokens": 565
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 7.946,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "d004b36f-d6ca-4186-9ef8-900659308360",
+      "startedAt": "2026-10-23T07:10:49.635Z",
+      "finishedAt": "2026-10-23T07:18:31.052Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 21903350,
+        "inputTokens": 21801483,
+        "cachedInputTokens": 21016576,
+        "outputTokens": 101867
+      },
+      "corrected": {
+        "totalTokens": 3059750,
+        "inputTokens": 3024692,
+        "cachedInputTokens": 2664192,
+        "outputTokens": 35058
+      },
+      "mainDelta": {
+        "totalTokens": 711554,
+        "inputTokens": 706899,
+        "cachedInputTokens": 694016,
+        "outputTokens": 4655
+      },
+      "team": {
+        "totalTokens": 2348196,
+        "inputTokens": 2317793,
+        "cachedInputTokens": 1970176,
+        "outputTokens": 30403
+      },
+      "accountPercent": 2,
+      "durationSec": 461.417,
+      "agentCount": 4,
+      "agents": [
+        "researcher",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 1,
+      "discussions": 1,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED",
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "78bf6198-e94c-4aeb-a3ee-068f0454f977",
+      "startedAt": "2026-10-24T00:38:35.940Z",
+      "finishedAt": "2026-10-24T00:42:35.488Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 20411634,
+        "inputTokens": 20330489,
+        "cachedInputTokens": 19786368,
+        "outputTokens": 81145
+      },
+      "corrected": {
+        "totalTokens": 856480,
+        "inputTokens": 846799,
+        "cachedInputTokens": 739968,
+        "outputTokens": 9681
+      },
+      "mainDelta": {
+        "totalTokens": 454369,
+        "inputTokens": 451890,
+        "cachedInputTokens": 398976,
+        "outputTokens": 2479
+      },
+      "team": {
+        "totalTokens": 402111,
+        "inputTokens": 394909,
+        "cachedInputTokens": 340992,
+        "outputTokens": 7202
+      },
+      "accountPercent": 1,
+      "durationSec": 239.548,
+      "agentCount": 1,
+      "agents": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 2,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": true
+    },
+    {
+      "id": "e223218e-32ab-43e4-8049-1ffcfa1cff21",
+      "startedAt": "2026-10-24T00:44:54.615Z",
+      "finishedAt": "2026-10-24T00:45:11.316Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 20168893,
+        "inputTokens": 20093746,
+        "cachedInputTokens": 19601408,
+        "outputTokens": 75147
+      },
+      "corrected": {
+        "totalTokens": 159370,
+        "inputTokens": 158166,
+        "cachedInputTokens": 156032,
+        "outputTokens": 1204
+      },
+      "mainDelta": {
+        "totalTokens": 159370,
+        "inputTokens": 158166,
+        "cachedInputTokens": 156032,
+        "outputTokens": 1204
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 16.701,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "e3461d79-a977-4f77-a601-9796ec2b05b2",
+      "startedAt": "2026-10-24T00:46:33.074Z",
+      "finishedAt": "2026-10-24T00:48:23.227Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 20644660,
+        "inputTokens": 20562661,
+        "cachedInputTokens": 20043776,
+        "outputTokens": 81999
+      },
+      "corrected": {
+        "totalTokens": 475767,
+        "inputTokens": 468915,
+        "cachedInputTokens": 442368,
+        "outputTokens": 6852
+      },
+      "mainDelta": {
+        "totalTokens": 276694,
+        "inputTokens": 274941,
+        "cachedInputTokens": 271488,
+        "outputTokens": 1753
+      },
+      "team": {
+        "totalTokens": 199073,
+        "inputTokens": 193974,
+        "cachedInputTokens": 170880,
+        "outputTokens": 5099
+      },
+      "accountPercent": 0,
+      "durationSec": 110.153,
+      "agentCount": 1,
+      "agents": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": true
+    },
+    {
+      "id": "68014a74-a4ee-40b3-9677-6e0ba87a3e4b",
+      "startedAt": "2026-10-24T00:54:03.197Z",
+      "finishedAt": "2026-10-24T00:56:41.990Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 21071560,
+        "inputTokens": 20990128,
+        "cachedInputTokens": 20458240,
+        "outputTokens": 81432
+      },
+      "corrected": {
+        "totalTokens": 625973,
+        "inputTokens": 621441,
+        "cachedInputTokens": 585344,
+        "outputTokens": 4532
+      },
+      "mainDelta": {
+        "totalTokens": 340773,
+        "inputTokens": 339947,
+        "cachedInputTokens": 337536,
+        "outputTokens": 826
+      },
+      "team": {
+        "totalTokens": 285200,
+        "inputTokens": 281494,
+        "cachedInputTokens": 247808,
+        "outputTokens": 3706
+      },
+      "accountPercent": 0,
+      "durationSec": 158.793,
+      "agentCount": 1,
+      "agents": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "44056b22-7c13-47a0-8e46-908e1d1db0d7",
+      "startedAt": "2026-10-24T01:02:05.310Z",
+      "finishedAt": "2026-10-24T01:02:32.475Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 20916625,
+        "inputTokens": 20836498,
+        "cachedInputTokens": 20324736,
+        "outputTokens": 80127
+      },
+      "corrected": {
+        "totalTokens": 130265,
+        "inputTokens": 127864,
+        "cachedInputTokens": 114304,
+        "outputTokens": 2401
+      },
+      "mainDelta": {
+        "totalTokens": 122028,
+        "inputTokens": 119678,
+        "cachedInputTokens": 114304,
+        "outputTokens": 2350
+      },
+      "team": {
+        "totalTokens": 8237,
+        "inputTokens": 8186,
+        "cachedInputTokens": 0,
+        "outputTokens": 51
+      },
+      "accountPercent": 0,
+      "durationSec": 27.165,
+      "agentCount": 1,
+      "agents": [
+        "prompt_refiner"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "4eb85233-e5a8-41b4-9558-08f6fd06885d",
+      "startedAt": "2026-10-24T01:03:26.107Z",
+      "finishedAt": "2026-10-24T01:03:50.653Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 21050487,
+        "inputTokens": 20968520,
+        "cachedInputTokens": 20450304,
+        "outputTokens": 81967
+      },
+      "corrected": {
+        "totalTokens": 142099,
+        "inputTokens": 140208,
+        "cachedInputTokens": 125568,
+        "outputTokens": 1891
+      },
+      "mainDelta": {
+        "totalTokens": 133875,
+        "inputTokens": 132028,
+        "cachedInputTokens": 125568,
+        "outputTokens": 1847
+      },
+      "team": {
+        "totalTokens": 8224,
+        "inputTokens": 8180,
+        "cachedInputTokens": 0,
+        "outputTokens": 44
+      },
+      "accountPercent": 0,
+      "durationSec": 24.546,
+      "agentCount": 1,
+      "agents": [
+        "prompt_refiner"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "46851f12-eca8-4326-b60f-7e12ae6f707d",
+      "startedAt": "2026-10-24T01:06:51.418Z",
+      "finishedAt": "2026-10-24T01:07:28.897Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 21123529,
+        "inputTokens": 21038172,
+        "cachedInputTokens": 20518400,
+        "outputTokens": 85357
+      },
+      "corrected": {
+        "totalTokens": 81266,
+        "inputTokens": 77832,
+        "cachedInputTokens": 68096,
+        "outputTokens": 3434
+      },
+      "mainDelta": {
+        "totalTokens": 73075,
+        "inputTokens": 69668,
+        "cachedInputTokens": 68096,
+        "outputTokens": 3407
+      },
+      "team": {
+        "totalTokens": 8191,
+        "inputTokens": 8164,
+        "cachedInputTokens": 0,
+        "outputTokens": 27
+      },
+      "accountPercent": 0,
+      "durationSec": 37.479,
+      "agentCount": 1,
+      "agents": [
+        "prompt_refiner"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "221d134b-0480-43fe-8292-71083b88f14f",
+      "startedAt": "2026-10-24T01:10:55.377Z",
+      "finishedAt": "2026-10-24T01:34:30.074Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 35647312,
+        "inputTokens": 35441420,
+        "cachedInputTokens": 34273536,
+        "outputTokens": 205892
+      },
+      "corrected": {
+        "totalTokens": 14531974,
+        "inputTokens": 14411412,
+        "cachedInputTokens": 13755136,
+        "outputTokens": 120562
+      },
+      "mainDelta": {
+        "totalTokens": 3789098,
+        "inputTokens": 3777512,
+        "cachedInputTokens": 3747072,
+        "outputTokens": 11586
+      },
+      "team": {
+        "totalTokens": 10742876,
+        "inputTokens": 10633900,
+        "cachedInputTokens": 10008064,
+        "outputTokens": 108976
+      },
+      "accountPercent": 3,
+      "durationSec": 1414.697,
+      "agentCount": 7,
+      "agents": [
+        "prompt_refiner",
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf"
+      ],
+      "workTasks": 7,
+      "consultations": 5,
+      "discussions": 5,
+      "retries": 0,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "74cab517-26ec-43a8-8d09-85db44f52640",
+      "startedAt": "2026-10-24T01:36:07.569Z",
+      "finishedAt": "2026-10-24T01:45:13.395Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 28690325,
+        "inputTokens": 28551764,
+        "cachedInputTokens": 27690496,
+        "outputTokens": 138561
+      },
+      "corrected": {
+        "totalTokens": 3785889,
+        "inputTokens": 3744244,
+        "cachedInputTokens": 3425024,
+        "outputTokens": 41645
+      },
+      "mainDelta": {
+        "totalTokens": 2075290,
+        "inputTokens": 2068191,
+        "cachedInputTokens": 2051584,
+        "outputTokens": 7099
+      },
+      "team": {
+        "totalTokens": 1710599,
+        "inputTokens": 1676053,
+        "cachedInputTokens": 1373440,
+        "outputTokens": 34546
+      },
+      "accountPercent": 1,
+      "durationSec": 545.826,
+      "agentCount": 4,
+      "agents": [
+        "prompt_refiner",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf"
+      ],
+      "workTasks": 7,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "705220bd-7a57-4be8-a047-2087fa68ba6e",
+      "startedAt": "2026-10-24T01:49:35.746Z",
+      "finishedAt": "2026-10-24T01:59:26.830Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 33614866,
+        "inputTokens": 33460472,
+        "cachedInputTokens": 32551040,
+        "outputTokens": 154394
+      },
+      "corrected": {
+        "totalTokens": 6635140,
+        "inputTokens": 6584761,
+        "cachedInputTokens": 6233984,
+        "outputTokens": 50379
+      },
+      "mainDelta": {
+        "totalTokens": 2329461,
+        "inputTokens": 2322227,
+        "cachedInputTokens": 2307968,
+        "outputTokens": 7234
+      },
+      "team": {
+        "totalTokens": 4305679,
+        "inputTokens": 4262534,
+        "cachedInputTokens": 3926016,
+        "outputTokens": 43145
+      },
+      "accountPercent": 1,
+      "durationSec": 591.084,
+      "agentCount": 4,
+      "agents": [
+        "verifier",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ],
+      "workTasks": 6,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "NOT_VERIFIED",
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "d9032586-fc0c-45ef-bdfb-0842202408e3",
+      "startedAt": "2026-10-24T02:34:11.195Z",
+      "finishedAt": "2026-10-24T02:35:19.517Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 29793698,
+        "inputTokens": 29676563,
+        "cachedInputTokens": 29063040,
+        "outputTokens": 117135
+      },
+      "corrected": {
+        "totalTokens": 484511,
+        "inputTokens": 478625,
+        "cachedInputTokens": 438016,
+        "outputTokens": 5886
+      },
+      "mainDelta": {
+        "totalTokens": 361824,
+        "inputTokens": 358018,
+        "cachedInputTokens": 352000,
+        "outputTokens": 3806
+      },
+      "team": {
+        "totalTokens": 122687,
+        "inputTokens": 120607,
+        "cachedInputTokens": 86016,
+        "outputTokens": 2080
+      },
+      "accountPercent": 0,
+      "durationSec": 68.322,
+      "agentCount": 2,
+      "agents": [
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 2,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "7771db7c-23f2-4313-aaab-14d4e0655701",
+      "startedAt": "2026-10-24T02:38:09.673Z",
+      "finishedAt": "2026-10-24T02:38:16.625Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 29794040,
+        "inputTokens": 29678651,
+        "cachedInputTokens": 29097472,
+        "outputTokens": 115389
+      },
+      "corrected": {
+        "totalTokens": 123029,
+        "inputTokens": 122695,
+        "cachedInputTokens": 120448,
+        "outputTokens": 334
+      },
+      "mainDelta": {
+        "totalTokens": 123029,
+        "inputTokens": 122695,
+        "cachedInputTokens": 120448,
+        "outputTokens": 334
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 6.952,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "e2210c68-7649-4cc7-a5e4-b5f364f62364",
+      "startedAt": "2026-10-24T02:44:20.531Z",
+      "finishedAt": "2026-10-24T02:51:30.352Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 33950981,
+        "inputTokens": 33797285,
+        "cachedInputTokens": 32637824,
+        "outputTokens": 153696
+      },
+      "corrected": {
+        "totalTokens": 4156941,
+        "inputTokens": 4118634,
+        "cachedInputTokens": 3540352,
+        "outputTokens": 38307
+      },
+      "mainDelta": {
+        "totalTokens": 2065428,
+        "inputTokens": 2055218,
+        "cachedInputTokens": 1756544,
+        "outputTokens": 10210
+      },
+      "team": {
+        "totalTokens": 2091513,
+        "inputTokens": 2063416,
+        "cachedInputTokens": 1783808,
+        "outputTokens": 28097
+      },
+      "accountPercent": 1,
+      "durationSec": 429.821,
+      "agentCount": 4,
+      "agents": [
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "7665d5ff-9680-4ad8-8c7d-c9e6545b6f10",
+      "startedAt": "2026-10-24T02:53:54.984Z",
+      "finishedAt": "2026-10-24T02:55:53.219Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 32578551,
+        "inputTokens": 32439296,
+        "cachedInputTokens": 31429760,
+        "outputTokens": 139255
+      },
+      "corrected": {
+        "totalTokens": 719083,
+        "inputTokens": 705427,
+        "cachedInputTokens": 575744,
+        "outputTokens": 13656
+      },
+      "mainDelta": {
+        "totalTokens": 139328,
+        "inputTokens": 137370,
+        "cachedInputTokens": 131840,
+        "outputTokens": 1958
+      },
+      "team": {
+        "totalTokens": 579755,
+        "inputTokens": 568057,
+        "cachedInputTokens": 443904,
+        "outputTokens": 11698
+      },
+      "accountPercent": 0,
+      "durationSec": 118.235,
+      "agentCount": 2,
+      "agents": [
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ],
+      "workTasks": 3,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "b960975d-934c-4cf1-80bf-8bd18463cb70",
+      "startedAt": "2026-10-25T01:20:41.370Z",
+      "finishedAt": "2026-10-25T01:20:48.276Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 32029990,
+        "inputTokens": 31901847,
+        "cachedInputTokens": 30985856,
+        "outputTokens": 128143
+      },
+      "corrected": {
+        "totalTokens": 31194,
+        "inputTokens": 30608,
+        "cachedInputTokens": 0,
+        "outputTokens": 586
+      },
+      "mainDelta": {
+        "totalTokens": 31194,
+        "inputTokens": 30608,
+        "cachedInputTokens": 0,
+        "outputTokens": 586
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 6.906,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "04bf2354-1a8b-4443-8db0-3e9fb256141f",
+      "startedAt": "2026-10-25T01:25:09.319Z",
+      "finishedAt": "2026-10-25T01:32:58.414Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 35367253,
+        "inputTokens": 35196218,
+        "cachedInputTokens": 33984384,
+        "outputTokens": 171035
+      },
+      "corrected": {
+        "totalTokens": 3337263,
+        "inputTokens": 3294371,
+        "cachedInputTokens": 2998528,
+        "outputTokens": 42892
+      },
+      "mainDelta": {
+        "totalTokens": 729204,
+        "inputTokens": 719072,
+        "cachedInputTokens": 700672,
+        "outputTokens": 10132
+      },
+      "team": {
+        "totalTokens": 2608059,
+        "inputTokens": 2575299,
+        "cachedInputTokens": 2297856,
+        "outputTokens": 32760
+      },
+      "accountPercent": 1,
+      "durationSec": 469.095,
+      "agentCount": 6,
+      "agents": [
+        "prompt_refiner",
+        "researcher",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "worker",
+        "verifier"
+      ],
+      "workTasks": 7,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 1,
+      "failedTasks": 2,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "a9441b25-2604-46f0-a082-7ad479e9be1b",
+      "startedAt": "2026-10-25T01:33:51.824Z",
+      "finishedAt": "2026-10-25T01:41:54.797Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 38443051,
+        "inputTokens": 38261754,
+        "cachedInputTokens": 37080576,
+        "outputTokens": 181297
+      },
+      "corrected": {
+        "totalTokens": 5683857,
+        "inputTokens": 5640835,
+        "cachedInputTokens": 5394048,
+        "outputTokens": 43022
+      },
+      "mainDelta": {
+        "totalTokens": 1005175,
+        "inputTokens": 1000729,
+        "cachedInputTokens": 987008,
+        "outputTokens": 4446
+      },
+      "team": {
+        "totalTokens": 4678682,
+        "inputTokens": 4640106,
+        "cachedInputTokens": 4407040,
+        "outputTokens": 38576
+      },
+      "accountPercent": 3,
+      "durationSec": 482.973,
+      "agentCount": 2,
+      "agents": [
+        "worker",
+        "verifier"
+      ],
+      "workTasks": 4,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "2425a82b-dc72-4c3e-a28f-f21bdf1ae3a0",
+      "startedAt": "2026-10-25T01:42:57.887Z",
+      "finishedAt": "2026-10-25T01:51:12.549Z",
+      "status": "needs_review",
+      "qualityGate": "failed",
+      "reported": {
+        "totalTokens": 38026654,
+        "inputTokens": 37837952,
+        "cachedInputTokens": 36588928,
+        "outputTokens": 188702
+      },
+      "corrected": {
+        "totalTokens": 4262285,
+        "inputTokens": 4216304,
+        "cachedInputTokens": 3915392,
+        "outputTokens": 45981
+      },
+      "mainDelta": {
+        "totalTokens": 1354405,
+        "inputTokens": 1346726,
+        "cachedInputTokens": 1324160,
+        "outputTokens": 7679
+      },
+      "team": {
+        "totalTokens": 2907880,
+        "inputTokens": 2869578,
+        "cachedInputTokens": 2591232,
+        "outputTokens": 38302
+      },
+      "accountPercent": 4,
+      "durationSec": 494.662,
+      "agentCount": 4,
+      "agents": [
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "worker",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 1,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "b52826bb-3ba2-47cd-b4d0-2abc3213731b",
+      "startedAt": "2026-10-25T02:00:42.401Z",
+      "finishedAt": "2026-10-25T02:11:05.606Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 41828036,
+        "inputTokens": 41615045,
+        "cachedInputTokens": 40317440,
+        "outputTokens": 212991
+      },
+      "corrected": {
+        "totalTokens": 6709262,
+        "inputTokens": 6646671,
+        "cachedInputTokens": 6319744,
+        "outputTokens": 62591
+      },
+      "mainDelta": {
+        "totalTokens": 3756815,
+        "inputTokens": 3746670,
+        "cachedInputTokens": 3711104,
+        "outputTokens": 10145
+      },
+      "team": {
+        "totalTokens": 2952447,
+        "inputTokens": 2900001,
+        "cachedInputTokens": 2608640,
+        "outputTokens": 52446
+      },
+      "accountPercent": 5,
+      "durationSec": 623.205,
+      "agentCount": 4,
+      "agents": [
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier",
+        "worker"
+      ],
+      "workTasks": 6,
+      "consultations": 5,
+      "discussions": 5,
+      "retries": 0,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "ff8a131f-1fa2-4fae-9381-915bfbbcba4e",
+      "startedAt": "2026-10-25T02:23:59.818Z",
+      "finishedAt": "2026-10-25T02:33:10.375Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 46976232,
+        "inputTokens": 46761045,
+        "cachedInputTokens": 45504896,
+        "outputTokens": 215187
+      },
+      "corrected": {
+        "totalTokens": 8100643,
+        "inputTokens": 8046001,
+        "cachedInputTokens": 7796096,
+        "outputTokens": 54642
+      },
+      "mainDelta": {
+        "totalTokens": 5384946,
+        "inputTokens": 5377074,
+        "cachedInputTokens": 5345024,
+        "outputTokens": 7872
+      },
+      "team": {
+        "totalTokens": 2715697,
+        "inputTokens": 2668927,
+        "cachedInputTokens": 2451072,
+        "outputTokens": 46770
+      },
+      "accountPercent": 6,
+      "durationSec": 550.557,
+      "agentCount": 4,
+      "agents": [
+        "worker",
+        "verifier",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+        "researcher"
+      ],
+      "workTasks": 6,
+      "consultations": 1,
+      "discussions": 1,
+      "retries": 0,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "NOT_VERIFIED",
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "8c15151f-40fe-4db1-b773-73f4676cbbbf",
+      "startedAt": "2026-10-25T02:39:09.759Z",
+      "finishedAt": "2026-10-25T02:46:19.289Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 50761050,
+        "inputTokens": 50549774,
+        "cachedInputTokens": 49149056,
+        "outputTokens": 211276
+      },
+      "corrected": {
+        "totalTokens": 6500515,
+        "inputTokens": 6457656,
+        "cachedInputTokens": 6095232,
+        "outputTokens": 42859
+      },
+      "mainDelta": {
+        "totalTokens": 3768350,
+        "inputTokens": 3760368,
+        "cachedInputTokens": 3663872,
+        "outputTokens": 7982
+      },
+      "team": {
+        "totalTokens": 2732165,
+        "inputTokens": 2697288,
+        "cachedInputTokens": 2431360,
+        "outputTokens": 34877
+      },
+      "accountPercent": 7,
+      "durationSec": 429.53,
+      "agentCount": 3,
+      "agents": [
+        "worker",
+        "verifier",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf"
+      ],
+      "workTasks": 5,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "9ca7a3d8-6f44-4a27-8b0c-a7ac4a16645f",
+      "startedAt": "2026-10-25T02:54:47.699Z",
+      "finishedAt": "2026-10-25T02:59:40.581Z",
+      "status": "completed",
+      "qualityGate": "passed",
+      "reported": {
+        "totalTokens": 53013461,
+        "inputTokens": 52812958,
+        "cachedInputTokens": 51419136,
+        "outputTokens": 200503
+      },
+      "corrected": {
+        "totalTokens": 4984576,
+        "inputTokens": 4960472,
+        "cachedInputTokens": 4701440,
+        "outputTokens": 24104
+      },
+      "mainDelta": {
+        "totalTokens": 3649194,
+        "inputTokens": 3643846,
+        "cachedInputTokens": 3551360,
+        "outputTokens": 5348
+      },
+      "team": {
+        "totalTokens": 1335382,
+        "inputTokens": 1316626,
+        "cachedInputTokens": 1150080,
+        "outputTokens": 18756
+      },
+      "accountPercent": 8,
+      "durationSec": 292.882,
+      "agentCount": 3,
+      "agents": [
+        "verifier",
+        "worker",
+        "researcher"
+      ],
+      "workTasks": 4,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "PASS"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "af109d19-566d-4b46-90f1-7d6e1965f0b9",
+      "startedAt": "2026-10-25T03:06:21.029Z",
+      "finishedAt": "2026-10-25T03:06:36.137Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 52951697,
+        "inputTokens": 52767461,
+        "cachedInputTokens": 51525888,
+        "outputTokens": 184236
+      },
+      "corrected": {
+        "totalTokens": 1273618,
+        "inputTokens": 1271129,
+        "cachedInputTokens": 1256832,
+        "outputTokens": 2489
+      },
+      "mainDelta": {
+        "totalTokens": 1265440,
+        "inputTokens": 1262972,
+        "cachedInputTokens": 1256832,
+        "outputTokens": 2468
+      },
+      "team": {
+        "totalTokens": 8178,
+        "inputTokens": 8157,
+        "cachedInputTokens": 0,
+        "outputTokens": 21
+      },
+      "accountPercent": 0,
+      "durationSec": 15.108,
+      "agentCount": 1,
+      "agents": [
+        "prompt_refiner"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "f21b63a6-c397-43a8-b5f0-dae14e334be7",
+      "startedAt": "2026-10-25T03:14:41.452Z",
+      "finishedAt": "2026-10-25T03:15:23.683Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 54729213,
+        "inputTokens": 54540008,
+        "cachedInputTokens": 53268352,
+        "outputTokens": 189205
+      },
+      "corrected": {
+        "totalTokens": 1785694,
+        "inputTokens": 1780704,
+        "cachedInputTokens": 1742464,
+        "outputTokens": 4990
+      },
+      "mainDelta": {
+        "totalTokens": 1694895,
+        "inputTokens": 1691203,
+        "cachedInputTokens": 1680384,
+        "outputTokens": 3692
+      },
+      "team": {
+        "totalTokens": 90799,
+        "inputTokens": 89501,
+        "cachedInputTokens": 62080,
+        "outputTokens": 1298
+      },
+      "accountPercent": 0,
+      "durationSec": 42.231,
+      "agentCount": 2,
+      "agents": [
+        "prompt_refiner",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ],
+      "workTasks": 2,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "a18fbad3-b9b8-452e-b676-e6a61aeae8c1",
+      "startedAt": "2026-10-25T03:15:44.676Z",
+      "finishedAt": "2026-10-25T03:15:57.747Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 54934912,
+        "inputTokens": 54745269,
+        "cachedInputTokens": 53495168,
+        "outputTokens": 189643
+      },
+      "corrected": {
+        "totalTokens": 296498,
+        "inputTokens": 294762,
+        "cachedInputTokens": 288896,
+        "outputTokens": 1736
+      },
+      "mainDelta": {
+        "totalTokens": 288303,
+        "inputTokens": 286600,
+        "cachedInputTokens": 282624,
+        "outputTokens": 1703
+      },
+      "team": {
+        "totalTokens": 8195,
+        "inputTokens": 8162,
+        "cachedInputTokens": 6272,
+        "outputTokens": 33
+      },
+      "accountPercent": 0,
+      "durationSec": 13.071,
+      "agentCount": 1,
+      "agents": [
+        "prompt_refiner"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "9e5ad203-88c0-4908-98a8-379201c72fd6",
+      "startedAt": "2026-10-25T03:24:17.597Z",
+      "finishedAt": "2026-10-25T03:32:09.077Z",
+      "status": "needs_review",
+      "qualityGate": "needs_review",
+      "reported": {
+        "totalTokens": 60283532,
+        "inputTokens": 60056498,
+        "cachedInputTokens": 58633088,
+        "outputTokens": 227034
+      },
+      "corrected": {
+        "totalTokens": 5356815,
+        "inputTokens": 5319391,
+        "cachedInputTokens": 5144192,
+        "outputTokens": 37424
+      },
+      "mainDelta": {
+        "totalTokens": 3345206,
+        "inputTokens": 3339147,
+        "cachedInputTokens": 3323136,
+        "outputTokens": 6059
+      },
+      "team": {
+        "totalTokens": 2011609,
+        "inputTokens": 1980244,
+        "cachedInputTokens": 1821056,
+        "outputTokens": 31365
+      },
+      "accountPercent": 1,
+      "durationSec": 471.48,
+      "agentCount": 3,
+      "agents": [
+        "prompt_refiner",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 4,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "NOT_VERIFIED",
+        "NOT_VERIFIED"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "130da916-3107-4bef-af17-cc84796b9d65",
+      "startedAt": "2026-10-25T03:32:28.606Z",
+      "finishedAt": "2026-10-25T03:37:06.900Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 61237728,
+        "inputTokens": 61020825,
+        "cachedInputTokens": 59684864,
+        "outputTokens": 216903
+      },
+      "corrected": {
+        "totalTokens": 2965805,
+        "inputTokens": 2944571,
+        "cachedInputTokens": 2872832,
+        "outputTokens": 21234
+      },
+      "mainDelta": {
+        "totalTokens": 2040036,
+        "inputTokens": 2034819,
+        "cachedInputTokens": 2021504,
+        "outputTokens": 5217
+      },
+      "team": {
+        "totalTokens": 925769,
+        "inputTokens": 909752,
+        "cachedInputTokens": 851328,
+        "outputTokens": 16017
+      },
+      "accountPercent": 1,
+      "durationSec": 278.294,
+      "agentCount": 1,
+      "agents": [
+        "verifier"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "PASS"
+      ],
+      "wroteFiles": false
+    },
+    {
+      "id": "cb264fe4-c8d8-4620-a639-132bce175e7a",
+      "startedAt": "2026-10-25T04:16:59.000Z",
+      "finishedAt": "2026-10-25T04:26:45.923Z",
+      "status": "completed",
+      "qualityGate": "passed",
+      "reported": {
+        "totalTokens": 76318441,
+        "inputTokens": 76060962,
+        "cachedInputTokens": 74470912,
+        "outputTokens": 257479
+      },
+      "corrected": {
+        "totalTokens": 16006482,
+        "inputTokens": 15949889,
+        "cachedInputTokens": 15637376,
+        "outputTokens": 56593
+      },
+      "mainDelta": {
+        "totalTokens": 11416803,
+        "inputTokens": 11406373,
+        "cachedInputTokens": 11373312,
+        "outputTokens": 10430
+      },
+      "team": {
+        "totalTokens": 4589679,
+        "inputTokens": 4543516,
+        "cachedInputTokens": 4264064,
+        "outputTokens": 46163
+      },
+      "accountPercent": 2,
+      "durationSec": 586.923,
+      "agentCount": 4,
+      "agents": [
+        "prompt_refiner",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 5,
+      "consultations": 1,
+      "discussions": 1,
+      "retries": 1,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "NONE",
+        "PASS"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "f54c4b4a-4640-4b2e-a896-6398e921add0",
+      "startedAt": "2026-10-25T05:31:22.041Z",
+      "finishedAt": "2026-10-25T05:43:36.080Z",
+      "status": "completed",
+      "qualityGate": "passed",
+      "reported": {
+        "totalTokens": 89066780,
+        "inputTokens": 88783489,
+        "cachedInputTokens": 87010432,
+        "outputTokens": 283291
+      },
+      "corrected": {
+        "totalTokens": 17338018,
+        "inputTokens": 17266043,
+        "cachedInputTokens": 16803584,
+        "outputTokens": 71975
+      },
+      "mainDelta": {
+        "totalTokens": 13101671,
+        "inputTokens": 13080776,
+        "cachedInputTokens": 12943104,
+        "outputTokens": 20895
+      },
+      "team": {
+        "totalTokens": 4236347,
+        "inputTokens": 4185267,
+        "cachedInputTokens": 3860480,
+        "outputTokens": 51080
+      },
+      "accountPercent": 0,
+      "durationSec": 734.039,
+      "agentCount": 3,
+      "agents": [
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier"
+      ],
+      "workTasks": 6,
+      "consultations": 2,
+      "discussions": 2,
+      "retries": 1,
+      "failedTasks": 1,
+      "verifierVerdicts": [
+        "FAIL",
+        "NONE",
+        "PASS"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "37bd45ff-e4b4-40d3-a25d-c2a52bafa7f3",
+      "startedAt": "2026-10-25T06:00:30.172Z",
+      "finishedAt": "2026-10-25T06:00:36.507Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 92189118,
+        "inputTokens": 91951304,
+        "cachedInputTokens": 90487296,
+        "outputTokens": 237814
+      },
+      "corrected": {
+        "totalTokens": 7358685,
+        "inputTokens": 7353082,
+        "cachedInputTokens": 7337344,
+        "outputTokens": 5603
+      },
+      "mainDelta": {
+        "totalTokens": 7358685,
+        "inputTokens": 7353082,
+        "cachedInputTokens": 7337344,
+        "outputTokens": 5603
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 6.335,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "227fd709-33cc-40cf-bdb6-707b195d1d54",
+      "startedAt": "2026-10-25T06:04:46.391Z",
+      "finishedAt": "2026-10-25T06:17:01.168Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 100358197,
+        "inputTokens": 100060745,
+        "cachedInputTokens": 98349824,
+        "outputTokens": 297452
+      },
+      "corrected": {
+        "totalTokens": 8169079,
+        "inputTokens": 8109441,
+        "cachedInputTokens": 7862528,
+        "outputTokens": 59638
+      },
+      "mainDelta": {
+        "totalTokens": 4844746,
+        "inputTokens": 4835575,
+        "cachedInputTokens": 4818944,
+        "outputTokens": 9171
+      },
+      "team": {
+        "totalTokens": 3324333,
+        "inputTokens": 3273866,
+        "cachedInputTokens": 3043584,
+        "outputTokens": 50467
+      },
+      "accountPercent": 2,
+      "durationSec": 734.777,
+      "agentCount": 2,
+      "agents": [
+        "verifier",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ],
+      "workTasks": 4,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 2,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "NOT_VERIFIED",
+        "FAIL"
+      ],
+      "wroteFiles": false
+    },
+    {
+      "id": "07042b28-c9fd-4be1-bace-a5bc699194e0",
+      "startedAt": "2026-10-25T08:10:41.761Z",
+      "finishedAt": "2026-10-25T08:17:02.685Z",
+      "status": "completed",
+      "qualityGate": "passed",
+      "reported": {
+        "totalTokens": 120832427,
+        "inputTokens": 120538867,
+        "cachedInputTokens": 118701184,
+        "outputTokens": 293560
+      },
+      "corrected": {
+        "totalTokens": 23798563,
+        "inputTokens": 23751988,
+        "cachedInputTokens": 23394944,
+        "outputTokens": 46575
+      },
+      "mainDelta": {
+        "totalTokens": 22213007,
+        "inputTokens": 22189295,
+        "cachedInputTokens": 22065792,
+        "outputTokens": 23712
+      },
+      "team": {
+        "totalTokens": 1585556,
+        "inputTokens": 1562693,
+        "cachedInputTokens": 1329152,
+        "outputTokens": 22863
+      },
+      "accountPercent": 1,
+      "durationSec": 380.924,
+      "agentCount": 3,
+      "agents": [
+        "researcher",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "verifier"
+      ],
+      "workTasks": 5,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 1,
+      "failedTasks": 0,
+      "verifierVerdicts": [
+        "FAIL",
+        "PASS"
+      ],
+      "wroteFiles": true
+    },
+    {
+      "id": "d29183be-8cce-45af-8e0f-8269a92a4dee",
+      "startedAt": "2026-10-25T09:39:58.069Z",
+      "finishedAt": "2026-10-25T09:42:44.795Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 120568519,
+        "inputTokens": 120282106,
+        "cachedInputTokens": 118476544,
+        "outputTokens": 286413
+      },
+      "corrected": {
+        "totalTokens": 1321648,
+        "inputTokens": 1305932,
+        "cachedInputTokens": 1104512,
+        "outputTokens": 15716
+      },
+      "mainDelta": {
+        "totalTokens": 609070,
+        "inputTokens": 605921,
+        "cachedInputTokens": 516736,
+        "outputTokens": 3149
+      },
+      "team": {
+        "totalTokens": 712578,
+        "inputTokens": 700011,
+        "cachedInputTokens": 587776,
+        "outputTokens": 12567
+      },
+      "accountPercent": 1,
+      "durationSec": 166.726,
+      "agentCount": 3,
+      "agents": [
+        "researcher",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 3,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "80bac934-344b-4127-b3af-3ae38d90ec78",
+      "startedAt": "2026-10-27T04:35:28.484Z",
+      "finishedAt": "2026-10-27T04:35:33.016Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 119946243,
+        "inputTokens": 119672156,
+        "cachedInputTokens": 117888768,
+        "outputTokens": 274087
+      },
+      "corrected": {
+        "totalTokens": 90302,
+        "inputTokens": 90061,
+        "cachedInputTokens": 0,
+        "outputTokens": 241
+      },
+      "mainDelta": {
+        "totalTokens": 90302,
+        "inputTokens": 90061,
+        "cachedInputTokens": 0,
+        "outputTokens": 241
+      },
+      "team": {
+        "totalTokens": 0,
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 0
+      },
+      "accountPercent": 0,
+      "durationSec": 4.532,
+      "agentCount": 0,
+      "agents": [],
+      "workTasks": 0,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    },
+    {
+      "id": "11d71818-7f59-4160-8a91-8cf5a8c391e2",
+      "startedAt": "2026-10-27T05:41:47.413Z",
+      "finishedAt": "2026-10-27T05:42:58.954Z",
+      "status": "completed",
+      "qualityGate": "not_required",
+      "reported": {
+        "totalTokens": 120479221,
+        "inputTokens": 120201583,
+        "cachedInputTokens": 118287488,
+        "outputTokens": 277638
+      },
+      "corrected": {
+        "totalTokens": 532978,
+        "inputTokens": 529427,
+        "cachedInputTokens": 398720,
+        "outputTokens": 3551
+      },
+      "mainDelta": {
+        "totalTokens": 363633,
+        "inputTokens": 362962,
+        "cachedInputTokens": 271232,
+        "outputTokens": 671
+      },
+      "team": {
+        "totalTokens": 169345,
+        "inputTokens": 166465,
+        "cachedInputTokens": 127488,
+        "outputTokens": 2880
+      },
+      "accountPercent": 2,
+      "durationSec": 71.541,
+      "agentCount": 1,
+      "agents": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ],
+      "workTasks": 1,
+      "consultations": 0,
+      "discussions": 0,
+      "retries": 0,
+      "failedTasks": 0,
+      "verifierVerdicts": [],
+      "wroteFiles": false
+    }
+  ]
+}

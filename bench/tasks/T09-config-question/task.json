@@ -1,0 +1,11 @@
+{
+  "id": "T09",
+  "title": "설정 질문 (읽기 전용)",
+  "category": "question",
+  "kind": "answer",
+  "prompt": "이 프로젝트에서 서버의 기본 포트 번호와 데이터 파일의 기본 경로가 뭐야? 코드는 수정하지 말고 답만 알려줘.",
+  "expect": {
+    "answerIncludes": ["3100", "data/todos.json"],
+    "noFileChanges": true
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "T10",
+  "title": "최신순 정렬",
+  "category": "backend-feature",
+  "kind": "code",
+  "prompt": "GET /api/todos 결과를 최근에 만든 순서(createdAt 내림차순)로 정렬해줘. createdAt이 같으면 id 오름차순으로 정렬해."
+}

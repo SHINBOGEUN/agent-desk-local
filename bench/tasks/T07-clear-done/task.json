@@ -1,0 +1,7 @@
+{
+  "id": "T07",
+  "title": "완료 항목 일괄 삭제 (API + 화면)",
+  "category": "fullstack",
+  "kind": "code",
+  "prompt": "완료된 할 일을 한 번에 지우는 기능을 추가해줘. API는 DELETE /api/todos?status=done 이고 응답은 200 { \"deleted\": 지운 개수 }야. status=done이 아닌 일괄 삭제 요청(쿼리 없음 포함)은 아무것도 지우지 말고 400과 { error }를 돌려줘. 화면에는 '완료 항목 지우기' 버튼(id=\"clear-done\")을 추가해서, 누르면 이 API를 호출하고 목록을 새로 고쳐줘."
+}

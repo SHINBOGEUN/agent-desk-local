@@ -1,0 +1,11 @@
+{
+  "name": "minitodo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Small todo service used as the Agent Desk benchmark target",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/app.test.mjs test/render.test.mjs"
+  }
+}

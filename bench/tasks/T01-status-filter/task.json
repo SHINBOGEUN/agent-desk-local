@@ -1,0 +1,7 @@
+{
+  "id": "T01",
+  "title": "상태 필터 버그 수정",
+  "category": "backend-bug",
+  "kind": "code",
+  "prompt": "할 일 목록 API(GET /api/todos)에서 ?status=done 이나 ?status=open 필터를 쓰면 항목이 하나도 안 나와. 버그를 고쳐줘. done은 완료된 항목만, open은 완료되지 않은 항목만 돌려줘야 해."
+}

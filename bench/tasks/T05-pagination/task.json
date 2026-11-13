@@ -1,0 +1,7 @@
+{
+  "id": "T05",
+  "title": "목록 API 페이지네이션",
+  "category": "backend-feature",
+  "kind": "code",
+  "prompt": "GET /api/todos에 페이지네이션을 추가해줘. 쿼리 page(기본 1)와 limit(기본 20)를 받고, limit이 100보다 크면 100으로 맞춰줘. page나 limit이 1 이상의 정수가 아니면 400과 { error }를 돌려줘. 응답 헤더 X-Total-Count에는 페이지를 나누기 전 전체 개수를 넣어줘."
+}

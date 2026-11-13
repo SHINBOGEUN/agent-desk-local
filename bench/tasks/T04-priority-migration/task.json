@@ -1,0 +1,7 @@
+{
+  "id": "T04",
+  "title": "우선순위 필드와 DB 마이그레이션",
+  "category": "database",
+  "kind": "code",
+  "prompt": "할 일에 우선순위(priority) 필드를 추가해줘. 값은 low, normal, high 중 하나이고 기본값은 normal이야. 기존 데이터 파일(schemaVersion 1)은 DB 마이그레이션으로 모든 항목에 normal을 채우고 schemaVersion을 2로 올려줘. POST /api/todos에서 priority를 받을 수 있게 하고, 허용되지 않은 값이면 400과 { error }를 돌려줘."
+}

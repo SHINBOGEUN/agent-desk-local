@@ -1,0 +1,7 @@
+{
+  "id": "T08",
+  "title": "서버 포트 설정 검증",
+  "category": "server-config",
+  "kind": "code",
+  "prompt": "서버 설정에서 PORT 환경 변수를 검증해줘. PORT가 1024~65535 범위의 정수가 아니면 loadConfig가 에러를 던져야 해. PORT가 없으면 기본값 3100을 그대로 써."
+}

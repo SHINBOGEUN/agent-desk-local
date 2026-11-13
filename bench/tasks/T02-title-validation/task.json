@@ -1,0 +1,7 @@
+{
+  "id": "T02",
+  "title": "제목 입력 검증",
+  "category": "backend-validation",
+  "kind": "code",
+  "prompt": "POST /api/todos의 입력 검증을 강화해줘. title은 앞뒤 공백을 제거한 뒤 1~100자여야 하고, 아니면 400과 { error } JSON을 돌려줘. 저장할 때도 앞뒤 공백을 제거한 값으로 저장해."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "T06",
+  "title": "삭제 API 관리자 인증",
+  "category": "security",
+  "kind": "code",
+  "prompt": "보안 강화: 할 일 삭제 API(DELETE /api/todos/:id)는 관리자만 쓸 수 있게 해줘. createApp에 adminToken 옵션을 추가하고, 요청 헤더 Authorization: Bearer <adminToken>이 정확히 일치할 때만 삭제해. 헤더가 없거나 틀리면 401과 { error }를 돌려줘. adminToken이 설정되지 않았으면 삭제는 항상 401이어야 해. 서버를 실행할 때는 ADMIN_TOKEN 환경 변수에서 읽어줘."
+}
