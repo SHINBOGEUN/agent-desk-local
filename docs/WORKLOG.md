@@ -1,0 +1,21 @@
+# 작업 기록
+
+v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
+
+## 2026-11-13 · 0단계 (0-1 ~ 0-4)
+
+| 커밋 | 내용 |
+|---|---|
+| `99a232a` | 벤치마크 러너를 공통부(`bench/run.mjs`)와 v1 어댑터(`bench/adapters/v1.mjs`)로 분리. 사용률 한도 중단 경로를 셀프테스트에 추가 |
+| `8a002b2` | v1을 `legacy/`로 이동(이력 보존). 기본 프로젝트 경로 보정, 루트 README·package.json 신규 |
+| `a25158d` (태그 `v1-legacy`) | 벤치마크, v1 실행 기록 분석, 설계 ADR 커밋 |
+
+확인한 것
+- `legacy/`에서 `npm run check` 통과, `npm test` 64/66 (기존과 동일: Linux 전용 실패 1, Windows 전용 생략 1)
+- `legacy/server.mjs`가 새 위치에서 기동, `/api/health`·대시보드 응답, 기본 프로젝트가 저장소 상위 폴더로 유지
+- `bench`: 과제 10개 공정성 검증 통과, 셀프테스트 통과
+
+남은 것
+- 0-5 `v1-13` 기준선 실행 (사용자 PC, Codex 사용량 필요)
+- 0-6 `v1-3`: v1 배정 규칙이 꺼진 필수 담당자의 대체를 금지해 측정이 왜곡됨. 실행 방법 결정 필요
+- GitHub push: 이 작업 환경에서는 GitHub 접속이 막혀 있어 사용자 PC에서 `git push --follow-tags` 필요
