@@ -137,3 +137,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 84개 테스트와 `tsc --noEmit` 통과(FakeRuntime으로 run·doctor·질문·설정 오류·Codex 탐색).
 - 아직 없는 것: 실제 Codex로 실행(2-10, 사용자 PC), AGENTS.md/CLAUDE.md 차이 점검, Claude 실행 파일 탐색(3단계). 출력은 영어(PowerShell 5 인코딩 문제 회피).
 - 다음 사람이 할 일: 2-8 v1 실패 재현 테스트, 2-9 벤치 어댑터.
+
+### 2026-11-13 · Claude (10차)
+- 한 일: 2-8. `orchestrator/test/v1-failures.test.ts`에 v1 실패 사례 7개를 끝-대-끝으로 재현: 거짓 완료 2건(변경 없이 "완료" 보고, 보고한 테스트 통과가 G3를 대신하지 못함) → 둘 다 `completed`가 아님, 환경 오류 2건(실행 불가 verify 명령, 런타임 시작 실패) → `failed`·REDO 0회, REDO 초과 → `needs_review`·REDO 2회, 거짓 경보 2건(unverified 주장 + G3 통과, 검증자 BLOCKED + 사유 + G3 통과) → `completed`.
+- 확인한 것: 전체 91개 테스트와 `tsc --noEmit` 통과.
+- 아직 없는 것: 실제 모델에서 같은 결과가 나오는지는 2-10 측정에서 확인.
+- 다음 사람이 할 일: 2-9 `bench/adapters/v2.mjs`(`bench/selftest.mjs` 통과 필요).
