@@ -84,3 +84,10 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 테스트 23개 통과(실제 자식 프로세스 e2e 포함), `tsc --noEmit` 통과.
 - 확인하지 못한 것: 실제 Codex·Claude가 이 서버를 띄워 호출하는 것(2-2에서 확인).
 - 다음 사람이 할 일: 2-2 `runtime-codex`. `mcpServerCommand(registration)`이 MCP 서버 실행 명령을 준다. Codex에는 ADR 0003대로 `default_tools_approval_mode = "approve"` 설정.
+
+### 2026-11-13 · Claude (3차)
+- 한 일: 2-2 `packages/runtime-codex`. 세션마다 `codex app-server` 프로세스 1개, `thread/start`에 MCP 서버 설정(`default_tools_approval_mode = "approve"`, ADR 0003), 샌드박스 `read-only`/`workspace-write` + `approvalPolicy never`, `thread/tokenUsage/updated`의 `last`를 usage 증분으로 변환, AbortSignal → `turn/interrupt`, 서버 승인 요청은 `approval_request` 이벤트로 알리고 거절, 서버가 죽으면 `turn_end failed`.
+- 확인한 것: 가짜 app-server 테스트(실제 `tools-mcp` 프로세스를 거쳐 보고 제출까지) 포함 전체 32개 통과, `tsc --noEmit` 통과.
+- 확인하지 못한 것: 실제 Codex와의 연결. `item/completed`의 `agentMessage`·`commandExecution`·`fileChange` 필드 이름(`text`, `command`, `aggregatedOutput`, `exitCode`, `changes[].kind.type`)과 `turn/completed`의 `turn.error.message`는 알려진 프로토콜을 바탕으로 한 가정입니다. 사용자 PC에서 `scripts/proto`식 실행으로 확인 필요(2-7 `doctor`/2-10에서).
+- 다음 사람이 할 일: 2-3 오케스트레이터(answer/build).
+
