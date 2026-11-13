@@ -12,10 +12,17 @@ export const tasksDirectory = path.join(benchDirectory, 'tasks');
 const ACCEPTANCE_DIR = '.bench-acceptance';
 const IGNORED = new Set(['.git', ACCEPTANCE_DIR, 'node_modules', 'data']);
 
-export function loadTasks(filter = null) {
+// Task sets: "standard" (T01-T10, the original benchmark), "hard" (H01-H05,
+// multi-file tasks with hidden edge cases) or "all". Defaults to "standard" so
+// existing labels keep their meaning.
+const SET_PATTERNS = { standard: /^T\d+/, hard: /^H\d+/, all: /^[TH]\d+/ };
+
+export function loadTasks(filter = null, set = 'standard') {
+  const pattern = SET_PATTERNS[set];
+  if (!pattern) throw new Error(`unknown task set "${set}" (standard, hard, all)`);
   const wanted = filter ? new Set(filter.map(id => id.toUpperCase())) : null;
   return fs.readdirSync(tasksDirectory, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && /^T\d+/.test(entry.name))
+    .filter(entry => entry.isDirectory() && pattern.test(entry.name))
     .map(entry => {
       const directory = path.join(tasksDirectory, entry.name);
       const task = JSON.parse(fs.readFileSync(path.join(directory, 'task.json'), 'utf8'));

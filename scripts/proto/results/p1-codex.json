@@ -1,0 +1,57 @@
+{
+  "prototype": "P1 codex",
+  "at": "2026-11-13T06:03:25.672Z",
+  "platform": "win32",
+  "node": "v24.20.0",
+  "ok": true,
+  "checks": [
+    {
+      "id": "connect",
+      "ok": true,
+      "detail": "app-server agent_desk_proto/0.167.2 (Windows 10.0.26200; x86_64) unknown (agent_desk_proto; 0.0.1)"
+    },
+    {
+      "id": "turn completes",
+      "ok": true,
+      "detail": "turn status completed"
+    },
+    {
+      "id": "P1-a MCP server attached via thread config",
+      "ok": true,
+      "detail": "MCP server initialize seen: true"
+    },
+    {
+      "id": "P1-b MCP tool called from read-only sandbox",
+      "ok": true,
+      "detail": "tool calls: [{\"summary\":\"prototype ok\",\"changedFiles\":[]}]"
+    },
+    {
+      "id": "P1-b approvals needed for MCP",
+      "ok": true,
+      "detail": "server requests: mcpServer/elicitation/request (harness must answer these)"
+    },
+    {
+      "id": "P1-c per-turn usage (last) present",
+      "ok": true,
+      "detail": "4 usage updates, last present: true"
+    },
+    {
+      "id": "P1-c sum(last) == total",
+      "ok": true,
+      "detail": "sum(last)=53306, total=53306"
+    },
+    {
+      "id": "P3-a turn/interrupt stops a long turn",
+      "ok": true,
+      "detail": "status interrupted after 9 ms"
+    },
+    {
+      "id": "P3-b MCP server processes exit with app-server",
+      "ok": true,
+      "detail": "MCP pids 42060 alive after close: none"
+    }
+  ],
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p1-mlwBfw",
+  "transcript": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p1-mlwBfw\\transcript.jsonl",
+  "mcpLog": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p1-mlwBfw\\mcp-log.jsonl"
+}

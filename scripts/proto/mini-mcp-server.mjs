@@ -25,6 +25,7 @@ const tools = [{
     required: ['summary', 'changedFiles'],
     additionalProperties: false,
   },
+  ...(process.env.AGENT_DESK_PROTO_ANNOTATE === '1' ? { annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } } : {}),
 }];
 
 createInterface({ input: process.stdin }).on('line', line => {

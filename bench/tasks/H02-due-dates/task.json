@@ -1,0 +1,7 @@
+{
+  "id": "H02",
+  "title": "마감일과 지연 표시 (시간 주입 + 마이그레이션 + 화면)",
+  "category": "hard-fullstack",
+  "kind": "code",
+  "prompt": "할 일에 마감일(dueDate)과 지연(overdue) 표시를 추가해줘.\n\n- 데이터: dueDate는 'YYYY-MM-DD' 문자열 또는 null(기본값 null). 기존 데이터 파일(schemaVersion 1)은 DB 마이그레이션으로 모든 항목에 dueDate: null을 채우고 schemaVersion을 2로 올려줘.\n- 검증: dueDate는 실제로 존재하는 달력 날짜여야 해. 형식이 다르거나('2026-3-5', '2026/03/05', 숫자 등) 존재하지 않는 날짜('2026-02-30', '2026-13-01')면 400과 { error }. POST /api/todos와 PATCH /api/todos/:id에서 dueDate를 받을 수 있고, PATCH에서 null을 주면 마감일을 지워. PATCH에서 dueDate가 잘못되면 400이고 같은 요청의 title/done도 반영하지 마.\n- 지연: 완료되지 않았고 dueDate가 '오늘'보다 이른 항목이 지연이야. 오늘은 openDb(file, { now })의 now()가 돌려주는 시각의 UTC 날짜야(Date.now()나 new Date()를 직접 쓰지 말고 DB에 주입된 now를 써야 테스트에서 시간을 고정할 수 있어). 마감일이 오늘이면 지연이 아니고, 완료한 항목은 마감일이 지났어도 지연이 아니야.\n- GET /api/todos, POST, PATCH 응답의 각 할 일에 overdue(boolean)를 넣어줘. overdue는 요청 때마다 계산하는 값이라 데이터 파일에는 저장하지 마. GET /api/todos?overdue=true 는 지연 항목만 돌려줘.\n- 정렬: GET /api/todos?sort=due 는 dueDate 오름차순, dueDate가 null인 항목은 맨 뒤, 같으면 id 오름차순. sort에 다른 값을 주면 400과 { error }.\n- 화면: 새 할 일 폼에 name=\"dueDate\" 입력칸(type=\"date\")을 추가하고 app.js가 비어 있지 않을 때만 dueDate를 보내게 해줘. public/render.js는 dueDate가 있으면 <span class=\"due\">YYYY-MM-DD</span>를 그리고, 항목의 overdue가 true이면 <li>의 class에 overdue를 넣어줘. 예전 항목(dueDate/overdue 없음)도 오류 없이 그려줘.\n\n기존 테스트는 계속 통과해야 해."
+}

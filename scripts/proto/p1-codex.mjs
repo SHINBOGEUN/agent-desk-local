@@ -8,6 +8,7 @@
 //   P3-b  closing the app-server leaves no MCP server process behind
 //
 //   node scripts/proto/p1-codex.mjs [--codex <path to codex.exe>] [--model <id>]
+//                                  [--mcp-approval approve|auto|prompt|none] [--annotate] [--policy never|on-request]
 //
 // Uses a few Codex requests (small prompts, low effort). Run it when no
 // benchmark is measuring account usage.
@@ -88,9 +89,10 @@ try {
     'features.memories': false,
     'mcp_servers.agentdesk.command': process.execPath,
     'mcp_servers.agentdesk.args': [mcpServerPath],
-    'mcp_servers.agentdesk.env': { AGENT_DESK_PROTO_LOG: logFile },
+    'mcp_servers.agentdesk.env': { AGENT_DESK_PROTO_LOG: logFile, ...('annotate' in args ? { AGENT_DESK_PROTO_ANNOTATE: '1' } : {}) },
+    ...(args['mcp-approval'] && args['mcp-approval'] !== 'none' ? { 'mcp_servers.agentdesk.default_tools_approval_mode': args['mcp-approval'] } : {}),
   };
-  const thread = await request('thread/start', { cwd: workspace, ...(args.model ? { model: args.model } : {}), ephemeral: true, sandbox: 'read-only', approvalPolicy: 'never', developerInstructions: 'You are testing a tool integration. Follow the user instruction exactly and keep answers short.', config });
+  const thread = await request('thread/start', { cwd: workspace, ...(args.model ? { model: args.model } : {}), ephemeral: true, sandbox: 'read-only', approvalPolicy: args.policy || 'never', developerInstructions: 'You are testing a tool integration. Follow the user instruction exactly and keep answers short.', config });
   const threadId = thread.thread.id;
 
   const first = await runTurn(threadId, 'Call the submit_report tool exactly once with summary "prototype ok" and changedFiles []. Then reply with the single word DONE.');

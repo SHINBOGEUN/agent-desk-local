@@ -5,7 +5,7 @@
 // specific Agent Desk version is the adapter's job (bench/adapters/<name>.mjs);
 // preparing workspaces, grading and recording results are shared here.
 //
-//   node bench/run.mjs --label v1-13 [--adapter v1] [--tasks T01,T05] [--repeat 1]
+//   node bench/run.mjs --label v1-13 [--adapter v1] [--set standard|hard] [--tasks T01,T05] [--repeat 1]
 //                      [--url http://127.0.0.1:4317] [--timeout-min 40]
 //                      [--usage-limit 20] [--work-dir <dir>] [--results-dir <dir>]
 //
@@ -20,12 +20,13 @@ import { benchDirectory, loadTasks, prepareWorkspace, evaluate } from './lib/eva
 const ADAPTERS = ['v1'];
 
 export function parseArgs(argv) {
-  const options = { adapter: 'v1', repeat: 1, url: 'http://127.0.0.1:4317', timeoutMin: 40, pollMs: 3000, workDir: path.join(os.tmpdir(), 'agent-desk-bench'), resultsDir: path.join(benchDirectory, 'results', 'runs') };
+  const options = { adapter: 'v1', set: 'standard', repeat: 1, url: 'http://127.0.0.1:4317', timeoutMin: 40, pollMs: 3000, workDir: path.join(os.tmpdir(), 'agent-desk-bench'), resultsDir: path.join(benchDirectory, 'results', 'runs') };
   for (let index = 0; index < argv.length; index++) {
     const key = argv[index].replace(/^--/, '');
     const value = argv[++index];
     if (key === 'label') options.label = value;
     else if (key === 'adapter') options.adapter = value;
+    else if (key === 'set') options.set = value;
     else if (key === 'tasks') options.tasks = value.split(',').map(item => item.trim()).filter(Boolean);
     else if (key === 'repeat') options.repeat = Number(value);
     else if (key === 'url') options.url = value.replace(/\/$/, '');
@@ -36,6 +37,7 @@ export function parseArgs(argv) {
     else if (key === 'poll-ms') options.pollMs = Number(value);
     else throw new Error(`unknown option --${key}`);
   }
+  if (!['standard', 'hard'].includes(options.set)) throw new Error('--set must be standard or hard');
   if (!options.label || !/^[\w.-]{1,60}$/.test(options.label)) throw new Error('--label is required (letters, digits, . _ -)');
   if (!ADAPTERS.includes(options.adapter)) throw new Error(`--adapter must be one of: ${ADAPTERS.join(', ')}`);
   if (!Number.isInteger(options.repeat) || options.repeat < 1) throw new Error('--repeat must be a positive integer');
@@ -86,7 +88,7 @@ async function executeTask(adapter, task, attempt, options, log) {
 
 export async function main(argv = process.argv.slice(2), log = console.log) {
   const options = parseArgs(argv);
-  const tasks = loadTasks(options.tasks);
+  const tasks = loadTasks(options.tasks, options.set);
   if (!tasks.length) throw new Error('no matching tasks');
   const adapter = await loadAdapter(options);
   await adapter.connect();

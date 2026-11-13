@@ -14,7 +14,7 @@ let problems = 0;
 const report = (ok, message) => { if (!ok) problems++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${message}`); };
 
 try {
-  for (const task of loadTasks()) {
+  for (const task of loadTasks(null, 'all')) {
     if (task.kind === 'answer') {
       const workspace = prepareWorkspace(path.join(scratch, `${task.id}-answer`));
       const good = evaluate(task, workspace.path, { answer: `기본 포트는 ${task.expect.answerIncludes.join(', 경로는 ')} 입니다.`, before: workspace.snapshot });

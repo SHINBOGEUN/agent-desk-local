@@ -1,0 +1,52 @@
+{
+  "prototype": "P2 claude",
+  "at": "2026-11-13T06:00:47.115Z",
+  "platform": "win32",
+  "node": "v24.20.0",
+  "ok": true,
+  "checks": [
+    {
+      "id": "P2 init",
+      "ok": true,
+      "detail": "session 8ea2f6df-43f6-4e45-9af9-a08626164c20, model claude-opus-5-5, MCP agentdesk status connected"
+    },
+    {
+      "id": "turn 1 result",
+      "ok": true,
+      "detail": "subtype success, is_error false"
+    },
+    {
+      "id": "P2-b MCP tool called",
+      "ok": true,
+      "detail": "tool calls: [{\"summary\":\"prototype ok\",\"changedFiles\":[]}]"
+    },
+    {
+      "id": "P2-b only allowed tools usable",
+      "ok": true,
+      "detail": "tools offered: Task, CronCreate, CronDelete, CronList, DesignSync, EnterWorktree, ExitWorktree, Glob, Grep, ListAgents, NotebookEdit, PushNotification, Read, RemoteTrigger, ReportFindings, ScheduleWakeup, SendMessage, Skill, TaskStop, ToolSearch, WebFetch, WebSearch, mcp__agentdesk__submit_report"
+    },
+    {
+      "id": "P2-a second turn in the same process",
+      "ok": true,
+      "detail": "subtype success, same session true"
+    },
+    {
+      "id": "P2-c usage per turn",
+      "ok": true,
+      "detail": "turn1 {\"input_tokens\":8,\"cache_creation_input_tokens\":9553,\"cache_read_input_tokens\":44585,\"output_tokens\":182,\"output_tokens_details\":{\"thinking_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":9553,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"global\",\"iterations\":[{\"input_tokens\":2,\"output_tokens\":5,\"cache_read_input_tokens\":18102,\"cache_creation_input_tokens\":109,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":109},\"type\":\"message\"}],\"speed\":\"standard\",\"fallback_credit\":null} | turn2 {\"input_tokens\":4,\"cache_creation_input_tokens\":19,\"cache_read_input_tokens\":18211,\"output_tokens\":6,\"output_tokens_details\":{\"thinking_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":19,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"global\",\"iterations\":[{\"input_tokens\":4,\"output_tokens\":6,\"cache_read_input_tokens\":18211,\"cache_creation_input_tokens\":19,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":19},\"type\":\"message\"}],\"speed\":\"standard\",\"fallback_credit\":null} | cost 0.08901300000000001 -> 0.0929432 | turn 2 looks like an increment"
+    },
+    {
+      "id": "P3-c interrupt over stream-json control message",
+      "ok": true,
+      "detail": "result error_during_execution after 16 ms, process alive true"
+    },
+    {
+      "id": "P3-d MCP server processes exit with the CLI",
+      "ok": true,
+      "detail": "CLI exited by itself: true; MCP pids 41432 alive after: none"
+    }
+  ],
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p2-Xf5F6f",
+  "transcript": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p2-Xf5F6f\\transcript.jsonl",
+  "mcpLog": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-p2-Xf5F6f\\mcp-log.jsonl"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "H01",
+  "title": "태그 기능 (DB 마이그레이션 + API + 화면)",
+  "category": "hard-fullstack",
+  "kind": "code",
+  "prompt": "할 일에 태그(tags) 기능을 추가해줘.\n\n- 데이터: 각 할 일에 tags(문자열 배열, 기본값 []). 기존 데이터 파일(schemaVersion 1)은 DB 마이그레이션으로 모든 항목에 tags: []를 채우고 schemaVersion을 2로 올려줘.\n- 정규화: 태그는 앞뒤 공백을 지우고 소문자로 바꾸고, 빈 문자열은 버리고, 중복은 처음 것만 남겨(순서 유지).\n- 검증: tags가 문자열 배열이 아니거나, 정규화 뒤 6개 이상이거나, 20자를 넘는 태그가 있으면 400과 { error }. POST /api/todos에서 tags를 받을 수 있고(생략하면 []), PATCH /api/todos/:id에서도 tags를 받아 통째로 교체해. PATCH에서 tags가 잘못되면 400이고, 같은 요청에 담긴 title/done도 반영하지 말고 아무것도 바꾸지 마.\n- 조회: GET /api/todos?tag=work 는 그 태그가 있는 항목만 돌려줘. 태그 값은 정규화해서 비교하고(?tag=%20Work 도 work), tag를 여러 번 주면(?tag=a&tag=b) 모두 가진 항목만 돌려줘.\n- GET /api/tags 는 [{ \"tag\": \"work\", \"count\": 2 }] 형태로, count 내림차순 → tag 오름차순으로 돌려줘.\n- 화면: 새 할 일 입력 폼에 name=\"tags\" 입력칸(쉼표로 구분)을 추가하고 app.js가 그 값을 tags 배열로 보내게 해줘. public/render.js는 각 태그를 <span class=\"tag\">…</span>로 그리되 HTML 이스케이프하고, tags가 없는 예전 항목도 오류 없이 그려줘.\n\n기존 테스트는 계속 통과해야 해."
+}

@@ -14,6 +14,8 @@ Agent Desk v2 재설계 작업의 문서 위치입니다. 설계 원본은 Claud
 
 | 경로 | 내용 |
 |---|---|
+| `docs/HANDOFF.md` | Claude와 Codex가 번갈아 작업할 때 먼저 읽는 인수인계 문서(읽는 순서, 현재 상태, 다음 작업, 작업 규칙, 기록) |
+| `docs/design-v2.md` | 전체 설계서 사본(원본은 위 Claude 문서) |
 | `docs/adr/` | 설계 결정 기록 (ADR). 결정마다 한 파일 |
 | `bench/README.md` | 벤치마크 구성·지표·실행 방법 |
 | `bench/results/history-13-agents.md` | v1(13개 에이전트) 실제 실행 60건 분석 |

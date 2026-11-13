@@ -1,0 +1,7 @@
+{
+  "id": "H03",
+  "title": "휴지통과 복원 (삭제 방식 변경 + 자동 비우기)",
+  "category": "hard-backend",
+  "kind": "code",
+  "prompt": "할 일 삭제를 '휴지통' 방식으로 바꿔줘.\n\n- DELETE /api/todos/:id 는 항목을 지우지 않고 휴지통으로 보내. 휴지통에 간 시각을 deletedAt(ISO 문자열)에 기록하고, 응답은 지금처럼 204야. 없는 항목이거나 이미 휴지통에 있는 항목이면 404와 { error }.\n- 휴지통에 있는 항목은 GET /api/todos 목록에서 빠지고, PATCH /api/todos/:id 는 404를 돌려줘.\n- GET /api/trash 는 휴지통 항목을 deletedAt 내림차순(같으면 id 내림차순)으로 돌려줘.\n- POST /api/todos/:id/restore 는 휴지통의 항목을 되살리고(deletedAt은 null로) 200과 그 항목을 돌려줘. 휴지통에 없으면 404와 { error }. 되살린 항목은 id와 다른 값이 그대로여야 하고 목록에 다시 나타나.\n- DELETE /api/trash 는 휴지통을 비워서 영구 삭제하고 200 { \"purged\": 지운 개수 }를 돌려줘.\n- 자동 비우기: openDb(file, { now })로 DB를 열 때, 휴지통에 간 지 30일을 넘긴 항목은 영구 삭제해(now()가 주입한 시각 기준이니 Date.now()를 직접 쓰지 마). 29일 지난 항목은 남겨.\n- id는 영구 삭제된 뒤에도 다시 쓰이면 안 돼(새 항목은 항상 이전에 쓴 id보다 커).\n- 데이터: 기존 데이터 파일(schemaVersion 1)은 DB 마이그레이션으로 모든 항목에 deletedAt: null을 채우고 schemaVersion을 2로 올려줘. 이 값은 데이터 파일에 저장돼서 서버를 다시 시작해도 휴지통이 유지돼야 해. openDb(file).list()도 휴지통 항목을 포함하지 않아야 해.\n\n기존 테스트는 계속 통과해야 해."
+}
