@@ -43,8 +43,9 @@ export function instructionsFor(role: RoleId, notes?: string): string {
   return [COMMON, body, notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
-export function classifyPrompt(request: string): string {
-  return `Step: classify.\nUser request:\n${request}\n\nChoose the workflow and submit your report.`;
+export function classifyPrompt(request: string, previousBrief?: string): string {
+  const brief = previousBrief ? `Summary of the previous run in this project (context only, not part of the request):\n${previousBrief}\n\n` : '';
+  return `Step: classify.\n${brief}User request:\n${request}\n\nChoose the workflow and submit your report.`;
 }
 
 export function reportReminder(what: string): string {

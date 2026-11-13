@@ -123,3 +123,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: '같은 세션 자체 점검' 비교 구성(3-5), 실제 모델이 판정 기준을 따르는지(2-10 측정으로 확인).
 - 다음 사람이 할 일: 2-6 SQLite 이벤트 저장과 Run Brief.
 
+### 2026-11-13 · Claude (8차)
+- 한 일: 2-6. `packages/store`(`RunStore`: runs·steps·events·usage 테이블, 스키마 버전 관리, 이벤트 저장 콜백 `recorder(runId)`, `finishRun`, `recoverInterrupted`, `latestBrief`), 비밀값 가리기와 긴 문자열 4,000자 절단, `orchestrator/run-brief.ts`(코드가 만드는 1,500자 이내 Run Brief), `RunConfig.previousBrief`(classify 단계에만 전달).
+- 확인한 것: 전체 73개 테스트와 `tsc --noEmit` 통과. 저장된 토큰 합계가 이벤트 로그의 턴 증분 합과 일치, 비정상 종료 후 재시작 시 `running` Run이 `interrupted`로 표시되고 다시 실행되지 않음.
+- 아직 없는 것: `quota_samples` 테이블(Codex 한도 추적은 4단계), `node:sqlite`가 실험 기능이라 첫 import 때 경고가 한 번 출력됨(동작에는 영향 없음).
+- 다음 사람이 할 일: 2-7 CLI `agent-desk run`·`doctor`.
+

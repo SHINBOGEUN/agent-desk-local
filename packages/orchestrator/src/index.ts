@@ -11,3 +11,4 @@ export type { RunConfig, RunEvent, RunEventBody, RunResult } from './types.ts';
 export { decideReview, reviewPrompt, isSecurityPath, DEFAULT_AUTO_LIMITS } from './review.ts';
 export type { ReviewPolicy, ReviewFacts, ReviewDecision } from './review.ts';
 export { renderDiff } from './diff-text.ts';
+export { buildRunBrief, BRIEF_MAX_CHARS } from './run-brief.ts';

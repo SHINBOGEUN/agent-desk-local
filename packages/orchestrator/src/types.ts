@@ -17,6 +17,8 @@ export interface RunConfig {
   /** Receives every event as it happens. */
   onEvent?: (event: RunEvent) => void;
   signal?: AbortSignal;
+  /** Run Brief of the previous run in this project; only the classify step receives it. */
+  previousBrief?: string;
   /** Gate G3: commands the harness runs itself; all must exit 0. Empty means no automatic verification. */
   verify?: string[];
   /** Time limit per verify command. Default 120 000 ms. */

@@ -223,7 +223,7 @@ async function runClassify(ctx: RunContext, request: string, lead: LeadCollector
     let session: Session | null = null;
     try {
       session = await openSession(ctx, 'classify', 'lead', holder);
-      return await playUntilReport(ctx, 'classify', 'lead', session, holder, classifyPrompt(request), reportReminder('your report (workflow, requirements, reason, and the answer when the workflow is "answer")'));
+      return await playUntilReport(ctx, 'classify', 'lead', session, holder, classifyPrompt(request, ctx.config.previousBrief), reportReminder('your report (workflow, requirements, reason, and the answer when the workflow is "answer")'));
     } catch (error) {
       return failedStep(error instanceof Error ? error.message : String(error));
     } finally {
