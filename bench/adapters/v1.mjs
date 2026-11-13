@@ -14,10 +14,21 @@
 const TERMINAL = new Set(['completed', 'needs_review', 'failed', 'interrupted']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// The v1 server can be briefly unreachable (busy, or restarting after a crash).
+// Retry for a while, then fail with a message that says what to do.
+async function fetchWithRetry(url, init, { attempts = 12, delayMs = 5000 } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try { return await fetch(url, init); }
+    catch (error) { lastError = error; if (attempt < attempts) await sleep(delayMs); }
+  }
+  throw new Error(`Agent Desk v1 stopped responding at ${url} (${lastError?.cause?.code || lastError?.message}). If the server crashed, check legacy\\data\\server-error.log, restart it without the dashboard (Start-AgentDesk.ps1 -NoBrowser) and re-run the same command; finished tasks are skipped.`);
+}
+
 class Client {
   constructor(url) { this.url = url; this.csrf = null; }
   async get(pathname) {
-    const response = await fetch(this.url + pathname);
+    const response = await fetchWithRetry(this.url + pathname);
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || `${pathname} ${response.status}`);
     return body;
@@ -25,7 +36,7 @@ class Client {
   async state() { const state = await this.get('/api/state'); this.csrf = state.csrf; return state; }
   async post(pathname, input) {
     if (!this.csrf) await this.state();
-    const response = await fetch(this.url + pathname, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Desk-Token': this.csrf }, body: JSON.stringify(input) });
+    const response = await fetchWithRetry(this.url + pathname, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Desk-Token': this.csrf }, body: JSON.stringify(input) });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw Object.assign(new Error(body.error || `${pathname} ${response.status}`), { status: response.status });
     return body;
@@ -119,6 +130,7 @@ export function createAdapter({ url = 'http://127.0.0.1:4317', pollMs = 3000 } =
         const state = await desk.state();
         run = state.runs.find(item => item.id === started.id);
         if (!run) throw new Error('run disappeared from Agent Desk state');
+        if (run.status === 'interrupted' && !cancelSent) cancelReason ||= 'server_restarted';
         if (TERMINAL.has(run.status) && state.activeRunId !== run.id) break;
         const approvals = (state.approvals || []).length;
         if (approvals && !allowAllSent) {

@@ -37,7 +37,7 @@ export function loadResults(resultsDir, labels) {
 }
 
 export function summarize({ label, config, results }) {
-  const valid = results.filter(result => !['blocked_on_approval'].includes(result.cancelReason));
+  const valid = results.filter(result => !['blocked_on_approval', 'server_restarted'].includes(result.cancelReason)); // harness or environment failures, not the team's result
   const claimed = valid.filter(result => result.claimedSuccess);
   const tokens = valid.map(result => result.metrics.usage.totalTokens);
   const successful = valid.filter(result => result.grade.success);
