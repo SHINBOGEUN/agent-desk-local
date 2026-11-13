@@ -14,6 +14,7 @@
     "#runtime-claude": "./packages/runtime-claude/src/index.ts",
     "#orchestrator": "./packages/orchestrator/src/index.ts",
     "#store": "./packages/store/src/index.ts",
+    "#service": "./packages/service/src/index.ts",
     "#project": "./packages/project/src/index.ts",
     "#cli": "./packages/cli/src/main.ts"
   },

@@ -12,10 +12,9 @@ import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
 import { addMemory, assignRuntimes, checkSkills, loadMemory, memoryFacts, memoryPath, newSuggestions, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
 import type { LoadedProject, RuntimeKind } from '#project';
-import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from './discover.ts';
-import type { Found } from './discover.ts';
+import { dataDirectory, executeRun, locate as locateExecutable, readMachineSettings, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, writeMachineSettings } from '#service';
+import type { Found } from '#service';
 import { EXIT_CODES, describeEvent, summarize } from './format.ts';
-import { dataDirectory, readMachineSettings, writeMachineSettings } from './paths.ts';
 
 export interface CliDeps {
   env: NodeJS.ProcessEnv;
@@ -124,10 +123,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
 }
 
 function locate(kind: 'codex' | 'claude', deps: CliDeps, saved: ReturnType<typeof readMachineSettings>): Found | null {
-  const common = { env: deps.env, platform: deps.platform };
-  return kind === 'codex'
-    ? resolveCodexExecutable({ ...common, ...(saved.codex?.path ? { saved: saved.codex.path } : {}) })
-    : resolveClaudeExecutable({ ...common, ...(saved.claude?.path ? { saved: saved.claude.path } : {}) });
+  return locateExecutable(kind, deps.env, deps.platform, saved);
 }
 
 async function doctor(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
@@ -207,91 +203,39 @@ function suggestVerify(project: string): string {
 
 async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
   if (!parsed.request) { deps.err(`run needs a request\n\n${USAGE}\n`); return 64; }
-  if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) { deps.err(`project folder not found: ${project}\n`); return 64; }
-  const loaded: LoadedProject = loadProject(project);
-  if (loaded.errors.length) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
-  const config = loaded.config;
-  for (const warning of loaded.warnings) deps.err(`note: ${warning}\n`);
-  const settings = roleSettings(loaded);
-  const dir = dataDirectory(deps.env, deps.platform);
-  const assignment = assignRuntimes(config, parsed.runtime);
-  const instances = new Map<RuntimeKind, Runtime>();
-  for (const kind of new Set(Object.values(assignment))) {
-    let command: string | undefined;
-    if (kind !== 'fake') {
-      const found = locate(kind, deps, readMachineSettings(dir));
-      if (!found) { deps.err(`${kind === 'codex' ? 'Codex' : 'Claude'} was not found. Run "agent-desk doctor" for details.\n`); return 1; }
-      command = found.path;
-    }
-    instances.set(kind, deps.createRuntime(kind, command));
+  const interactive = !parsed.unattended ? deps.ask : undefined;
+  const outcome = await executeRun({
+    project,
+    request: parsed.request,
+    env: deps.env,
+    platform: deps.platform,
+    createRuntime: deps.createRuntime,
+    runtime: parsed.runtime,
+    verify: parsed.verify,
+    review: parsed.review,
+    maxTokens: parsed.maxTokens,
+    maxMinutes: parsed.maxMinutes,
+    ask: interactive,
+    signal: deps.signal,
+    onNote: text => deps.err(`${text}\n`),
+    onEvent: event => { if (!parsed.json) { const line = describeEvent(event); if (line) deps.err(`${line}\n`); } },
+  });
+  if (!outcome.ok) { deps.err(`${outcome.message}\n`); return outcome.code; }
+  const { result, runId, suggestions } = outcome;
+  if (parsed.json) deps.out(`${JSON.stringify(result, null, 2)}\n`);
+  else deps.out(`${summarize(result, outcome.durationMs)}\n`);
+  if (suggestions.length && !parsed.json) {
+    deps.out(`\nMemory suggestions (nothing was saved):\n${suggestions.map(fact => `  - ${fact}`).join('\n')}\n`);
+    if (interactive) {
+      for (const fact of suggestions) {
+        const choice = await interactive({ question: `Add to project memory?\n  ${fact}`, options: ['add', 'skip'] });
+        if (choice.trim().toLowerCase() === 'add') { const added = addMemory(project, fact); deps.out(added.ok ? 'Added.\n' : `Not added: ${added.error}\n`); }
+      }
+    } else deps.out('Add one with: agent-desk memory add "<fact>"\n');
   }
-  const runtimeMap = Object.fromEntries(Object.entries(assignment).map(([role, kind]) => [role, instances.get(kind)!])) as Partial<Record<RoleId, Runtime>>;
-
-  fs.mkdirSync(dir, { recursive: true });
-  const store = new RunStore(path.join(dir, 'agent-desk.db'));
-  try {
-    const recovered = store.recoverInterrupted();
-    if (recovered.length) deps.err(`marked ${recovered.length} earlier run(s) as interrupted\n`);
-    const runId = store.startRun(project, parsed.request);
-    const record = store.recorder(runId);
-    const previousBrief = store.latestBrief(project);
-    const verify = parsed.verify.length ? parsed.verify : config.verify ?? [];
-    const maxTokens = parsed.maxTokens ?? config.limits?.tokens;
-    const maxMinutes = parsed.maxMinutes ?? config.limits?.minutes;
-    const interactive = !parsed.unattended ? deps.ask : undefined;
-    const started = Date.now();
-
-    const result = await runRequest(parsed.request, {
-      cwd: project,
-      runtime: runtimeMap,
-      access: settings.access,
-      effort: settings.effort,
-      models: settings.models,
-      roleNotes: settings.roleNotes,
-      ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
-      ...(loadMemory(project) ? { projectMemory: loadMemory(project) } : {}),
-      ...(interactive ? { askUser: interactive, confirmPlan: async (plan: Parameters<typeof planText>[0]) => (await interactive({ question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
-      onEvent: event => {
-        record(event);
-        if (!parsed.json) { const line = describeEvent(event); if (line) deps.err(`${line}\n`); }
-      },
-      ...(deps.signal ? { signal: deps.signal } : {}),
-      ...(previousBrief ? { previousBrief } : {}),
-      verify,
-      restorePointDir: path.join(dir, 'restore', String(runId)),
-      ...(config.ignore ? { ignore: config.ignore } : {}),
-      ...(maxTokens || maxMinutes ? { budget: { ...(maxTokens ? { maxTokens } : {}), ...(maxMinutes ? { maxMillis: maxMinutes * 60000 } : {}) } } : {}),
-      ...((parsed.review ?? config.review) ? { review: (parsed.review ?? config.review)! } : {}),
-      ...(config.limits?.redo !== undefined ? { redoLimit: config.limits.redo } : {}),
-    });
-    store.finishRun(runId, parsed.request, result);
-    pruneRestorePoints(path.join(dir, 'restore'), 10);
-    const suggestions = newSuggestions(project, result.memorySuggestions ?? []);
-    if (parsed.json) deps.out(`${JSON.stringify(result, null, 2)}\n`);
-    else deps.out(`${summarize(result, Date.now() - started)}\n`);
-    if (suggestions.length && !parsed.json) {
-      deps.out(`\nMemory suggestions (nothing was saved):\n${suggestions.map(fact => `  - ${fact}`).join('\n')}\n`);
-      if (interactive) {
-        for (const fact of suggestions) {
-          const choice = await interactive({ question: `Add to project memory?\n  ${fact}`, options: ['add', 'skip'] });
-          if (choice.trim().toLowerCase() === 'add') { const added = addMemory(project, fact); deps.out(added.ok ? 'Added.\n' : `Not added: ${added.error}\n`); }
-        }
-      } else deps.out('Add one with: agent-desk memory add "<fact>"\n');
-    }
-    if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
-    if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
-    return EXIT_CODES[result.status] ?? 1;
-  } finally {
-    store.close();
-  }
-}
-
-/** Keeps only the newest `keep` restore points. Run ids grow, so the highest numbers are the newest. */
-function pruneRestorePoints(root: string, keep: number): void {
-  try {
-    const ids = fs.readdirSync(root).filter(name => /^\d+$/.test(name)).map(Number).sort((a, b) => b - a);
-    for (const id of ids.slice(keep)) fs.rmSync(path.join(root, String(id)), { recursive: true, force: true });
-  } catch { /* nothing to prune */ }
+  if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
+  if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
+  return EXIT_CODES[result.status] ?? 1;
 }
 
 async function memory(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {

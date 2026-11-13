@@ -82,3 +82,12 @@ export function resolveClaudeExecutable(input: { env: NodeJS.ProcessEnv; platfor
   }
   return null;
 }
+
+import type { MachineSettings } from './paths.ts';
+
+/** Finds the executable for a runtime kind on this PC, using saved settings as a hint. */
+export function locate(kind: 'codex' | 'claude', env: NodeJS.ProcessEnv, platform: NodeJS.Platform, saved: MachineSettings): Found | null {
+  return kind === 'codex'
+    ? resolveCodexExecutable({ env, platform, ...(saved.codex?.path ? { saved: saved.codex.path } : {}) })
+    : resolveClaudeExecutable({ env, platform, ...(saved.claude?.path ? { saved: saved.claude.path } : {}) });
+}

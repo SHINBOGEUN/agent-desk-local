@@ -8,7 +8,7 @@ import type { FakeScript } from '#runtime-fake';
 import { RunStore } from '#store';
 import { main, parseArgs } from '../src/main.ts';
 import type { CliDeps } from '../src/main.ts';
-import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from '../src/discover.ts';
+import { resolveClaudeExecutable, resolveCodexExecutable, versionWarning } from '#service';
 import { validateConfig } from '#project';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
