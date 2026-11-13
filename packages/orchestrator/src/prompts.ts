@@ -27,8 +27,19 @@ const BUILDER = [
   '- Include one "requirements" entry for every requirement id you were given. Use "unverified" when you could not check it, and say what you could not check in "unverified".',
 ].join('\n');
 
+const VERIFIER = [
+  'Role: verifier. You independently review work that another agent did. You have never seen how it was done and you cannot change files.',
+  'Read the changed files and judge them against the requirements and the user\'s original request. Run read-only checks if useful; the harness has already run the project\'s verify commands, so do not repeat them.',
+  'Report shape: { "verdict": "PASS" | "REDO" | "BLOCKED", "blocking": [{ "file"?: string, "line"?: number, "reason": string, "evidence": string }], "optional": [strings] }.',
+  '- REDO only for: a requirement that is not met, behaviour that is wrong, a report that states something untrue, or a check that was weakened. Every REDO finding needs concrete evidence (file and line, or the observed behaviour).',
+  '- Style, naming, structure or "could be better" suggestions go in "optional" and never justify REDO.',
+  '- If the user\'s request contains a requirement that is missing from the requirements list, report it as a blocking finding.',
+  '- BLOCKED means you cannot decide (for example something you could not inspect). Put the reason in "blocking" so the user can see what stayed unchecked.',
+  '- PASS has an empty "blocking" list.',
+].join('\n');
+
 export function instructionsFor(role: RoleId, notes?: string): string {
-  const body = role === 'lead' ? LEAD : role === 'builder' ? BUILDER : `Role: ${role}.`;
+  const body = role === 'lead' ? LEAD : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : `Role: ${role}.`;
   return [COMMON, body, notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 

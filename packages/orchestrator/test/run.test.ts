@@ -36,7 +36,7 @@ test('build workflow follows classify -> build -> report and records usage per s
   const cwd = tmp();
   const runtime = new FakeRuntime({ scripts: { lead: [script([usage(50), { report: buildClassify }])], builder: [script([write('ping.js'), write('ping.test.js'), usage(400), { report: doneReport }])] } });
   const events: RunEvent[] = [];
-  const result = await runRequest('Add a ping endpoint with a test', { cwd, runtime, onEvent: event => events.push(event) });
+  const result = await runRequest('Add a ping endpoint with a test', { cwd, runtime, review: 'never', onEvent: event => events.push(event) });
   assert.equal(result.status, 'completed');
   assert.equal(result.builder?.changedFiles.length, 2);
   assert.deepEqual(result.requirements.map(requirement => requirement.id), ['R1', 'R2']);
@@ -62,7 +62,7 @@ test('a rejected report is corrected inside the same turn', async () => {
   assert.match(runtime.turns[0]?.toolResults[0]?.message ?? '', /report\.answer/);
 
   const second = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([...files, { report: missingR2 }, { report: doneReport }])] } });
-  const built = await runRequest('x', { cwd: tmp(), runtime: second });
+  const built = await runRequest('x', { cwd: tmp(), runtime: second, review: 'never' });
   assert.equal(built.status, 'completed');
   assert.match(second.turns[1]?.toolResults[0]?.message ?? '', /missing an entry for R2/);
 });
@@ -70,7 +70,7 @@ test('a rejected report is corrected inside the same turn', async () => {
 test('builder reporting open requirements ends as needs_review', async () => {
   const partial = { ...doneReport, requirements: [doneReport.requirements[0], { id: 'R2', status: 'unverified', evidence: '' }], unverified: ['test not run'] };
   const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([...files, { report: partial }])] } });
-  const result = await runRequest('x', { cwd: tmp(), runtime });
+  const result = await runRequest('x', { cwd: tmp(), runtime, review: 'never' });
   assert.equal(result.status, 'needs_review');
   assert.match(result.reason, /could not verify R2/);
 });
@@ -129,7 +129,7 @@ test('questions go to askUser; without it the run waits for the user', async () 
 test('roles can use different runtimes', async () => {
   const lead = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])] } });
   const builder = new FakeRuntime({ scripts: { builder: [script([...files, { report: doneReport }])] } });
-  const result = await runRequest('x', { cwd: tmp(), runtime: { lead, builder } });
+  const result = await runRequest('x', { cwd: tmp(), runtime: { lead, builder }, review: 'never' });
   assert.equal(result.status, 'completed');
   assert.equal(lead.turns.length, 1);
   assert.equal(builder.turns.length, 1);

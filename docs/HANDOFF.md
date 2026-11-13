@@ -114,3 +114,12 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: G4 리뷰(2-5). `RunResult.warnings`의 테스트 파일 변경 표시는 아직 리뷰 정책과 연결되지 않음. 사용률(Codex 5시간 한도) 기반 G5는 4단계.
 - 다음 사람이 할 일: 2-5 verifier와 G4, 리뷰 정책 `always/auto/never`.
 
+### 2026-11-13 · Claude (7차)
+- 한 일: 2-5. `review.ts`(정책 결정 `decideReview`, 리뷰 프롬프트), `diff-text.ts`(변경 파일의 줄 단위 diff, 스냅샷에 작은 파일 본문 보관), 검증자 지침(`prompts.ts`), `run.ts`에 G4 연결.
+  - 리뷰는 builder와 다른 새 세션(역할 `verifier`, 읽기 전용, 런타임 따로 지정 가능). 입력은 사용자 원문·요구사항·실제 diff·G3 결과이고 builder의 요약·추론은 주지 않음. 테스트 파일이 바뀌면 "검사를 약화했는지" 명시적으로 판단하도록 요구.
+  - 정책: `always`(기본), `auto`(verify 통과 + 3파일·60줄 이하 + 테스트·보안 경로 없음일 때만 생략, verify가 없으면 리뷰), `never`. `config.review`, `config.autoReview`로 설정.
+  - 판정: `PASS` → 완료, `REDO` → blocking 항목이 REDO 사유가 되어 builder로(REDO 한도 공유, 매번 새 verifier 세션), `BLOCKED`는 사유 필수 — G3 통과면 `completed` + `unverified`에 표시, verify가 없으면 `needs_review`. 검증자가 파일을 바꾸거나 판정 없이 끝나면 `needs_review`.
+- 확인한 것: 전체 66개 테스트와 `tsc --noEmit` 통과(가짜 런타임).
+- 아직 없는 것: '같은 세션 자체 점검' 비교 구성(3-5), 실제 모델이 판정 기준을 따르는지(2-10 측정으로 확인).
+- 다음 사람이 할 일: 2-6 SQLite 이벤트 저장과 Run Brief.
+

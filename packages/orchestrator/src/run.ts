@@ -2,17 +2,19 @@
 // of steps, the roles, access levels, gates, REDO and the final status are all
 // decided here in code. Models only work inside steps.
 
-import type { BuilderReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion } from '#core';
+import type { BuilderReport, HarnessTools, Requirement, RoleId, Runtime, RunStatus, Session, StepKind, TokenUsage, UserQuestion, VerifierReport } from '#core';
 import { UsageLedger } from '#core';
 import { ReportCollector } from '#tools-mcp';
 import { classifyFailure } from './failure.ts';
 import type { FailureType } from './failure.ts';
 import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gates.ts';
 import type { GateResult } from './gates.ts';
+import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, redoPrompt, reportReminder } from './prompts.ts';
+import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt } from './review.ts';
 import { diffProtected, diffSnapshots, restoreProtected, takeSnapshot } from './snapshot.ts';
-import type { Snapshot } from './snapshot.ts';
+import type { Diff, Snapshot } from './snapshot.ts';
 import type { RunConfig, RunEvent, RunEventBody, RunResult } from './types.ts';
 
 interface Collector {
@@ -240,7 +242,7 @@ async function runClassify(ctx: RunContext, request: string, lead: LeadCollector
 async function runBuild(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>): Promise<RunResult> {
   const { config } = ctx;
   const redoLimit = config.redoLimit ?? DEFAULT_REDO_LIMIT;
-  const before = takeSnapshot(config.cwd, { ignore: ctx.ignore });
+  const before = takeSnapshot(config.cwd, { ignore: ctx.ignore, keepContent: true });
   const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => builderCoverageErrors(requirements, report));
   let collector = newCollector();
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
@@ -283,8 +285,16 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
         return failureResult(ctx, failedStep(g3.problems[0] ?? 'A verify command could not be run.', 'environment'), { ...base, builder: report });
       }
       const notDone = report.requirements.filter(entry => entry.status === 'not_done').map(entry => `Requirement ${entry.id} is reported as not done${entry.evidence ? `: ${entry.evidence}` : ''}.`);
-      const reasons = [...g2.problems, ...g3.problems, ...notDone];
-      if (!reasons.length) return completeBuild(ctx, report, g2, g3, base);
+      let reasons = [...g2.problems, ...g3.problems, ...notDone];
+      let review: ReviewOutcome = { kind: 'skipped', reason: 'earlier gates failed' };
+      if (!reasons.length) {
+        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3 });
+        if (review.kind === 'stop') {
+          return review.failure ? failureResult(ctx, review.failure, { ...base, builder: report }) : finish(ctx, review.status, review.reason, { ...base, builder: report });
+        }
+        if (review.kind === 'verdict' && review.report.verdict === 'REDO') reasons = review.report.blocking.map(finding => `Review: ${finding.reason}${finding.file ? ` (${finding.file}${finding.line ? `:${finding.line}` : ''})` : ''}. Evidence: ${finding.evidence}`);
+      }
+      if (!reasons.length) return completeBuild(ctx, report, g2, g3, base, review);
       if (!ctx.enforceBudget(ctx.redo, false)) {
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'budget' });
         return failureResult(ctx, { kind: 'budget', reason: ctx.budgetHit ?? 'budget exceeded', step: 'build' }, { ...base, builder: report });
@@ -305,20 +315,77 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
   }
 }
 
-function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g3: GateResult, base: Partial<RunResult>): RunResult {
+type ReviewOutcome =
+  | { kind: 'skipped'; reason: string }
+  | { kind: 'verdict'; report: VerifierReport }
+  | { kind: 'stop'; status: RunStatus; reason: string; failure?: StepFailure };
+
+/** Gate G4: decides by policy whether to review, then runs an independent read-only verifier in a new session. */
+async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult }): Promise<ReviewOutcome> {
+  const { config } = ctx;
+  const rendered = renderDiff({ cwd: config.cwd, before: input.before, diff: input.diff });
+  const decision = decideReview({
+    policy: config.review ?? 'always', verifySkipped: input.g3.skipped === true, changedFiles: input.diff.all, changedLines: rendered.lines, linesUnknown: rendered.unknown,
+    limits: { ...DEFAULT_AUTO_LIMITS, ...config.autoReview },
+  });
+  if (!decision.review) {
+    ctx.recordGate({ gate: 'G4', ok: true, skipped: true, attempt: ctx.redo, detail: `review skipped: ${decision.reason}`, problems: [] });
+    return { kind: 'skipped', reason: decision.reason };
+  }
+  const testFiles = (input.g2.data?.testFilesChanged as string[] | undefined) ?? [];
+  const verifyLines = ((input.g3.data?.commands as string[] | undefined) ?? []).map(command => `\`${command}\` passed`);
+  const prompt = reviewPrompt({ request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles });
+  const collector = new ReportCollector('verifier', report => (report.verdict === 'BLOCKED' && !report.blocking.length ? ['verifier.blocking: BLOCKED needs at least one entry that says what could not be decided and why'] : []));
+  const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
+  ctx.emit({ type: 'step_started', step: 'review', role: 'verifier' });
+  const guardBefore = takeSnapshot(config.cwd, { mode: 'stat', ignore: ctx.ignore });
+  const failure = await withTransientRetry(ctx, 'review', async () => {
+    let session: Session | null = null;
+    try {
+      session = await openSession(ctx, 'review', 'verifier', holder);
+      return await playUntilReport(ctx, 'review', 'verifier', session, holder, prompt, reportReminder('your verifier report'));
+    } catch (error) {
+      return failedStep(error instanceof Error ? error.message : String(error));
+    } finally {
+      await session?.close().catch(() => {});
+    }
+  });
+  const guardAfter = takeSnapshot(config.cwd, { mode: 'stat', ignore: ctx.ignore });
+  const violation = protectedViolation(ctx, guardBefore, guardAfter);
+  const touched = diffSnapshots(guardBefore, guardAfter);
+  if (violation) { ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: 'protected paths changed' }); return { kind: 'stop', status: 'failed', reason: violation }; }
+  if (touched.all.length) { ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: 'read-only step changed files' }); return { kind: 'stop', status: 'needs_review', reason: `The review step is read-only but these files changed: ${touched.all.join(', ')}` }; }
+  if (failure) {
+    ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: failure.kind });
+    if (failure.kind === 'failed' && failure.type !== 'environment') return { kind: 'stop', status: 'needs_review', reason: `The review did not produce a verdict: ${failure.reason}` };
+    return { kind: 'stop', status: 'failed', reason: '', failure };
+  }
+  const verdict = collector.report!;
+  ctx.recordGate({ gate: 'G4', ok: verdict.verdict === 'PASS', attempt: ctx.redo, detail: `verdict ${verdict.verdict}`, problems: verdict.blocking.map(finding => finding.reason), data: { optional: verdict.optional } });
+  ctx.emit({ type: 'step_finished', step: 'review', ok: verdict.verdict !== 'REDO', detail: `verdict ${verdict.verdict}` });
+  return { kind: 'verdict', report: verdict };
+}
+
+function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g3: GateResult, base: Partial<RunResult>, review: ReviewOutcome): RunResult {
   const testFiles = (g2.data?.testFilesChanged as string[] | undefined) ?? [];
   if (testFiles.length) ctx.warnings.push(`Test or check files changed: ${testFiles.join(', ')}. Confirm the change was required by the request.`);
   const openIds = report.requirements.filter(entry => entry.status === 'unverified').map(entry => entry.id);
   const unverified = [...openIds.map(id => `Requirement ${id} was reported as unverified.`), ...report.unverified];
   if (g3.skipped) ctx.warnings.push('No automatic verification: no verify commands are configured.');
+  const reviewExtra: Partial<RunResult> = review.kind === 'verdict' ? { review: review.report } : review.kind === 'skipped' ? { reviewSkipped: review.reason } : {};
+  if (review.kind === 'verdict' && review.report.verdict === 'BLOCKED') {
+    const why = review.report.blocking.map(finding => finding.reason).join('; ');
+    if (g3.skipped) return finish(ctx, 'needs_review', `The reviewer could not decide and no verify command is configured: ${why}`, { ...base, ...reviewExtra, builder: report, unverified });
+    unverified.push(`Review could not decide: ${why}`);
+  }
   ctx.emit({ type: 'step_finished', step: 'build', ok: true, detail: 'gates passed' });
   if (openIds.length && g3.skipped) {
-    return finish(ctx, 'needs_review', `The builder could not verify ${openIds.join(', ')} and no verify command is configured to check them.`, { ...base, builder: report, unverified });
+    return finish(ctx, 'needs_review', `The builder could not verify ${openIds.join(', ')} and no verify command is configured to check them.`, { ...base, ...reviewExtra, builder: report, unverified });
   }
   ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
   ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'build reported' });
   const note = unverified.length ? ` Not verified by the builder: ${unverified.length} item(s), listed in the result.` : '';
-  return finish(ctx, 'completed', `Every requirement is done and the gates passed.${note}`, { ...base, builder: report, unverified });
+  return finish(ctx, 'completed', `Every requirement is done and the gates passed.${note}`, { ...base, ...reviewExtra, builder: report, unverified });
 }
 
 export async function runRequest(request: string, config: RunConfig): Promise<RunResult> {

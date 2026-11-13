@@ -21,7 +21,7 @@ const report = (changedFiles: string[], status = 'done', extra: Record<string, u
 const lead = (...extra: FakeScript[]) => [script([{ report: buildClassify }]), ...extra];
 
 function run(runtime: FakeRuntime, cwd: string, config: Partial<RunConfig> = {}) {
-  return runRequest('create ok.txt', { cwd, runtime, ...config });
+  return runRequest('create ok.txt', { cwd, runtime, review: 'never', ...config });
 }
 
 // ---------- snapshot and G2 ----------

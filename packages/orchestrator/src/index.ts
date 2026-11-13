@@ -8,3 +8,6 @@ export type { Diff, Snapshot } from './snapshot.ts';
 export { LeadCollector } from './lead-report.ts';
 export { instructionsFor } from './prompts.ts';
 export type { RunConfig, RunEvent, RunEventBody, RunResult } from './types.ts';
+export { decideReview, reviewPrompt, isSecurityPath, DEFAULT_AUTO_LIMITS } from './review.ts';
+export type { ReviewPolicy, ReviewFacts, ReviewDecision } from './review.ts';
+export { renderDiff } from './diff-text.ts';

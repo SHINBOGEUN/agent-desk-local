@@ -4,7 +4,8 @@
 
 import type { FailureType } from './failure.ts';
 import type { Budget, GateResult } from './gates.ts';
-import type { AnswerReport, BuilderReport, ClassifyReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, WorkflowId } from '#core';
+import type { ReviewPolicy } from './review.ts';
+import type { AnswerReport, BuilderReport, ClassifyReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
 
 export interface RunConfig {
   /** Project folder the run works in. */
@@ -24,6 +25,10 @@ export interface RunConfig {
   ignore?: string[];
   /** Gate G5. */
   budget?: Budget;
+  /** Gate G4. Default "always". */
+  review?: ReviewPolicy;
+  /** Limits for the "auto" policy. Defaults: 3 files, 60 changed lines. */
+  autoReview?: { maxFiles?: number; maxLines?: number };
   /** Maximum REDO rounds after the first build attempt. Default 2. */
   redoLimit?: number;
   models?: Partial<Record<RoleId, string>>;
@@ -55,6 +60,9 @@ export interface RunResult {
   classify?: ClassifyReport;
   answer?: AnswerReport;
   builder?: BuilderReport;
+  review?: VerifierReport;
+  /** Why no review ran, when none did. */
+  reviewSkipped?: string;
   /** Every gate evaluation in order. */
   gates: GateResult[];
   /** REDO rounds used. */
