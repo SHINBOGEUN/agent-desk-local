@@ -1,0 +1,75 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T01",
+  "category": "backend-bug",
+  "attempt": 1,
+  "runId": "495cc817-1d2f-421b-842d-730c87dabff5",
+  "projectId": "b01dbb03-7189-47bb-bd65-decf543111c1",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T01-r1-2026-11-13T02-22-30-734Z",
+  "startedAt": "2026-11-13T02:22:31.805Z",
+  "finishedAt": "2026-11-13T02:26:29.758Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 555522,
+      "inputTokens": 547290,
+      "cachedInputTokens": 448512,
+      "uncachedInputTokens": 98778,
+      "outputTokens": 8232
+    },
+    "accountPercent": 1,
+    "durationSec": 237.953,
+    "agentCount": 2,
+    "agents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 3,
+    "consultations": 0,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 199649
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 263915
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 91958
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`GET /api/todos`의 상태 필터를 수정했습니다. `?status=done`은 완료 항목만, `?status=open`은 미완료 항목만 반환하며, 상태를 지정하지 않으면 전체 목록을 반환합니다.\n\n담당자는 테스트 7개 통과를 보고했습니다. 독립 검증에서는 각 필터와 무필터 응답을 직접 확인했지만, 전체 테스트는 임시 디렉터리 생성 시 `EPERM` 오류가 나 재확인하지 못했습니다."
+}

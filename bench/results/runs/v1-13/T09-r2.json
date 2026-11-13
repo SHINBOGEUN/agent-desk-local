@@ -1,0 +1,59 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T09",
+  "category": "question",
+  "attempt": 2,
+  "runId": "33a090c0-59ba-4fe1-839a-7379d5bb5d8a",
+  "projectId": "6ba1e9a5-f667-4ff4-ab4e-b85b74d05da2",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T09-r2-2026-11-13T05-22-14-777Z",
+  "startedAt": "2026-11-13T05:22:16.456Z",
+  "finishedAt": "2026-11-13T05:23:05.404Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "not_required",
+    "usage": {
+      "totalTokens": 113035,
+      "inputTokens": 111330,
+      "cachedInputTokens": 70656,
+      "uncachedInputTokens": 40674,
+      "outputTokens": 1705
+    },
+    "accountPercent": 1,
+    "durationSec": 48.948,
+    "agentCount": 1,
+    "agents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+    ],
+    "workTasks": 1,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [],
+    "requiredAgents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 46053
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 66982
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [],
+    "missing": [],
+    "unexpectedChanges": []
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "서버의 기본 포트는 **3100**, 데이터 파일의 기본 경로는 **`data/todos.json`**입니다. 둘 다 [`src/config.mjs`](src/config.mjs)에서 정의되며, 각각 `PORT`와 `DATA_FILE` 환경 변수로 변경할 수 있습니다. 코드는 수정하지 않았습니다."
+}

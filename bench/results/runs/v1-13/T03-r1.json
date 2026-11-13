@@ -1,0 +1,79 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T03",
+  "category": "frontend",
+  "attempt": 1,
+  "runId": "90e58267-a803-44f2-b628-fa2ea7d21e4b",
+  "projectId": "f2fe5814-8425-40be-83e1-e2c11e8b4f64",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T03-r1-2026-11-13T02-30-49-612Z",
+  "startedAt": "2026-11-13T02:30:51.193Z",
+  "finishedAt": "2026-11-13T02:33:28.167Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 390173,
+      "inputTokens": 384611,
+      "cachedInputTokens": 314496,
+      "uncachedInputTokens": 70115,
+      "outputTokens": 5562
+    },
+    "accountPercent": 1,
+    "durationSec": 156.974,
+    "agentCount": 2,
+    "agents": [
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "verifier"
+    ],
+    "workTasks": 2,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 110391
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 193640
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 86142
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "test/render.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "목록 위에 **‘남은 할 일 N개’**를 표시하도록 구현했습니다. `public/render.js`의 `renderSummary(todos)`가 미완료 항목만 세며, 목록을 처음 불러오거나 추가·완료 변경·삭제할 때 `#summary`도 갱신됩니다.\n\n독립 검증에서 관련 렌더 테스트 3개가 통과했습니다. 전체 테스트는 담당자 실행에서는 7개 통과했지만, 독립 재실행에서는 임시 디렉터리 생성 권한 오류로 나머지 4개를 확인하지 못했습니다. 실제 브라우저 화면도 확인하지 못했습니다."
+}

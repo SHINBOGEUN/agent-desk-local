@@ -1,0 +1,105 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H03",
+  "category": "hard-backend",
+  "attempt": 3,
+  "runId": "43f758ee-8068-4eb4-8cea-7ad59cc9335e",
+  "projectId": "77cdb0ee-be30-434d-9455-8e9c4f53c4e0",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H03-r3-2026-11-13T07-52-17-677Z",
+  "startedAt": "2026-11-13T07:52:18.824Z",
+  "finishedAt": "2026-11-13T08:00:45.679Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 1090128,
+      "inputTokens": 1069931,
+      "cachedInputTokens": 915840,
+      "uncachedInputTokens": 154091,
+      "outputTokens": 20197
+    },
+    "accountPercent": 1,
+    "durationSec": 506.855,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 5,
+    "consultations": 1,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 391329
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 198132
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 130478
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 88097
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 282092
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0,
+      "timedOut": false,
+      "output": "✔ creates, updates, lists and deletes todos (99.1208ms)\n✔ rejects a missing title (14.7784ms)\n✔ persists todos to the data file (5.7394ms)\n✔ moves todos to trash, restores them, and purges trash through the API (128.3201ms)\n✔ serves the page (12.0218ms)\n✔ renders todos and escapes titles (1.2101ms)\n✔ renders an empty state (0.1361ms)\nℹ tests 7\nℹ suites 0\nℹ pass 7\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 387.7601\n"
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0,
+      "timedOut": false,
+      "output": "✔ delete moves a todo to the trash; restore brings it back unchanged (212.4149ms)\n✔ trash is ordered by deletedAt descending, then id descending (92.5754ms)\n✔ emptying the trash purges permanently and ids are never reused (133.725ms)\n✔ trash persists across restarts and is purged after more than 30 days (78.0877ms)\n✔ migrates schemaVersion 1 data and keeps the trash across restarts (22.7859ms)\nℹ tests 5\nℹ suites 0\nℹ pass 5\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 670.9274\n"
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 삭제를 휴지통 방식으로 변경했습니다. 삭제한 항목은 일반 목록에서 빠지고, `/api/trash`에서 조회·복구·영구 삭제할 수 있습니다. 삭제 시각과 휴지통 상태는 데이터 파일에 저장되며, 기존 v1 데이터는 v2로 마이그레이션됩니다. DB를 열 때 30일을 **초과한** 휴지통 항목만 자동 삭제하고, 영구 삭제된 ID는 재사용하지 않습니다.\n\n독립 검증에서 `npm test` **7개 모두 통과**했고, 만료 경계·재시작 후 저장 상태·정렬·복구·ID 재사용 방지도 추가 확인했습니다.",
+  "regrade": {
+    "at": "2026-11-13T10:00:32.137Z",
+    "reason": "hidden test called db methods the prompt never specified",
+    "previous": {
+      "success": false,
+      "visible": true,
+      "acceptance": false
+    }
+  }
+}

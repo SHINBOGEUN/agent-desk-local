@@ -1,0 +1,79 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T08",
+  "category": "server-config",
+  "attempt": 1,
+  "runId": "749d801c-8eb9-4fa8-8e7e-d250557f7ebb",
+  "projectId": "717e4e1b-bbc3-4ab2-8954-d4e289e70bd4",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T08-r1-2026-11-13T03-57-37-655Z",
+  "startedAt": "2026-11-13T03:57:38.708Z",
+  "finishedAt": "2026-11-13T03:59:45.750Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 315097,
+      "inputTokens": 310424,
+      "cachedInputTokens": 247936,
+      "uncachedInputTokens": 62488,
+      "outputTokens": 4673
+    },
+    "accountPercent": 1,
+    "durationSec": 127.042,
+    "agentCount": 2,
+    "agents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "workTasks": 2,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 94985
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 139819
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 80293
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "package.json",
+      "src/config.mjs",
+      "test/config.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`loadConfig`의 PORT 검증을 변경했습니다. PORT가 없으면 기본값 **3100**을 유지하고, 값이 있으면 **1024~65535 범위의 정수**만 허용합니다. 그 외 값은 에러를 던집니다.\n\n독립 검증에서 설정 테스트 **3개가 통과**했습니다. 다만 전체 `npm test`는 임시 디렉터리 생성 중 `EPERM`으로 앱 테스트 4개가 실패해, 전체 통과는 확인하지 못했습니다."
+}

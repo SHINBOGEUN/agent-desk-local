@@ -1,0 +1,93 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T07",
+  "category": "fullstack",
+  "attempt": 2,
+  "runId": "334f2377-a16e-40aa-87c6-ccfebbd15d2c",
+  "projectId": "4f0cf3b8-f90f-4508-87a3-528bbd9c5a8a",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T07-r2-2026-11-13T05-07-38-547Z",
+  "startedAt": "2026-11-13T05:07:39.755Z",
+  "finishedAt": "2026-11-13T05:17:10.383Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1485963,
+      "inputTokens": 1466364,
+      "cachedInputTokens": 1291392,
+      "uncachedInputTokens": 174972,
+      "outputTokens": 19599
+    },
+    "accountPercent": 1,
+    "durationSec": 570.628,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 2,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "FAIL"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 501322
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 131508
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 3,
+        "tokens": 143627
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 2,
+        "tokens": 325460
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 384046
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "완료 항목 일괄 삭제 기능을 추가했습니다.\n\n- `DELETE /api/todos?status=done`은 완료 항목만 지우고 `200 {\"deleted\": 삭제 개수}`를 반환합니다. 쿼리가 없거나 `status`가 `done`이 아니면 삭제하지 않고 `400 {\"error\": ...}`를 반환합니다.\n- 화면에 **완료 항목 지우기** 버튼(`id=\"clear-done\"`)을 추가했습니다. 클릭하면 API 호출 성공 후 목록을 새로 고칩니다.\n\n전체 테스트 8개가 통과했습니다. 검증 중 한글 문구가 손상됐다는 보고가 있었지만, HTML 파일을 UTF-8로 직접 다시 읽어 대체 문자 없이 정확한 버튼 문구가 들어 있음을 확인했습니다. 실제 브라우저 클릭 동작은 확인하지 못했습니다."
+}

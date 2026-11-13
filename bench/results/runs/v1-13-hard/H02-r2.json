@@ -1,0 +1,95 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H02",
+  "category": "hard-fullstack",
+  "attempt": 2,
+  "runId": "4c0dd1b8-bd88-4b23-ab72-db333464bcc2",
+  "projectId": "3ae9cd5c-2eab-476d-ad5f-5f45337222dc",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H02-r2-2026-11-13T06-57-35-488Z",
+  "startedAt": "2026-11-13T06:57:36.677Z",
+  "finishedAt": "2026-11-13T07:06:02.638Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 1099295,
+      "inputTokens": 1080051,
+      "cachedInputTokens": 945152,
+      "uncachedInputTokens": 134899,
+      "outputTokens": 19244
+    },
+    "accountPercent": 4,
+    "durationSec": 505.961,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 5,
+    "consultations": 1,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "FAIL",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 414174
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 185620
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 142764
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 141055
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 215682
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "마감일과 지연 표시를 추가했습니다.\n\n- 기존 데이터는 `schemaVersion 2`로 마이그레이션하며 `dueDate: null`을 채웁니다. 지연 여부는 주입된 `now()`의 UTC 날짜로 요청마다 계산하고 파일에는 저장하지 않습니다.\n- POST/PATCH에서 실제 달력 날짜만 허용하고, 잘못된 날짜는 `400 { error }`로 응답합니다. 잘못된 PATCH는 다른 필드도 반영하지 않습니다.\n- GET의 `overdue=true` 필터와 `sort=due` 정렬, 화면의 날짜 입력·표시·지연 클래스를 추가했습니다.\n\n체커의 재실행에서 **테스트 7개 모두 통과**했습니다. 실제 브라우저 화면은 확인하지 못했습니다. 별도로 발견된 기존 `status=done/open` 필터 결함은 이번 변경 전부터 있었으며 수정 범위에는 포함하지 않았습니다."
+}

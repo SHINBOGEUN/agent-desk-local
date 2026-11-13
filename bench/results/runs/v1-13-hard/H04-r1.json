@@ -1,0 +1,93 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H04",
+  "category": "hard-reliability",
+  "attempt": 1,
+  "runId": "3604eeb8-ba7e-4741-b02f-22b828665735",
+  "projectId": "b5f112c1-d404-4019-9738-1c6c7a24c8f9",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H04-r1-2026-11-13T06-34-44-132Z",
+  "startedAt": "2026-11-13T06:34:45.308Z",
+  "finishedAt": "2026-11-13T06:41:47.882Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 968852,
+      "inputTokens": 952268,
+      "cachedInputTokens": 790528,
+      "uncachedInputTokens": 161740,
+      "outputTokens": 16584
+    },
+    "accountPercent": 3,
+    "durationSec": 422.574,
+    "agentCount": 3,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "workTasks": 5,
+    "consultations": 1,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "FAIL",
+      "NOT_VERIFIED",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 286239
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 162572
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 171095
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 8917
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 340029
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "package.json",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/db.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 데이터 파일에 같은 폴더의 `.tmp` 파일을 거친 원자적 저장, 손상 파일의 `.corrupt-<숫자>` 보존과 빈 데이터 복구, `recoveredFrom` 반환, 새 스키마 버전 보호, `nextId` 보정을 적용했습니다. 요청 본문은 **100KB 초과 시 413 `{ error }`를 반환하고 저장하지 않도록** 변경했습니다.\n\n구현 담당자가 실행한 전체 테스트는 **12개 통과**했습니다. 다만 독립 체커의 재실행은 임시 디렉터리 생성 `EPERM`으로 8개 테스트가 기능 검사에 도달하지 못했습니다. 따라서 전체 테스트의 **독립 검증은 완료되지 않았습니다**."
+}

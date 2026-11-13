@@ -1,0 +1,86 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H04",
+  "category": "hard-reliability",
+  "attempt": 2,
+  "runId": "74d1da17-5325-484b-b9b8-ef7535647422",
+  "projectId": "a6f32128-100e-43f1-a7aa-0671018cd53b",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H04-r2-2026-11-13T07-13-48-643Z",
+  "startedAt": "2026-11-13T07:13:49.840Z",
+  "finishedAt": "2026-11-13T07:19:21.377Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 789631,
+      "inputTokens": 776459,
+      "cachedInputTokens": 617344,
+      "uncachedInputTokens": 159115,
+      "outputTokens": 13172
+    },
+    "accountPercent": 2,
+    "durationSec": 331.537,
+    "agentCount": 3,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "workTasks": 4,
+    "consultations": 0,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 263986
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 217471
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 143985
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 164189
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 데이터 파일 처리를 수정했습니다. 저장은 같은 폴더의 `.tmp` 파일에 먼저 쓴 뒤 rename으로 교체하고, 성공 후 임시 파일을 정리합니다. 손상된 파일은 `.corrupt-<숫자>`로 보존해 빈 데이터로 복구하며, 새 버전 데이터는 변경하지 않고 오류로 거부합니다. `nextId` 보정과 100KB 초과 요청의 **413 `{ error }` 응답·무저장**도 적용했습니다.\n\n독립 검증에서 `npm test` **13개 모두 통과**, `git diff --check` 통과를 확인했습니다. 저장 실패를 강제로 발생시키는 경우는 별도로 테스트하지 않았습니다."
+}

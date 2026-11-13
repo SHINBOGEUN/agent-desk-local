@@ -1,0 +1,106 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H05",
+  "category": "hard-security",
+  "attempt": 1,
+  "runId": "8792b8bf-ebce-4e33-88e4-bf7e70e32c27",
+  "projectId": "a975244c-f9be-473e-b8bc-dec862c5ee95",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H05-r1-2026-11-13T06-41-51-654Z",
+  "startedAt": "2026-11-13T06:41:53.054Z",
+  "finishedAt": "2026-11-13T06:50:40.126Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1311801,
+      "inputTokens": 1291161,
+      "cachedInputTokens": 1091712,
+      "uncachedInputTokens": 199449,
+      "outputTokens": 20640
+    },
+    "accountPercent": 3,
+    "durationSec": 527.072,
+    "agentCount": 6,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 3,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 469940
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 137822
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 3,
+        "tokens": 153048
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 165884
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 92352
+      },
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf": {
+        "calls": 1,
+        "tokens": 129062
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 163693
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "src/app.mjs",
+      "src/config.mjs",
+      "src/db.mjs",
+      "src/server.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "API 키별 할 일 분리를 구현했습니다. `API_KEYS` 파싱과 서버 전달, Bearer 인증, `owner` 저장·필터링, 기존 데이터의 스키마 v2 마이그레이션, 화면 요청의 토큰 헤더를 반영했습니다. 키가 없으면 요청대로 기존 무인증 동작을 유지합니다.\n\n구현 담당자의 `npm test`는 **7개 통과**했습니다. 다만 독립 검증에서는 테스트 임시 디렉터리 생성이 `EPERM`으로 막혀 통합 테스트 통과를 재확인하지 못했습니다. 코드 검토와 `git diff --check`는 통과했으며, **독립 검증 상태는 NOT_VERIFIED**입니다."
+}

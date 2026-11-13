@@ -1,0 +1,96 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H02",
+  "category": "hard-fullstack",
+  "attempt": 1,
+  "runId": "420f23b6-faec-4724-9ff2-07b30c3b8a26",
+  "projectId": "aa7212bc-8797-4d3d-a3f3-857ceba57094",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H02-r1-2026-11-13T06-13-52-684Z",
+  "startedAt": "2026-11-13T06:13:54.309Z",
+  "finishedAt": "2026-11-13T06:25:54.083Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1604834,
+      "inputTokens": 1576395,
+      "cachedInputTokens": 1405312,
+      "uncachedInputTokens": 171083,
+      "outputTokens": 28439
+    },
+    "accountPercent": 2,
+    "durationSec": 719.774,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 0,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "FAIL",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 606948
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 197229
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 303497
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 111475
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 385685
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "public/style.css",
+      "src/app.mjs",
+      "src/db.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "마감일과 지연 표시를 추가했습니다. schemaVersion 1 데이터는 dueDate가 null인 버전 2로 마이그레이션하며, API는 날짜 검증·지연 필터·마감일 정렬을 지원합니다. 화면에도 날짜 입력과 지연 표시를 반영했습니다.\n\n프로젝트 쓰기 권한으로 실행한 검증에서 **기존 테스트 6개가 통과**했고, 실제 DB·HTTP 경계에서 마이그레이션, 잘못된 날짜의 400 응답, PATCH 원자성, UTC 기준 지연 계산, 필터·정렬을 확인했습니다. 이후 읽기 전용 재실행은 임시 파일 생성이 거부되어 완료되지 않았으며, 실제 브라우저 화면은 확인하지 못했습니다.\n\n별도로 발견된 `status=true` 필터 오류는 이번 변경 전부터 있던 코드에서 발생하며, 이번 작업에는 포함하지 않았습니다."
+}

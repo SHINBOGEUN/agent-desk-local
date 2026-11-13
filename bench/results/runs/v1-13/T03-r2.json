@@ -1,0 +1,78 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T03",
+  "category": "frontend",
+  "attempt": 2,
+  "runId": "d9bf35a1-9b14-4f27-b91e-1219882de475",
+  "projectId": "f2a4eec6-0257-423a-8c7e-9e67ed971812",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T03-r2-2026-11-13T04-09-57-867Z",
+  "startedAt": "2026-11-13T04:09:58.987Z",
+  "finishedAt": "2026-11-13T04:12:21.294Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 325423,
+      "inputTokens": 320243,
+      "cachedInputTokens": 249088,
+      "uncachedInputTokens": 71155,
+      "outputTokens": 5180
+    },
+    "accountPercent": 0,
+    "durationSec": 142.307,
+    "agentCount": 2,
+    "agents": [
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "verifier"
+    ],
+    "workTasks": 2,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 111123
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 117437
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 96863
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "목록 위에 `남은 할 일 N개`를 표시하도록 구현했습니다. `renderSummary(todos)`가 미완료 항목을 세고, 목록을 갱신하는 `refresh()`에서 요약 문구도 함께 갱신합니다.\n\n독립 검증에서 함수의 세 가지 사례와 화면 요소의 순서·갱신 연결은 확인했습니다. 다만 검증 환경에서 임시 디렉터리 생성이 `EPERM`으로 거부돼 전체 테스트는 완료하지 못했고, 브라우저 화면도 직접 확인하지 못했습니다."
+}

@@ -1,0 +1,195 @@
+{
+  "label": "v1-13-hard",
+  "recordedAt": "2026-11-13T07:25:08.371Z",
+  "adapter": "v1",
+  "settings": {
+    "concurrency": 2,
+    "maxDelegations": 6,
+    "timeoutMinutes": 15,
+    "usagePercentLimit": 20
+  },
+  "agents": [
+    {
+      "id": "main",
+      "name": "메인 AI",
+      "enabled": true,
+      "model": "gpt-6-sol",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "researcher",
+      "name": "리서처",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "worker",
+      "name": "빌더",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "verifier",
+      "name": "체커",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "name": "백엔드 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "name": "프론트엔드 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "7773408d-48ae-4a70-9943-2eb7eb399315",
+      "name": "웹디자인 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "name": "서버 · 인프라 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "name": "DB 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "workspace-write"
+    },
+    {
+      "id": "09651d72-7570-4014-81a1-09c00bf830b0",
+      "name": "QA 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "name": "보안 리뷰 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "monitor",
+      "name": "AI 모니터링 에이전트",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "access": "read-only"
+    },
+    {
+      "id": "prompt_refiner",
+      "name": "프롬프트 정리 AI",
+      "enabled": true,
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "access": "read-only"
+    }
+  ],
+  "skills": [
+    {
+      "id": "focused-exploration",
+      "enabled": true,
+      "agentIds": [
+        "researcher",
+        "worker",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "7773408d-48ae-4a70-9943-2eb7eb399315",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf"
+      ]
+    },
+    {
+      "id": "evidence-based-verification",
+      "enabled": true,
+      "agentIds": [
+        "worker",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "7773408d-48ae-4a70-9943-2eb7eb399315",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier"
+      ]
+    },
+    {
+      "id": "api-contract-alignment",
+      "enabled": true,
+      "agentIds": [
+        "worker",
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+      ]
+    },
+    {
+      "id": "safe-database-change",
+      "enabled": true,
+      "agentIds": [
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "verifier"
+      ]
+    },
+    {
+      "id": "security-review-basics",
+      "enabled": true,
+      "agentIds": [
+        "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+        "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+        "dea251ab-6e19-4592-8a38-a29f321ca0cf"
+      ]
+    },
+    {
+      "id": "visible-ui-check",
+      "enabled": true,
+      "agentIds": [
+        "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+        "7773408d-48ae-4a70-9943-2eb7eb399315",
+        "verifier"
+      ]
+    },
+    {
+      "id": "safe-infrastructure-change",
+      "enabled": true,
+      "agentIds": [
+        "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+      ]
+    }
+  ],
+  "node": "v24.20.0",
+  "platform": "win32"
+}

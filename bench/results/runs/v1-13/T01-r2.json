@@ -1,0 +1,76 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T01",
+  "category": "backend-bug",
+  "attempt": 2,
+  "runId": "bb46cae4-175e-4f8d-a9ca-a1537e22c2c6",
+  "projectId": "2097f5f3-41c7-4ea8-a737-5e1076870166",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T01-r2-2026-11-13T04-03-28-297Z",
+  "startedAt": "2026-11-13T04:03:29.580Z",
+  "finishedAt": "2026-11-13T04:06:27.017Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 388052,
+      "inputTokens": 382382,
+      "cachedInputTokens": 315136,
+      "uncachedInputTokens": 67246,
+      "outputTokens": 5670
+    },
+    "accountPercent": 0,
+    "durationSec": 177.437,
+    "agentCount": 2,
+    "agents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 3,
+    "consultations": 0,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 127851
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 95824
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 164377
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`GET /api/todos`의 상태 필터를 수정했습니다. `?status=done`은 완료된 항목만, `?status=open`은 미완료 항목만 반환하며, 필터가 없으면 전체 항목을 반환합니다.\n\n회귀 테스트를 추가했고, 독립 검증에서 `npm test` **7개 통과, 0개 실패**를 확인했습니다."
+}

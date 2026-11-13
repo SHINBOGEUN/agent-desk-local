@@ -1,0 +1,78 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T02",
+  "category": "backend-validation",
+  "attempt": 2,
+  "runId": "c52f07ab-f97f-458e-81e1-ba315bc8a6d1",
+  "projectId": "49c358a0-07af-4d8b-8b91-b18763a1b3eb",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T02-r2-2026-11-13T04-06-28-181Z",
+  "startedAt": "2026-11-13T04:06:30.779Z",
+  "finishedAt": "2026-11-13T04:09:54.514Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 442746,
+      "inputTokens": 435120,
+      "cachedInputTokens": 353792,
+      "uncachedInputTokens": 81328,
+      "outputTokens": 7626
+    },
+    "accountPercent": 1,
+    "durationSec": 203.735,
+    "agentCount": 2,
+    "agents": [
+      "verifier",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec"
+    ],
+    "workTasks": 3,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "FAIL",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 167356
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 170000
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 105390
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`POST /api/todos`의 title 검증을 강화했습니다. 앞뒤 공백을 제거한 뒤 길이가 1~100자가 아니면 HTTP 400과 `{ error }` JSON을 반환하고, 유효하면 공백을 제거한 값으로 저장합니다.\n\n경계 조건 테스트를 추가했고, 독립 검증에서 `npm test` **8/8 통과**를 확인했습니다."
+}

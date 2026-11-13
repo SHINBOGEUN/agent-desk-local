@@ -1,0 +1,75 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T10",
+  "category": "backend-feature",
+  "attempt": 1,
+  "runId": "cafe3177-9cf9-42e8-958d-b34f9ac2d2cb",
+  "projectId": "9fa20282-694b-4c51-9166-1b6f1252292b",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T10-r1-2026-11-13T04-01-03-197Z",
+  "startedAt": "2026-11-13T04:01:04.269Z",
+  "finishedAt": "2026-11-13T04:03:25.893Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 324959,
+      "inputTokens": 320161,
+      "cachedInputTokens": 265600,
+      "uncachedInputTokens": 54561,
+      "outputTokens": 4798
+    },
+    "accountPercent": 1,
+    "durationSec": 141.624,
+    "agentCount": 2,
+    "agents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 2,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 109118
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 130848
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 84993
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`GET /api/todos`를 **createdAt 내림차순**, 값이 같으면 **id 오름차순**으로 정렬하도록 변경했습니다. 기존 상태 필터와 응답 형식은 유지했습니다.\n\n동률 사례를 포함한 정렬 테스트는 독립 검증에서 통과했습니다. 담당자의 전체 테스트는 7개 통과했지만, 독립 검증의 전체 테스트는 임시 디렉터리 생성이 `EPERM`으로 막혀 완료하지 못했습니다."
+}

@@ -1,0 +1,95 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H01",
+  "category": "hard-fullstack",
+  "attempt": 2,
+  "runId": "5c9483cf-46b2-4ace-a877-46fc2e20be99",
+  "projectId": "e740d594-78c1-47f5-8128-6a36cb3c8d92",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H01-r2-2026-11-13T06-50-44-591Z",
+  "startedAt": "2026-11-13T06:50:46.177Z",
+  "finishedAt": "2026-11-13T06:57:31.527Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1086985,
+      "inputTokens": 1071896,
+      "cachedInputTokens": 899200,
+      "uncachedInputTokens": 172696,
+      "outputTokens": 15089
+    },
+    "accountPercent": 2,
+    "durationSec": 405.35,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 4,
+    "consultations": 2,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 304319
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 165132
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 176973
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 2,
+        "tokens": 239165
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 201396
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "public/style.css",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 태그 기능을 추가했습니다. 데이터 파일은 schemaVersion 1에서 2로 마이그레이션하며 기존 항목에 `tags: []`를 채웁니다. POST·PATCH의 태그 정규화와 검증, 반복 `tag` 조건의 AND 필터, `GET /api/tags` 집계를 구현했습니다. 새 할 일 폼에는 쉼표 구분 입력칸을 추가했고, 태그는 HTML 이스케이프해 표시합니다.\n\n**검증:** 기존 테스트를 포함한 `npm test` 9개가 모두 통과했고, 문법 검사와 `git diff --check`도 통과했습니다. 다만 실제 브라우저에서 폼 제출과 화면 렌더링은 확인하지 못했습니다."
+}

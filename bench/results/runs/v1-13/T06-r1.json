@@ -1,0 +1,91 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T06",
+  "category": "security",
+  "attempt": 1,
+  "runId": "fe11cdb9-e7bf-406d-aa64-7577bc3005ff",
+  "projectId": "25b50e6a-3ab1-425d-9eb8-266bef460693",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T06-r1-2026-11-13T02-44-58-181Z",
+  "startedAt": "2026-11-13T02:44:59.291Z",
+  "finishedAt": "2026-11-13T02:51:33.514Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 927840,
+      "inputTokens": 912388,
+      "cachedInputTokens": 787200,
+      "uncachedInputTokens": 125188,
+      "outputTokens": 15452
+    },
+    "accountPercent": 1,
+    "durationSec": 394.223,
+    "agentCount": 4,
+    "agents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 2,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 323097
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 3,
+        "tokens": 240981
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 2,
+        "tokens": 146136
+      },
+      "dea251ab-6e19-4592-8a38-a29f321ca0cf": {
+        "calls": 1,
+        "tokens": 67943
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 149683
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/server.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 삭제 API에 관리자 토큰 검사를 추가했습니다. `createApp`의 `adminToken`이 설정되어 있고 `Authorization: Bearer <adminToken>`이 **정확히 일치할 때만** 삭제됩니다. 토큰이 설정되지 않았거나 헤더가 없거나 틀리면 삭제하지 않고 `401`과 `{ error }`를 반환합니다. 서버는 실행 시 `ADMIN_TOKEN` 환경 변수를 전달하도록 변경했습니다.\n\n독립 검증에서 `npm test` **9개 모두 통과**했습니다. 서버 실행이나 실제 HTTP 요청 확인은 수행하지 않았습니다."
+}

@@ -1,0 +1,85 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T04",
+  "category": "database",
+  "attempt": 1,
+  "runId": "bd03ec7c-1f0f-4eef-82b6-60757ed72379",
+  "projectId": "1d01d3e0-4454-45ec-8d44-0ebb86a1dac3",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T04-r1-2026-11-13T02-33-31-735Z",
+  "startedAt": "2026-11-13T02:33:32.964Z",
+  "finishedAt": "2026-11-13T02:38:38.847Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 670990,
+      "inputTokens": 659330,
+      "cachedInputTokens": 546432,
+      "uncachedInputTokens": 112898,
+      "outputTokens": 11660
+    },
+    "accountPercent": 1,
+    "durationSec": 305.883,
+    "agentCount": 3,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 4,
+    "consultations": 0,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 239395
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 154991
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 106593
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 170011
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일에 `priority`를 추가했습니다. 값은 `low`, `normal`, `high`이며, 생략하면 `normal`입니다. 기존 schemaVersion 1 데이터는 모든 항목에 `normal`을 채워 버전 2로 마이그레이션합니다. `POST /api/todos`는 priority를 받고, 허용되지 않은 값은 HTTP 400과 `{ error }`로 응답합니다.\n\n독립 검증에서 프로젝트 내부 임시 경로를 사용해 `npm test` **10개 모두 통과**했습니다."
+}

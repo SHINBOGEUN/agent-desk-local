@@ -1,0 +1,75 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T10",
+  "category": "backend-feature",
+  "attempt": 2,
+  "runId": "12800ca8-97b4-4106-854d-5138bf7f741e",
+  "projectId": "33072352-a6ba-4191-b6a2-e249f2c6d510",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T10-r2-2026-11-13T05-23-08-453Z",
+  "startedAt": "2026-11-13T05:23:09.546Z",
+  "finishedAt": "2026-11-13T05:25:42.708Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 364236,
+      "inputTokens": 358588,
+      "cachedInputTokens": 282624,
+      "uncachedInputTokens": 75964,
+      "outputTokens": 5648
+    },
+    "accountPercent": 0,
+    "durationSec": 153.162,
+    "agentCount": 2,
+    "agents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 2,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 109528
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 165610
+      },
+      "verifier": {
+        "calls": 1,
+        "tokens": 89098
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`GET /api/todos`를 **createdAt 내림차순**, 값이 같으면 **id 오름차순**으로 정렬하도록 수정했습니다. 독립 검증에서 정렬 회귀 테스트는 통과했습니다.\n\n전체 테스트는 독립 검증 시 임시 디렉터리 생성에서 `EPERM`이 발생해 완료되지 않았습니다."
+}

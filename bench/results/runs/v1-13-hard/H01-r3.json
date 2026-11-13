@@ -1,0 +1,99 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H01",
+  "category": "hard-fullstack",
+  "attempt": 3,
+  "runId": "5aecedd3-a344-4a4f-93ba-83c3be5bf392",
+  "projectId": "a3f310d1-9b31-4c74-856a-085743faf935",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H01-r3-2026-11-13T07-33-08-433Z",
+  "startedAt": "2026-11-13T07:33:09.528Z",
+  "finishedAt": "2026-11-13T07:42:34.362Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1277889,
+      "inputTokens": 1255892,
+      "cachedInputTokens": 1087488,
+      "uncachedInputTokens": 168404,
+      "outputTokens": 21997
+    },
+    "accountPercent": 10,
+    "durationSec": 564.834,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 1,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "NOT_VERIFIED",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 408428
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 155719
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 2,
+        "tokens": 180310
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 258276
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 275156
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "package.json",
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/db.test.mjs",
+      "test/render.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 태그 기능을 구현했습니다. 기존 데이터 파일의 v1→v2 마이그레이션과 `tags: []` 기본값, POST/PATCH 태그 검증·정규화, 태그별 조회·집계 API, 입력 폼과 안전한 태그 렌더링을 반영했습니다.\n\n**검증은 일부만 완료됐습니다.** 변경 담당자는 테스트 14개 통과를 보고했지만, 독립 검증에서는 렌더링 테스트 3개만 통과했습니다. 나머지 11개는 테스트용 임시 폴더 생성이 `EPERM`으로 막혀 동작을 확인하지 못했습니다. `git diff --check`는 통과했고, 실제 브라우저 화면은 확인하지 못했습니다."
+}

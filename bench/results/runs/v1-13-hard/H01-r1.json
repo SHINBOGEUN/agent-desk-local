@@ -1,0 +1,96 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H01",
+  "category": "hard-fullstack",
+  "attempt": 1,
+  "runId": "36b9806c-b905-4374-a20e-619521f0d8d9",
+  "projectId": "845677e5-bcbd-4bae-b7bc-d2ff7efb0885",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H01-r1-2026-11-13T06-04-53-900Z",
+  "startedAt": "2026-11-13T06:04:55.259Z",
+  "finishedAt": "2026-11-13T06:13:50.187Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 1230729,
+      "inputTokens": 1210313,
+      "cachedInputTokens": 1048832,
+      "uncachedInputTokens": 161481,
+      "outputTokens": 20416
+    },
+    "accountPercent": 1,
+    "durationSec": 534.928,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 5,
+    "consultations": 1,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 399507
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 157211
+      },
+      "ee692952-3f83-4fd0-8b9a-b657734f99c0": {
+        "calls": 1,
+        "tokens": 256755
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 143638
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 273618
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "public/style.css",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 태그 기능을 추가했습니다. 기존 schemaVersion 1 데이터는 각 항목에 `tags: []`를 채워 버전 2로 마이그레이션하며, 신규 항목에도 기본값을 적용합니다. API에는 태그 정규화·검증, PATCH 전체 교체와 검증 실패 시 무변경 처리, 반복 `tag` 필터, `/api/tags` 집계를 구현했습니다. 화면에는 쉼표 구분 입력칸과 HTML 이스케이프된 태그 표시를 추가했습니다.\n\n독립 검증에서 **`npm test` 9개 모두 통과**했습니다. 실제 브라우저 화면 동작은 별도로 확인하지 못했습니다."
+}

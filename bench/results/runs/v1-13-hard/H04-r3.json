@@ -1,0 +1,90 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H04",
+  "category": "hard-reliability",
+  "attempt": 3,
+  "runId": "30f82bef-c2f6-4921-ba80-7d844a6b83dc",
+  "projectId": "de6df86b-c49f-4aae-9545-fb3ee7899d50",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H04-r3-2026-11-13T08-00-49-062Z",
+  "startedAt": "2026-11-13T08:00:50.220Z",
+  "finishedAt": "2026-11-13T08:07:02.183Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 787600,
+      "inputTokens": 773198,
+      "cachedInputTokens": 648960,
+      "uncachedInputTokens": 124238,
+      "outputTokens": 14402
+    },
+    "accountPercent": 1,
+    "durationSec": 371.963,
+    "agentCount": 3,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "workTasks": 4,
+    "consultations": 1,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "PASS"
+    ],
+    "requiredAgents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 263552
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 155823
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 148276
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 9069
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 210880
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 데이터 파일 저장·복구와 요청 크기 제한을 적용했습니다.\n\n- 저장은 같은 폴더의 `<파일>.tmp`에 먼저 쓴 뒤 rename으로 교체하고, 임시 파일을 정리합니다.\n- 손상된 JSON이나 잘못된 데이터 구조는 `.corrupt-<숫자>`로 보존한 뒤 빈 데이터로 시작합니다. 복구 경로는 `recoveredFrom`에 담고, 정상 파일은 `null`로 둡니다.\n- 지원 버전보다 새로운 데이터는 원본을 변경하지 않고 `newer` 오류로 시작을 거부합니다. `nextId`도 기존 ID와 겹치지 않도록 보정합니다.\n- 요청 본문이 100KB를 초과하면 저장하지 않고 413과 `{ error }`를 반환합니다.\n\n독립 검증에서 **`npm test` 7개가 모두 통과**했고, 100KB 경계와 주요 복구 사례를 확인했습니다. 실제 사용자 데이터 파일은 건드리지 않았습니다."
+}

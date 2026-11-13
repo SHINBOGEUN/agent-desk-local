@@ -1,0 +1,80 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T08",
+  "category": "server-config",
+  "attempt": 2,
+  "runId": "4c5ca5ac-b76b-4afc-9d6f-bc4262646c9f",
+  "projectId": "97874e6f-9f15-4ed2-9498-28ca1d083662",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T08-r2-2026-11-13T05-17-13-464Z",
+  "startedAt": "2026-11-13T05:17:14.711Z",
+  "finishedAt": "2026-11-13T05:22:12.918Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 613527,
+      "inputTokens": 602165,
+      "cachedInputTokens": 486912,
+      "uncachedInputTokens": 115253,
+      "outputTokens": 11362
+    },
+    "accountPercent": 1,
+    "durationSec": 298.207,
+    "agentCount": 2,
+    "agents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "workTasks": 4,
+    "consultations": 1,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 221652
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 2,
+        "tokens": 232920
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 158955
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "package.json",
+      "src/config.mjs",
+      "test/config.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`loadConfig`의 PORT 검증을 수정했습니다. PORT가 없으면 **3100**을 사용하고, 설정된 값은 **1024~65535 범위의 십진 정수**만 허용합니다. 그 외 값은 에러를 던집니다.\n\n독립 검증에서 설정 단위 테스트는 **3/3 통과**했습니다. 다만 전체 `npm test`는 임시 디렉터리 생성 중 `EPERM`으로 **9개 중 4개가 실패**해, 전체 테스트 통과는 확인하지 못했습니다."
+}

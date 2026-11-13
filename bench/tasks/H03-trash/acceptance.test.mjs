@@ -61,34 +61,35 @@ test('emptying the trash purges permanently and ids are never reused', async t =
   assert.deepEqual((await app.call('GET', '/api/todos')).body.map(todo => todo.id), [1, 4]);
 });
 
-test('trash persists across restarts and is purged after more than 30 days', async () => {
+test('trash persists across restarts and is purged after more than 30 days', async t => {
   const { openDb } = await load('src/db.mjs');
   const file = tempFile();
-  const first = openDb(file, at(T0));
-  first.insert({ title: 'old' });
-  first.insert({ title: 'recent' });
-  first.insert({ title: 'live' });
-  assert.equal(first.trash(1), true);
-  const later = openDb(file, at(T0 + 20 * DAY));
-  assert.equal(later.trash(2), true);
-  assert.deepEqual(later.list().map(todo => todo.title), ['live']);
-  const day29 = openDb(file, at(T0 + 29 * DAY));
-  assert.deepEqual(day29.listTrash().map(todo => todo.title).sort(), ['old', 'recent'], 'kept at 29 days');
-  const day31 = openDb(file, at(T0 + 31 * DAY));
-  assert.deepEqual(day31.listTrash().map(todo => todo.title), ['recent'], 'old purged after 30 days, recent kept');
-  assert.deepEqual(day31.list().map(todo => todo.title), ['live']);
-  assert.equal(day31.insert({ title: 'next' }).id, 4, 'purged ids are not reused');
+  const first = await appWith(t, { db: openDb(file, at(T0)) });
+  for (const title of ['old', 'recent', 'live']) await add(first, title);
+  assert.equal((await first.call('DELETE', '/api/todos/1')).status, 204);
+  const later = await appWith(t, { db: openDb(file, at(T0 + 20 * DAY)) });
+  assert.equal((await later.call('DELETE', '/api/todos/2')).status, 204);
+  assert.deepEqual((await later.call('GET', '/api/todos')).body.map(todo => todo.title), ['live']);
+  const day29 = await appWith(t, { db: openDb(file, at(T0 + 29 * DAY)) });
+  assert.deepEqual((await day29.call('GET', '/api/trash')).body.map(todo => todo.title).sort(), ['old', 'recent'], 'kept at 29 days');
+  const day31 = await appWith(t, { db: openDb(file, at(T0 + 31 * DAY)) });
+  assert.deepEqual((await day31.call('GET', '/api/trash')).body.map(todo => todo.title), ['recent'], 'old purged after 30 days, recent kept');
+  assert.deepEqual((await day31.call('GET', '/api/todos')).body.map(todo => todo.title), ['live']);
+  assert.equal((await add(day31, 'next')).body.id, 4, 'purged ids are not reused');
   const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.ok(onDisk.todos.every(todo => !todo.title.includes('old')), 'purged todo is gone from the file');
+  assert.ok(onDisk.todos.every(todo => todo.title !== 'old'), 'purged todo is gone from the file');
 });
 
-test('migrates schemaVersion 1 data', async () => {
+test('migrates schemaVersion 1 data and keeps the trash across restarts', async t => {
   const { openDb } = await load('src/db.mjs');
   const file = tempFile();
   fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, nextId: 3, todos: [{ id: 1, title: 'a', done: false, createdAt: 'x' }, { id: 2, title: 'b', done: false, createdAt: 'y' }] }));
-  const db = openDb(file);
-  assert.deepEqual(db.list().map(todo => todo.deletedAt), [null, null]);
+  const app = await appWith(t, { db: openDb(file) });
+  const listed = (await app.call('GET', '/api/todos')).body;
+  assert.deepEqual(listed.map(todo => todo.deletedAt), [null, null]);
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 2);
-  assert.equal(db.trash(1), true);
-  assert.deepEqual(openDb(file).list().map(todo => todo.id), [2]);
+  assert.equal((await app.call('DELETE', '/api/todos/1')).status, 204);
+  const reopened = await appWith(t, { db: openDb(file) });
+  assert.deepEqual((await reopened.call('GET', '/api/todos')).body.map(todo => todo.id), [2]);
+  assert.deepEqual((await reopened.call('GET', '/api/trash')).body.map(todo => todo.id), [1]);
 });

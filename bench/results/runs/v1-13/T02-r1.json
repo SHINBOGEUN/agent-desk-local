@@ -1,0 +1,78 @@
+{
+  "label": "v1-13",
+  "adapter": "v1",
+  "taskId": "T02",
+  "category": "backend-validation",
+  "attempt": 1,
+  "runId": "6a635a68-4769-4a18-b3e1-bf721a19e370",
+  "projectId": "fcb1d866-47ed-44e1-a231-c212ab661c23",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T02-r1-2026-11-13T02-26-30-936Z",
+  "startedAt": "2026-11-13T02:26:32.302Z",
+  "finishedAt": "2026-11-13T02:30:46.817Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 582852,
+      "inputTokens": 573225,
+      "cachedInputTokens": 461440,
+      "uncachedInputTokens": 111785,
+      "outputTokens": 9627
+    },
+    "accountPercent": 0,
+    "durationSec": 254.515,
+    "agentCount": 2,
+    "agents": [
+      "verifier",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec"
+    ],
+    "workTasks": 3,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 215547
+      },
+      "verifier": {
+        "calls": 2,
+        "tokens": 262464
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 1,
+        "tokens": 104841
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "`POST /api/todos`를 수정해 `title`의 앞뒤 공백을 제거한 뒤 1~100자인지 검사합니다. 범위를 벗어나면 HTTP 400과 `{ error }` JSON을 반환하고, 유효하면 공백을 제거한 값으로 저장합니다.\n\n독립 검증에서 1자·100자 저장과 공백만 있는 제목·101자 제목의 거부를 직접 확인했습니다. 다만 검증 환경에서 임시 디렉터리 생성이 `EPERM`으로 거부돼 전체 `npm test` 통과는 확인하지 못했습니다."
+}

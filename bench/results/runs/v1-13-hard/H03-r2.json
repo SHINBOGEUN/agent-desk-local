@@ -1,0 +1,107 @@
+{
+  "label": "v1-13-hard",
+  "adapter": "v1",
+  "taskId": "H03",
+  "category": "hard-backend",
+  "attempt": 2,
+  "runId": "c289f6fa-cc53-4396-b0b1-cfd04e3c2ca2",
+  "projectId": "a0f9d7f0-4eff-426f-828e-4e4852ca4529",
+  "workspace": "C:\\Users\\user\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13-hard\\H03-r2-2026-11-13T07-06-05-265Z",
+  "startedAt": "2026-11-13T07:06:06.388Z",
+  "finishedAt": "2026-11-13T07:13:47.105Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": null,
+    "qualityGate": "needs_review",
+    "usage": {
+      "totalTokens": 1040475,
+      "inputTokens": 1021903,
+      "cachedInputTokens": 850944,
+      "uncachedInputTokens": 170959,
+      "outputTokens": 18572
+    },
+    "accountPercent": 1,
+    "durationSec": 460.717,
+    "agentCount": 4,
+    "agents": [
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "verifier"
+    ],
+    "workTasks": 6,
+    "consultations": 1,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "NOT_VERIFIED",
+      "NOT_VERIFIED",
+      "NOT_VERIFIED"
+    ],
+    "requiredAgents": [
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec",
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2",
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec",
+      "verifier"
+    ],
+    "perAgent": {
+      "main": {
+        "calls": 1,
+        "tokens": 361373
+      },
+      "3f586c6e-85e1-42f3-a36f-a1712b5d07b2": {
+        "calls": 1,
+        "tokens": 171228
+      },
+      "a23c56ab-f418-49f0-96d5-e0d4a2e45bec": {
+        "calls": 2,
+        "tokens": 126863
+      },
+      "7f4ab287-fd79-4fc4-9c39-c6d3e1c13bec": {
+        "calls": 1,
+        "tokens": 96531
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 284480
+      }
+    }
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/db.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0,
+      "timedOut": false,
+      "output": "✔ creates, updates, lists and deletes todos (102.0758ms)\n✔ rejects a missing title (16.0451ms)\n✔ persists todos to the data file (5.1655ms)\n✔ trash API soft deletes, lists in DB order, restores and purges (158.3189ms)\n✔ serves the page (11.7131ms)\n✔ migrates v1 todos and persists deletedAt across reopening (8.8375ms)\n✔ soft deletes, hides trash from list and restores it (11.9703ms)\n✔ on open purges only trash older than 30 days and never reuses IDs (15.2015ms)\n✔ renders todos and escapes titles (1.1432ms)\n✔ renders an empty state (0.1682ms)\nℹ tests 10\nℹ suites 0\nℹ pass 10\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 426.5727\n"
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0,
+      "timedOut": false,
+      "output": "✔ delete moves a todo to the trash; restore brings it back unchanged (238.5956ms)\n✔ trash is ordered by deletedAt descending, then id descending (104.324ms)\n✔ emptying the trash purges permanently and ids are never reused (120.3826ms)\n✔ trash persists across restarts and is purged after more than 30 days (64.3782ms)\n✔ migrates schemaVersion 1 data and keeps the trash across restarts (21.2409ms)\nℹ tests 5\nℹ suites 0\nℹ pass 5\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 688.3288\n"
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "할 일 삭제를 휴지통 방식으로 변경했습니다. 삭제 시 `deletedAt`을 저장하고 204를 반환하며, 휴지통 목록·복구·전체 비우기 API를 추가했습니다. 활성 목록과 PATCH에서는 휴지통 항목을 제외합니다. 기존 데이터는 스키마 v2로 마이그레이션하고, DB를 열 때 주입된 `now()` 기준 30일을 **넘긴** 항목만 영구 삭제하도록 했습니다. 영구 삭제 후에도 ID는 재사용하지 않습니다.\n\n구현 담당자의 테스트는 통과했지만, **독립 검증은 완료되지 않았습니다.** 체커의 테스트는 기본 임시 경로와 프로젝트 내부 임시 경로 모두에서 디렉터리 생성 `EPERM`으로 중단됐습니다. 따라서 기존 테스트까지 최종 통과했다고 확정할 수는 없습니다.",
+  "regrade": {
+    "at": "2026-11-13T10:00:30.887Z",
+    "reason": "hidden test called db methods the prompt never specified",
+    "previous": {
+      "success": false,
+      "visible": true,
+      "acceptance": false
+    }
+  }
+}
