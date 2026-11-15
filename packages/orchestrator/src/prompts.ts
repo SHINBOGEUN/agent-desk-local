@@ -1,7 +1,7 @@
 // Instructions given to each role. Short on purpose: every token here is paid
 // again on every turn, and the harness (not the prompt) enforces the rules.
 
-import type { PlanReport, Requirement, RoleId, StepKind } from '#core';
+import type { PlanReport, Requirement, RoleId, SkillRef, StepKind } from '#core';
 
 const COMMON = [
   'You work inside an automated harness. The harness decides what happens next; you only do the step you are given.',
@@ -53,9 +53,16 @@ const VERIFIER = [
   '- PASS has an empty "blocking" list.',
 ].join('\n');
 
-export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string): string {
+/** Skill list for a session's instructions: id, description and SKILL.md path only (the body is read on demand). */
+export function skillsText(skills: SkillRef[]): string {
+  if (!skills.length) return '';
+  const list = skills.map(skill => `- ${skill.id}: ${skill.description.replace(/\s+/g, ' ').trim()} (${skill.path})`).join('\n');
+  return `Skills for this project. Each line is: id: when to use it (SKILL.md path, relative to the project folder). When the task matches a skill's description, read its SKILL.md before you start that part of the work and follow it; read files it mentions (relative to the SKILL.md folder) only when it points you to them. Do not read skills that do not match.\n${list}`;
+}
+
+export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = []): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
-  return [COMMON, body, memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
+  return [COMMON, body, skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
 export function classifyPrompt(request: string, previousBrief?: string): string {

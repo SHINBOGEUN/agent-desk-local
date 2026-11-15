@@ -1,8 +1,9 @@
-import type { Access, Effort, RoleId } from '#core';
+import type { Access, Effort, RoleId, SkillRef } from '#core';
 import { loadProjectConfig, ROLE_NAMES } from './config.ts';
 import type { ProjectConfig } from './config.ts';
 import { loadRoles } from './roles.ts';
 import type { RoleDefinition } from './roles.ts';
+import { checkSkills } from './skills.ts';
 
 export * from './config.ts';
 export * from './roles.ts';
@@ -40,6 +41,36 @@ export function roleSettings(loaded: LoadedProject): { access: Partial<Record<Ro
     if (definition.body) roleNotes[role] = definition.body;
   }
   return { access, effort, models, roleNotes };
+}
+/**
+ * Skills each role's sessions may use, for RunConfig.skills. Skill files stay
+ * where they are (.agent-desk/skills/<id>/SKILL.md); nothing is copied into
+ * runtime folders. A role gets the skills its role file lists, limited to
+ * config.skills when that list exists. Skills that fail `skills check` with an
+ * error, or do not exist, are left out and reported through onSkip.
+ */
+export function skillsByRole(project: string, loaded: LoadedProject, onSkip?: (id: string, reason: string) => void): Partial<Record<RoleId, SkillRef[]>> {
+  const wanted = new Set(ROLE_NAMES.flatMap(role => loaded.roles[role].skills));
+  if (!wanted.size) return {};
+  const report = checkSkills(project, loaded.config, loaded.roles);
+  const broken = new Map<string, string>();
+  for (const finding of report.findings) if (finding.level === 'error' && finding.skill !== 'project' && !broken.has(finding.skill)) broken.set(finding.skill, finding.message);
+  const usable = new Map(report.skills.filter(skill => !broken.has(skill.id)).map(skill => [skill.id, skill]));
+  const enabled = loaded.config.skills ? new Set(loaded.config.skills) : null;
+  const skipped = new Set<string>();
+  const skip = (id: string, reason: string) => { if (!skipped.has(id)) { skipped.add(id); onSkip?.(id, reason); } };
+  const out: Partial<Record<RoleId, SkillRef[]>> = {};
+  for (const role of ROLE_NAMES) {
+    const refs: SkillRef[] = [];
+    for (const id of loaded.roles[role].skills) {
+      if (enabled && !enabled.has(id)) { skip(id, 'not listed in config.skills'); continue; }
+      const skill = usable.get(id);
+      if (!skill) { skip(id, broken.get(id) ?? `.agent-desk/skills/${id}/SKILL.md does not exist`); continue; }
+      if (!refs.some(ref => ref.id === id)) refs.push({ id: skill.id, description: skill.description, path: skill.path });
+    }
+    if (refs.length) out[role] = refs;
+  }
+  return out;
 }
 export * from './init.ts';
 export * from './skills.ts';

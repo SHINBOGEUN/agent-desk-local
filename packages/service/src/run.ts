@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { RoleId, Runtime, UserQuestion } from '#core';
 import { planText, runRequest } from '#orchestrator';
 import type { ReviewPolicy, RunConfig, RunEvent, RunResult } from '#orchestrator';
-import { assignRuntimes, loadMemory, loadProject, newSuggestions, roleSettings } from '#project';
+import { assignRuntimes, loadMemory, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
 import type { RuntimeKind } from '#project';
 import { RunStore } from '#store';
 import { locate } from './discover.ts';
@@ -63,6 +63,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
   const config = loaded.config;
   for (const warning of loaded.warnings) options.onNote?.(`note: ${warning}`);
   const settings = roleSettings(loaded);
+  const skills = skillsByRole(project, loaded, (id, reason) => options.onNote?.(`note: skill "${id}" is not used: ${reason}`));
   const dir = dataDirectory(options.env, options.platform);
   const assignment = assignRuntimes(config, options.runtime);
   const instances = new Map<RuntimeKind, Runtime>();
@@ -101,6 +102,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       effort: settings.effort,
       models: settings.models,
       roleNotes: settings.roleNotes,
+      skills,
       verify,
       restorePointDir: path.join(dir, 'restore', String(runId)),
       onEvent: event => { record(event); options.onEvent?.(event); },

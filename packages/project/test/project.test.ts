@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assignRuntimes, loadProject, parseFrontmatter, roleSettings, roleTemplate, validateConfig } from '#project';
+import { assignRuntimes, loadProject, parseFrontmatter, roleSettings, roleTemplate, skillsByRole, validateConfig } from '#project';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proj-'));
 const put = (project: string, rel: string, content: string) => { const file = path.join(project, rel); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); };
@@ -188,4 +188,32 @@ test('memory: add, dedupe, size cap, secrets refused, suggestions filtered', () 
   assert.equal(last.ok, false);
   assert.match((last as { error: string }).error, new RegExp(`exceed ${MEMORY_MAX_CHARS}`));
   assert.ok(loadMemory(project).length <= MEMORY_MAX_CHARS);
+});
+
+test('skillsByRole: roles get the skills their files list, limited to config.skills; broken or missing skills are skipped with a reason', () => {
+  const project = tmp();
+  assert.deepEqual(skillsByRole(project, loadProject(project)), {});
+  put(project, '.agent-desk/skills/api-conventions/SKILL.md', GOOD);
+  put(project, '.agent-desk/skills/api-conventions/references/rules.md', '# rules');
+  put(project, '.agent-desk/skills/db-migration/SKILL.md', GOOD.replace('name: api-conventions', 'name: db-migration').replace('HTTP endpoint', 'database migration'));
+  put(project, '.agent-desk/skills/db-migration/references/rules.md', '# rules');
+  put(project, '.agent-desk/skills/broken/SKILL.md', '---\nname: broken\n---\nbody\n');
+  put(project, '.agent-desk/agents/builder.md', '---\nskills: [api-conventions, db-migration, broken, ghost]\n---\n');
+  put(project, '.agent-desk/agents/verifier.md', '---\nskills: [api-conventions]\n---\n');
+  put(project, '.agent-desk/config.json', JSON.stringify({ skills: ['api-conventions', 'broken', 'ghost'] }));
+  const skipped: string[] = [];
+  const skills = skillsByRole(project, loadProject(project), (id, reason) => skipped.push(`${id}: ${reason}`));
+  assert.deepEqual(Object.keys(skills).sort(), ['builder', 'verifier']);
+  assert.deepEqual(skills.builder, [{ id: 'api-conventions', description: skills.builder?.[0]?.description, path: '.agent-desk/skills/api-conventions/SKILL.md' }]);
+  assert.match(skills.builder?.[0]?.description ?? '', /^Use when the user asks/);
+  assert.deepEqual(skills.verifier?.map(skill => skill.id), ['api-conventions']);
+  assert.equal(skipped.length, 3);
+  assert.match(skipped.find(line => line.startsWith('db-migration')) ?? '', /config\.skills/);
+  assert.match(skipped.find(line => line.startsWith('broken')) ?? '', /description/);
+  assert.match(skipped.find(line => line.startsWith('ghost')) ?? '', /does not exist/);
+  // No config.skills: every existing skill a role lists is used; nothing is copied into runtime folders.
+  fs.rmSync(path.join(project, '.agent-desk', 'config.json'));
+  assert.deepEqual(skillsByRole(project, loadProject(project)).builder?.map(skill => skill.id), ['api-conventions', 'db-migration']);
+  assert.equal(fs.existsSync(path.join(project, '.agents')), false);
+  assert.equal(fs.existsSync(path.join(project, '.claude')), false);
 });

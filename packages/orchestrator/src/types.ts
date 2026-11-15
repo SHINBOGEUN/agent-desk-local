@@ -5,7 +5,7 @@
 import type { FailureType } from './failure.ts';
 import type { Budget, GateResult } from './gates.ts';
 import type { ReviewPolicy } from './review.ts';
-import type { Access, AnswerReport, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
+import type { Access, AnswerReport, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, SkillRef, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
 
 export interface RunConfig {
   /** Project folder the run works in. */
@@ -47,6 +47,8 @@ export interface RunConfig {
   effort?: Partial<Record<RoleId, Effort>>;
   /** Extra text appended to a role's instructions (project rules). */
   roleNotes?: Partial<Record<RoleId, string>>;
+  /** Skills per role (from role files). Each session gets them as SessionOptions.skills and as a list in its instructions; SKILL.md is read only when needed. */
+  skills?: Partial<Record<RoleId, SkillRef[]>>;
 }
 
 export type RunEventBody =

@@ -105,3 +105,17 @@ test('a role file can restrict the builder to read-only but nothing can widen th
   assert.equal(runtime.turns.find(turn => turn.role === 'builder')?.options.access, 'read-only');
   assert.equal(runtime.turns.find(turn => turn.role === 'lead')?.options.access, 'read-only');
 });
+
+test('skills: each role session gets its own skills, listed by id, description and SKILL.md path in the instructions', async () => {
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classifyPlanBuild }]), script([{ report: plan }])], builder: [script([{ writeFile: { path: 'ok.txt', content: 'x' } }, { report: builderReport }])] } });
+  const skill = { id: 'api-conventions', description: 'Use when adding an endpoint.\nNot for UI work.', path: '.agent-desk/skills/api-conventions/SKILL.md' };
+  const result = await go(runtime, tmp(), { verify: [VERIFY], skills: { builder: [skill] } });
+  assert.equal(result.status, 'completed', result.reason);
+  const buildTurn = runtime.turns.find(turn => turn.role === 'builder');
+  assert.deepEqual(buildTurn?.options.skills, [skill]);
+  assert.match(buildTurn?.options.instructions ?? '', /- api-conventions: Use when adding an endpoint\. Not for UI work\. \(\.agent-desk\/skills\/api-conventions\/SKILL\.md\)/);
+  assert.match(buildTurn?.options.instructions ?? '', /read its SKILL\.md/);
+  const leadTurn = runtime.turns.find(turn => turn.role === 'lead');
+  assert.deepEqual(leadTurn?.options.skills, []);
+  assert.doesNotMatch(leadTurn?.options.instructions ?? '', /SKILL\.md/);
+});

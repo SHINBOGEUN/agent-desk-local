@@ -211,7 +211,7 @@ type RuntimeEvent =
 | 승인 | `item/*/requestApproval` → 승인 브로커 | `--permission-prompt-tool`(MCP) → 같은 브로커 |
 | 토큰 | `thread/tokenUsage/updated`의 `last` | 턴 결과 메시지의 usage |
 | 중단 | `turn/interrupt` | 프로세스 인터럽트 |
-| 스킬 | `.agents/skills` | `.claude/skills` |
+| 스킬 | 지침에 목록(id·설명·SKILL.md 경로), 복사 없음 (ADR 0008) | 같음 |
 
 **하네스 도구를 MCP 하나로 통일**: v1은 Codex의 실험적 동적 도구(`dynamicTools`)에 의존했습니다. v2는 `tools-mcp` 로컬 MCP 서버 하나를 두 런타임이 같이 쓰게 해서, 도구 구현을 한 번만 합니다. 도구는 `submit_report`(구조화 보고 제출), `request_user_input`(사용자에게 질문), `approve`(Claude 권한 프롬프트용) 세 개만 둡니다. 위임 도구는 없습니다.
 
@@ -342,7 +342,7 @@ type VerifierReport = {
 **스킬**
 
 - 점진적 공개 3층: (1) `description`만 항상 맥락에 둡니다. (2) 트리거되면 SKILL.md 본문을 읽습니다. (3) 참조 문서·스크립트는 본문이 가리킬 때만 읽습니다. 설명 목록이 길어지면 매 턴의 비용이 되므로 `description`은 짧고 구체적으로 씁니다.
-- 형식은 SKILL.md 하나로 통일하고, 원본은 `.agent-desk/skills/<id>/SKILL.md`에 둡니다. 실행 시 런타임별 위치(`.agents/skills`, `.claude/skills`)에 배치합니다.
+- 형식은 SKILL.md 하나로 통일하고, 원본은 `.agent-desk/skills/<id>/SKILL.md`에 둡니다. 런타임별 위치로 복사하지 않고, 역할 파일의 `skills`(그리고 `config.skills`)로 정한 목록을 세션 지침에 "id: 설명 (SKILL.md 경로)"로 넣습니다. 모델은 설명이 맞을 때 SKILL.md를 직접 읽습니다(ADR 0008).
 - 프론트매터 필수 항목(책의 PUSHY 공식): `description`에 수행 동사, 트리거 조건, 제외 조건을 모두 적습니다. 셀프 점검에서 세 가지가 없으면 경고합니다. 모델은 자체 기능으로 충분히 처리할 수 있다고 판단하면 스킬을 호출하지 않는 경향이 있으므로, 설명에는 이 스킬이 왜 필요한지(없으면 무엇이 틀리는지)가 드러나야 합니다.
 - 스킬 검증: (a) 구조 검증(파일 위치, 프론트매터, 참조 파일 일관성)은 `agent-desk skills check`가 자동으로 합니다. (b) 트리거 검증은 should-trigger 8~10개와 should-not-trigger 8~10개 요청을 두고 호출 여부를 확인합니다. (c) 스킬을 붙인 실행과 뺀 실행을 같은 과제로 비교해 효과를 확인합니다. (d) 정상 시나리오 1개와 오류 시나리오 1개로 드라이런합니다. (b)~(d)는 벤치마크 과제로 두고 6단계에서 수행합니다.
 - 본문은 규칙보다 이유를 씁니다(Why-first). 예시: "마이그레이션은 되돌리기 SQL을 같이 만든다. 운영 DB에서 실패하면 수동 복구가 필요하기 때문이다."

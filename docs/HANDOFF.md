@@ -192,3 +192,8 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: 실제 Codex의 `account/rateLimits/read` 응답 형태 확인(v1에서 쓰던 형태 그대로 가정, 스모크 스크립트에는 아직 없음), 조회 주기 15초 기본값 조정, 대시보드 표시(5단계).
 - 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정(모여Go 운영에 필요한지), 사용자 PC에서 4-5.
 
+### 2026-11-15 · Claude (19차)
+- 한 일: 4-8 후속, 스킬 런타임 배치. `packages/project/src/index.ts`에 `skillsByRole(project, loaded, onSkip?)`(역할 파일의 `skills`, `config.skills`가 있으면 그 안에서만, 없거나 `skills check` 오류인 스킬은 제외하고 이유 안내), `RunConfig.skills`(역할별 `SkillRef[]`), `openSession`이 `SessionOptions.skills`에 넣고 `instructionsFor(..., skills)`가 "id: 설명 (SKILL.md 경로)" 목록과 사용 규칙을 붙임(`skillsText`). `executeRun`이 연결. **스킬 파일은 복사하지 않음**: 설계서의 "런타임별 위치에 배치"를 ADR 0008로 바꾸고 `docs/design-v2.md` 사본 수정.
+- 확인한 것: 전체 149개 테스트 통과, `tsc` 통과(이 작업 환경에는 저장소 `node_modules`가 없어 외부 `@types/node`를 가리키는 임시 tsconfig로 실행 — 사용자 PC에서 `npm run typecheck` 한 번 확인 권장).
+- 아직 없는 것: 실제 모델이 목록을 보고 SKILL.md를 읽는지(6단계 트리거 검증·스킬 유무 비교), Run 설정 스냅샷에 스킬 목록 기록, 대시보드 표시. 작업 시작 시 `legacy/agents/main.md`·`verifier.md`에 커밋되지 않은 수정이 있었음(이번 작업과 무관, 손대지 않고 커밋에서 제외) — 사용자가 의도한 것인지 확인 필요.
+- 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정, 사용자 PC에서 4-5.

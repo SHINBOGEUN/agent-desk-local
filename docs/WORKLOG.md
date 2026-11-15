@@ -2,6 +2,12 @@
 
 v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계와 체크리스트는 [개발 로드맵](https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6#bc614b39-fee4)을 보세요.
 
+## 2026-11-15 · 4단계 진행(스킬 런타임 배치)
+
+| 항목 | 내용 |
+|---|---|
+| 스킬 전달 | `project.skillsByRole()`: 역할 파일의 `skills`(+ `config.skills` 필터)로 역할별 `SkillRef` 목록, 없는·오류 스킬은 제외하고 이유 안내. `RunConfig.skills` → `SessionOptions.skills`, `instructionsFor`에 id·설명·SKILL.md 경로 목록과 사용 규칙(`skillsText`). 파일은 복사하지 않음(ADR 0008, 설계서 사본 수정). 테스트 2개 추가(전체 149개) |
+
 ## 2026-11-13 · 4단계 진행(4-3)
 
 | 항목 | 내용 |

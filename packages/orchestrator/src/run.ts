@@ -160,9 +160,10 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
   const { config } = ctx;
   const effort = config.effort?.[role] ?? (role === 'lead' && step === 'classify' ? 'low' : undefined);
   const model = config.models?.[role];
+  const skills = config.skills?.[role] ?? [];
   return ctx.runtimeFor(role).startSession({
-    role, cwd: config.cwd, access: accessFor(ctx, role), skills: [], tools: toolsFor(ctx, step, role, holder),
-    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory),
+    role, cwd: config.cwd, access: accessFor(ctx, role), skills, tools: toolsFor(ctx, step, role, holder),
+    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
