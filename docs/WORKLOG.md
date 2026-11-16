@@ -149,3 +149,4 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 원클릭 실행: `Start-AgentDesk.cmd`/`Stop-AgentDesk.cmd`(필요하면 설치·빌드 후 서버를 백그라운드로 켜고 브라우저 열기). PowerShell이라 이 환경에서는 실행해 보지 못함.
 - 3D 장면 컨셉 시안: `docs/concepts/agent-scene-concept.png`(SVG로 그린 시안, 확정 전).
 - legacy/agents 변경분 폐기(사용자 결정). 테스트 193개 통과.
+- 3D 장면 컨셉 2차: 역할별로 다른 캐릭터(lead 헤드셋·태블릿, builder 안전모·무한궤도, verifier 부엉이·모노클, researcher 드론), 22초 애니메이션(각자 작업 → 하네스 중계대를 거친 계획 전달 → 구현·게이트 → 독립 리뷰 → 완료 보고). `docs/concepts/agent-scene-concept.html`·`.mp4`. SVG 2.5D 시안이며 실제 구현은 승인 후 React Three Fiber.

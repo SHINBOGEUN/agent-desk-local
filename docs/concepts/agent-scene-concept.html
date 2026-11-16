@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Desk 3D 장면 컨셉: 팀이 일하는 모습</title>
+<style>
+  :root { --ink:#1b2233; --muted:#5f6b80; --codex:#12a594; --claude:#7b5cf0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1d2030; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; color: var(--ink); }
+  .stage { position: relative; width: 100%; height: 100%; display: grid; place-items: center; overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; }
+  .bar { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); padding: 8px 10px; border-radius: 999px; box-shadow: 0 10px 30px -12px rgba(0,0,0,0.45); }
+  .bar span { font-size: 13px; color: var(--muted); padding: 5px 12px; border-radius: 999px; transition: background .3s, color .3s; white-space: nowrap; }
+  .bar span.on { background: var(--ink); color: #fff; }
+  .bar button { border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--muted); padding: 5px 10px; cursor: pointer; border-radius: 999px; }
+  .bar button:hover { background: #eef0f5; }
+  .title { position: absolute; left: 28px; top: 22px; color: #fff; }
+  .title h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .title p { margin: 4px 0 0; font-size: 13px; color: rgba(255,255,255,0.72); max-width: 520px; line-height: 1.5; }
+  .legend { position: absolute; right: 28px; top: 24px; display: flex; gap: 14px; color: rgba(255,255,255,0.8); font-size: 12.5px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <svg id="scene" viewBox="0 0 1600 1000" role="img" aria-label="네 에이전트가 각자 책상에서 일하다가 하네스를 거쳐 말을 주고받는 장면"></svg>
+  <div class="title"><h1>Agent Desk 팀 장면 (컨셉)</h1><p>각자 책상에서 일하다가, 하네스 중계대를 거쳐 일을 넘깁니다. 눈과 모니터 색은 담당 모델(Codex 청록, Claude 보라)입니다.</p></div>
+  <div class="legend"><span><i style="background:#12a594"></i>Codex</span><span><i style="background:#7b5cf0"></i>Claude</span></div>
+  <div class="bar" aria-live="polite"><span data-step="work">각자 작업</span><span data-step="plan">계획 전달</span><span data-step="build">구현·검증</span><span data-step="review">독립 리뷰</span><span data-step="done">완료 보고</span><button id="pause" aria-label="일시정지">일시정지</button></div>
+</div>
+<script>
+(() => {
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('scene');
+const el = (tag, attrs = {}, parent = svg) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+const S = 64, CX = 800, CY = 250, CO = Math.cos(Math.PI / 6);
+const P = (x, y, z = 0) => [CX + (x - y) * CO * S, CY + (x + y) * 0.5 * S - z * S];
+const pts = list => list.map(p => p.join(',')).join(' ');
+const poly = (list, fill, extra = {}, parent = svg) => el('polygon', { points: pts(list), fill, ...extra }, parent);
+const defs = el('defs');
+const lin = (id, stops, a = { x1: 0, y1: 0, x2: 0, y2: 1 }) => { const g = el('linearGradient', { id, ...a }, defs); stops.forEach(([o, c, op = 1]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': op }, g)); };
+const rad = (id, stops, a = {}) => { const g = el('radialGradient', { id, ...a }, defs); stops.forEach(([o, c, op = 1]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': op }, g)); };
+const filter = (id, build) => { const f = el('filter', { id, x: '-60%', y: '-60%', width: '220%', height: '220%' }, defs); build(f); };
+
+// ---------- palette & effects ----------
+lin('sky', [[0, '#2a2f4a'], [0.55, '#3b3a5c'], [1, '#5a4a63']]);
+lin('wallL', [[0, '#e9e3da'], [1, '#d9d0c4']]);
+lin('wallR', [[0, '#f2ece3'], [1, '#e4dbcf']]);
+lin('oak', [[0, '#d9b98f'], [1, '#c69d6c']]);
+lin('sunset', [[0, '#ffb86b'], [0.5, '#ff8f70'], [1, '#c86b9a']]);
+lin('beam', [[0, '#ffd9a0', 0.55], [1, '#ffd9a0', 0]]);
+lin('codexScreen', [[0, '#1fd1b9'], [1, '#0c7e70']]);
+lin('claudeScreen', [[0, '#a48bff'], [1, '#5a3fd1']]);
+rad('pearl', [[0, '#ffffff'], [0.55, '#eef0f6'], [1, '#c4cad8']], { cx: 0.35, cy: 0.3, r: 0.85 });
+rad('navy', [[0, '#5d6f99'], [0.6, '#33405f'], [1, '#1f2840']], { cx: 0.35, cy: 0.3, r: 0.9 });
+rad('amber', [[0, '#ffe08a'], [0.6, '#f6b73c'], [1, '#c98612']], { cx: 0.35, cy: 0.3, r: 0.9 });
+rad('lilac', [[0, '#efe9ff'], [0.55, '#c9b9ff'], [1, '#8d72e6']], { cx: 0.35, cy: 0.3, r: 0.9 });
+rad('mint', [[0, '#e3fff4'], [0.55, '#9be3c5'], [1, '#4fae86']], { cx: 0.35, cy: 0.3, r: 0.9 });
+rad('pulse', [[0, '#fff6d8', 0.95], [0.4, '#ffc76b', 0.55], [1, '#ff9a5c', 0]]);
+filter('blur8', f => el('feGaussianBlur', { stdDeviation: 8 }, f));
+filter('blur3', f => el('feGaussianBlur', { stdDeviation: 3 }, f));
+filter('glow', f => { el('feGaussianBlur', { stdDeviation: 5, result: 'b' }, f); const m = el('feMerge', {}, f); el('feMergeNode', { in: 'b' }, m); el('feMergeNode', { in: 'SourceGraphic' }, m); });
+
+el('rect', { x: 0, y: 0, width: 1600, height: 1000, fill: 'url(#sky)' });
+// distant stars
+for (let i = 0; i < 60; i++) el('circle', { cx: (i * 263) % 1600, cy: (i * 151) % 420, r: (i % 3) * 0.5 + 0.6, fill: '#fff', opacity: 0.25 + (i % 4) * 0.1 });
+
+// ---------- room ----------
+const W = 11, D = 8.5, H = 3.6;
+// slab
+poly([P(0, D, 0), P(W, D, 0), P(W, D, -0.5), P(0, D, -0.5)], '#7a5b3f');
+poly([P(W, 0, 0), P(W, D, 0), P(W, D, -0.5), P(W, 0, -0.5)], '#62482f');
+poly([P(0, 0), P(W, 0), P(W, D), P(0, D)], 'url(#oak)');
+for (let i = 1; i < W * 2; i++) { const a = P(i / 2, 0), b = P(i / 2, D); el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#b98d5d', 'stroke-opacity': 0.35, 'stroke-width': 1 }); }
+// rug
+poly([P(3.6, 3.6), P(7.6, 3.6), P(7.6, 6.6), P(3.6, 6.6)], '#2f3a57', { opacity: 0.92 });
+poly([P(3.85, 3.85), P(7.35, 3.85), P(7.35, 6.35), P(3.85, 6.35)], 'none', { stroke: '#f0c27a', 'stroke-width': 2, opacity: 0.6 });
+// walls
+poly([P(0, 0, 0), P(0, D, 0), P(0, D, H), P(0, 0, H)], 'url(#wallL)');
+poly([P(0, 0, 0), P(W, 0, 0), P(W, 0, H), P(0, 0, H)], 'url(#wallR)');
+poly([P(0, 0, H), P(0, D, H), P(-0.3, D, H), P(-0.3, 0, H)], '#cfc4b6');
+poly([P(0, 0, H), P(W, 0, H), P(W, -0.3, H), P(0, -0.3, H)], '#ddd3c6');
+// skirting
+poly([P(0, 0, 0), P(W, 0, 0), P(W, 0, 0.15), P(0, 0, 0.15)], '#cbbfb0');
+poly([P(0, 0, 0), P(0, D, 0), P(0, D, 0.15), P(0, 0, 0.15)], '#bfb2a2');
+// big window on left wall with sunset
+const win = [P(0.02, 1.2, 3.1), P(0.02, 5.4, 3.1), P(0.02, 5.4, 1.1), P(0.02, 1.2, 1.1)];
+poly(win, 'url(#sunset)');
+el('circle', { cx: P(0.02, 3.9, 1.55)[0], cy: P(0.02, 3.9, 1.55)[1], r: 34, fill: '#ffe2a8', opacity: 0.9, filter: 'url(#blur3)' });
+// skyline
+const sk = [[1.4, 1.55], [1.8, 1.9], [2.3, 1.45], [2.7, 2.1], [3.3, 1.7], [3.8, 1.4], [4.4, 1.95], [4.9, 1.6], [5.3, 1.35]];
+sk.forEach(([y, h], i) => poly([P(0.02, y, 1.1), P(0.02, y + 0.42, 1.1), P(0.02, y + 0.42, h), P(0.02, y, h)], i % 2 ? '#4b3a5c' : '#58466a', { opacity: 0.85 }));
+poly(win, 'none', { stroke: '#f6efe6', 'stroke-width': 7 });
+[2.6, 4.0].forEach(y => { const a = P(0.02, y, 3.1), b = P(0.02, y, 1.1); el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#f6efe6', 'stroke-width': 5 }); });
+// light beams on the floor
+poly([P(0, 1.2, 1.1), P(0, 5.4, 1.1), P(3.4, 7.2, 0), P(3.4, 2.4, 0)], 'url(#beam)', { opacity: 0.55 });
+
+// pinboard with requirement cards (right wall)
+poly([P(1.0, 0.02, 2.9), P(3.6, 0.02, 2.9), P(3.6, 0.02, 1.7), P(1.0, 0.02, 1.7)], '#c79a6c');
+const cards = [];
+[['R1', '#fff3c4', 1.25], ['R2', '#ffd8d0', 2.15], ['G?', '#d9f2ff', 3.0]].forEach(([t, c, x], i) => {
+  const g = el('g', {});
+  poly([P(x, 0.03, 2.75), P(x + 0.65, 0.03, 2.75), P(x + 0.65, 0.03, 1.95), P(x, 0.03, 1.95)], c, {}, g);
+  const p = P(x + 0.12, 0.03, 2.5); const tx = el('text', { x: p[0], y: p[1], 'font-size': 15, 'font-weight': 800, fill: '#5b4632', transform: `skewY(-30) translate(0 ${p[0] * Math.tan(Math.PI / 6)})` }, g); tx.textContent = i === 2 ? '✓' : t;
+  cards.push(g);
+});
+// gate panel (right wall)
+const gateX = 6.3;
+poly([P(gateX, 0.02, 3.05), P(gateX + 4.0, 0.02, 3.05), P(gateX + 4.0, 0.02, 1.85), P(gateX, 0.02, 1.85)], '#1f2538');
+poly([P(gateX, 0.02, 3.05), P(gateX + 4.0, 0.02, 3.05), P(gateX + 4.0, 0.02, 1.85), P(gateX, 0.02, 1.85)], 'none', { stroke: '#3b4462', 'stroke-width': 3 });
+const gateLabel = P(gateX + 0.2, 0.02, 2.85); const gl = el('text', { x: gateLabel[0], y: gateLabel[1], 'font-size': 13, fill: '#8f9ab3', 'font-weight': 600 }); gl.textContent = '게이트';
+const gates = ['G1', 'G2', 'G3', 'G4', 'G5'].map((name, i) => {
+  const p = P(gateX + 0.55 + i * 0.75, 0.02, 2.35);
+  const halo = el('circle', { cx: p[0], cy: p[1], r: 18, fill: '#3ecf72', opacity: 0, filter: 'url(#blur8)' });
+  const dot = el('circle', { cx: p[0], cy: p[1], r: 10, fill: '#3a425b' });
+  const t = el('text', { x: p[0], y: p[1] + 30, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#aab4c8' }); t.textContent = name;
+  return { dot, halo };
+});
+
+// ---------- furniture ----------
+function box(x, y, z, w, d, h, top, left, right, parent = svg) {
+  poly([P(x, y + d, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x, y + d, z + h)], left, {}, parent);
+  poly([P(x + w, y, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x + w, y, z + h)], right, {}, parent);
+  poly([P(x, y, z + h), P(x + w, y, z + h), P(x + w, y + d, z + h), P(x, y + d, z + h)], top, {}, parent);
+}
+const screens = {};
+function desk(id, x, y, kind, extra) {
+  const g = el('g', {});
+  [[0, 0], [1.75, 0], [0, 1.05], [1.75, 1.05]].forEach(([dx, dy]) => box(x + dx, y + dy, 0, 0.12, 0.12, 0.74, '#3a3f52', '#2c3142', '#24283a', g));
+  box(x - 0.08, y - 0.08, 0.74, 2.0, 1.32, 0.09, '#f5efe6', '#ddd2c3', '#cfc2b1', g);
+  // monitor
+  box(x + 0.85, y + 0.2, 0.83, 0.25, 0.22, 0.3, '#2b3042', '#22273a', '#1c2030', g);
+  const sx = x + 0.25, ex = x + 1.6;
+  poly([P(sx, y + 0.2, 1.1), P(ex, y + 0.2, 1.1), P(ex, y + 0.2, 1.78), P(sx, y + 0.2, 1.78)], '#141826', {}, g);
+  poly([P(sx + 0.06, y + 0.21, 1.15), P(ex - 0.06, y + 0.21, 1.15), P(ex - 0.06, y + 0.21, 1.73), P(sx + 0.06, y + 0.21, 1.73)], kind === 'codex' ? 'url(#codexScreen)' : 'url(#claudeScreen)', { opacity: 0.95 }, g);
+  const lines = [];
+  for (let i = 0; i < 5; i++) {
+    const a = P(sx + 0.16, y + 0.215, 1.63 - i * 0.1);
+    const l = el('line', { x1: a[0], y1: a[1], x2: a[0], y2: a[1], stroke: '#fff', 'stroke-opacity': 0.8, 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+    lines.push({ el: l, a, len: 0.35 + ((i * 7) % 5) * 0.14 });
+  }
+  screens[id] = lines;
+  // keyboard + mug
+  box(x + 0.6, y + 0.65, 0.83, 0.7, 0.26, 0.03, '#d7dbe4', '#c3c8d3', '#b5bbc7', g);
+  if (extra === 'mug') { box(x + 1.55, y + 0.75, 0.83, 0.16, 0.16, 0.18, '#e86f5a', '#c95745', '#b44c3c', g); }
+  if (extra === 'books') { box(x + 0.05, y + 0.7, 0.83, 0.32, 0.4, 0.08, '#4f8f6a', '#3f7656', '#356448', g); box(x + 0.07, y + 0.72, 0.91, 0.3, 0.36, 0.07, '#e7b85c', '#cc9d45', '#b78b3b', g); }
+  return g;
+}
+const desks = {
+  builder: { x: 2.0, y: 0.9, kind: 'codex', extra: 'mug' },
+  verifier: { x: 7.4, y: 1.1, kind: 'claude', extra: 'books' },
+  researcher: { x: 0.9, y: 5.3, kind: 'codex', extra: 'books' },
+  lead: { x: 8.0, y: 5.6, kind: 'codex', extra: 'mug' },
+};
+Object.entries(desks).forEach(([id, d]) => desk(id, d.x, d.y, d.kind, d.extra));
+
+// plant + lamp
+{ const b = P(0.6, 0.6); el('ellipse', { cx: b[0], cy: b[1] - 4, rx: 26, ry: 11, fill: '#1c2030', opacity: 0.25, filter: 'url(#blur3)' }); el('path', { d: `M${b[0] - 22} ${b[1] - 44} h44 l-6 40 h-32 z`, fill: '#e07a5f' }); [[-20, -96, -25], [16, -110, 20], [-2, -128, 0], [26, -84, 40], [-30, -76, -45], [6, -92, 8]].forEach(([dx, dy, r]) => el('ellipse', { cx: b[0] + dx, cy: b[1] + dy, rx: 15, ry: 34, fill: dx % 2 ? '#3f8f63' : '#5aa979', transform: `rotate(${r} ${b[0] + dx} ${b[1] + dy})` })); }
+
+// ---------- harness relay (center) ----------
+const relayPos = P(5.6, 5.1, 0);
+const relay = el('g', {});
+el('ellipse', { cx: relayPos[0], cy: relayPos[1], rx: 70, ry: 30, fill: '#000', opacity: 0.25, filter: 'url(#blur8)' }, relay);
+box(5.15, 4.65, 0, 0.9, 0.9, 0.55, '#3a4462', '#2b3350', '#232a43', relay);
+box(5.3, 4.8, 0.55, 0.6, 0.6, 0.12, '#f0c27a', '#d9a75c', '#c4924b', relay);
+const relayGlow = el('circle', { cx: P(5.6, 5.1, 0.95)[0], cy: P(5.6, 5.1, 0.95)[1], r: 46, fill: 'url(#pulse)', opacity: 0.6 }, relay);
+const ring = el('ellipse', { cx: P(5.6, 5.1, 0.72)[0], cy: P(5.6, 5.1, 0.72)[1], rx: 40, ry: 17, fill: 'none', stroke: '#ffd38a', 'stroke-width': 2.5, opacity: 0.8 }, relay);
+const relayText = el('text', { x: relayPos[0], y: relayPos[1] + 38, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#f6e3c4' }, relay); relayText.textContent = '하네스';
+
+// ---------- characters ----------
+const layer = el('g', {});
+function shadow(g, w = 34) { el('ellipse', { cx: 0, cy: 0, rx: w, ry: w * 0.38, fill: '#1b1520', opacity: 0.28, filter: 'url(#blur3)' }, g); }
+function tag(g, name, kind, color, y = 22) {
+  const w = name.length * 8.6 + (kind === 'codex' ? 50 : 54) + 40;
+  el('rect', { x: -w / 2, y, width: w, height: 26, rx: 13, fill: '#ffffff', opacity: 0.96 }, g);
+  el('circle', { cx: -w / 2 + 15, cy: y + 13, r: 5.5, fill: color }, g);
+  const t = el('text', { x: -w / 2 + 27, y: y + 18, 'font-size': 13.5, 'font-weight': 700, fill: '#1b2233' }, g); t.textContent = name;
+  const k = el('text', { x: w / 2 - 13, y: y + 18, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 800, fill: kind === 'codex' ? '#0e8f80' : '#6a4ce0' }, g); k.textContent = kind === 'codex' ? 'Codex' : 'Claude';
+}
+const eye = kind => (kind === 'codex' ? '#5ff5df' : '#d4c6ff');
+
+// lead: tall planner with headset, tablet, scarf, hovers
+function makeLead() {
+  const root = el('g', {}, layer); shadow(root, 30);
+  const body = el('g', {}, root);
+  el('path', { d: 'M-22 -40 Q-26 -96 0 -104 Q26 -96 22 -40 Q0 -28 -22 -40Z', fill: 'url(#navy)' }, body);
+  el('path', { d: 'M-24 -92 Q0 -80 24 -92 L20 -82 Q0 -70 -20 -82Z', fill: '#ff8a6b' }, body); // scarf
+  el('path', { d: 'M14 -86 l10 30 l-10 0 z', fill: '#ff8a6b' }, body);
+  const armL = el('g', {}, body); el('rect', { x: -6, y: 0, width: 11, height: 38, rx: 6, fill: '#3e4b6c' }, armL);
+  const armR = el('g', {}, body); el('rect', { x: -5, y: 0, width: 11, height: 38, rx: 6, fill: '#36425f' }, armR);
+  el('rect', { x: -14, y: 28, width: 30, height: 40, rx: 5, fill: '#1f2638', stroke: '#9fb0d6', 'stroke-width': 2 }, armR); // tablet
+  el('rect', { x: -10, y: 33, width: 22, height: 26, rx: 3, fill: 'url(#codexScreen)' }, armR);
+  armL.setAttribute('transform', 'translate(-22 -88) rotate(14)');
+  armR.setAttribute('transform', 'translate(22 -88) rotate(-22)');
+  const head = el('g', {}, body);
+  el('ellipse', { cx: 0, cy: -132, rx: 30, ry: 34, fill: 'url(#pearl)' }, head);
+  el('rect', { x: -24, y: -142, width: 48, height: 22, rx: 11, fill: '#141a2b' }, head);
+  const eyes = [el('rect', { x: -15, y: -136, width: 10, height: 9, rx: 4.5, fill: eye('codex'), filter: 'url(#glow)' }, head), el('rect', { x: 5, y: -136, width: 10, height: 9, rx: 4.5, fill: eye('codex'), filter: 'url(#glow)' }, head)];
+  el('path', { d: 'M-31 -138 Q-36 -170 0 -170 Q36 -170 31 -138', fill: 'none', stroke: '#2a3350', 'stroke-width': 5 }, head); // headset band
+  el('rect', { x: -38, y: -146, width: 10, height: 20, rx: 5, fill: '#ff8a6b' }, head);
+  el('path', { d: 'M-34 -128 Q-30 -110 -14 -112', fill: 'none', stroke: '#2a3350', 'stroke-width': 3 }, head);
+  el('circle', { cx: -13, cy: -112, r: 3.5, fill: '#ff8a6b' }, head);
+  tag(root, 'lead', 'codex', '#ff8a6b');
+  return { root, body, head, armL, armR, eyes };
+}
+// builder: stocky, hard hat, treads, mitten hands, tool belt
+function makeBuilder() {
+  const root = el('g', {}, layer); shadow(root, 40);
+  const body = el('g', {}, root);
+  el('rect', { x: -32, y: -18, width: 64, height: 18, rx: 9, fill: '#2d3245' }, body); // treads
+  [-22, -8, 6, 20].forEach(x => el('circle', { cx: x, cy: -9, r: 4.5, fill: '#4c5470' }, body));
+  el('rect', { x: -34, y: -86, width: 68, height: 70, rx: 18, fill: 'url(#amber)' }, body);
+  el('rect', { x: -34, y: -40, width: 68, height: 10, fill: '#7a5a2a', opacity: 0.85 }, body); // belt
+  el('rect', { x: 12, y: -44, width: 8, height: 18, rx: 2, fill: '#b9c2d3' }, body); // wrench handle
+  el('rect', { x: -22, y: -76, width: 26, height: 18, rx: 4, fill: '#ffefc2', opacity: 0.7 }, body);
+  const armL = el('g', {}, body); el('rect', { x: -7, y: 0, width: 14, height: 34, rx: 7, fill: '#e2a737' }, armL); el('circle', { cx: 0, cy: 38, r: 11, fill: '#3b4058' }, armL);
+  const armR = el('g', {}, body); el('rect', { x: -7, y: 0, width: 14, height: 34, rx: 7, fill: '#d69a2c' }, armR); el('circle', { cx: 0, cy: 38, r: 11, fill: '#3b4058' }, armR);
+  armL.setAttribute('transform', 'translate(-38 -80) rotate(30)');
+  armR.setAttribute('transform', 'translate(38 -80) rotate(-30)');
+  const head = el('g', {}, body);
+  el('rect', { x: -30, y: -142, width: 60, height: 54, rx: 14, fill: 'url(#pearl)' }, head);
+  el('rect', { x: -24, y: -130, width: 48, height: 30, rx: 9, fill: '#101624' }, head);
+  const eyes = [el('rect', { x: -15, y: -122, width: 11, height: 11, rx: 3, fill: eye('codex'), filter: 'url(#glow)' }, head), el('rect', { x: 4, y: -122, width: 11, height: 11, rx: 3, fill: eye('codex'), filter: 'url(#glow)' }, head)];
+  el('path', { d: 'M-36 -140 Q-34 -172 0 -174 Q34 -172 36 -140 Z', fill: '#ffcd3c' }, head); // hard hat
+  el('rect', { x: -42, y: -144, width: 84, height: 8, rx: 4, fill: '#f0b51c' }, head);
+  el('rect', { x: -4, y: -172, width: 8, height: 30, rx: 3, fill: '#f0b51c' }, head);
+  tag(root, 'builder', 'codex', '#f0b51c');
+  return { root, body, head, armL, armR, eyes };
+}
+// verifier: owl-like, big lenses, ear tufts, clipboard, Claude
+function makeVerifier() {
+  const root = el('g', {}, layer); shadow(root, 34);
+  const body = el('g', {}, root);
+  el('ellipse', { cx: 0, cy: -58, rx: 36, ry: 44, fill: 'url(#lilac)' }, body);
+  el('ellipse', { cx: 0, cy: -48, rx: 22, ry: 28, fill: '#f3eeff', opacity: 0.8 }, body);
+  [-10, 0, 10].forEach((x, i) => el('path', { d: `M${x - 6} ${-60 + i * 4} q6 6 12 0`, fill: 'none', stroke: '#b3a1f0', 'stroke-width': 2 }, body));
+  el('ellipse', { cx: -12, cy: -12, rx: 9, ry: 6, fill: '#8d72e6' }, body); el('ellipse', { cx: 12, cy: -12, rx: 9, ry: 6, fill: '#8d72e6' }, body);
+  const armL = el('g', {}, body); el('path', { d: 'M0 0 q-16 18 -6 44 q10 -6 14 -40z', fill: '#9e86ef' }, armL);
+  const armR = el('g', {}, body);
+  el('rect', { x: -20, y: 14, width: 34, height: 42, rx: 4, fill: '#fffdf6', stroke: '#c8b48a', 'stroke-width': 2 }, armR);
+  el('rect', { x: -9, y: 10, width: 12, height: 7, rx: 2, fill: '#8f7a52' }, armR);
+  const checks = [0, 1, 2].map(i => el('path', { d: `M-14 ${27 + i * 10} l4 4 l7 -8`, fill: 'none', stroke: '#2fb36b', 'stroke-width': 2.5, 'stroke-linecap': 'round', opacity: 0 }, armR));
+  [0, 1, 2].forEach(i => el('line', { x1: 0, y1: 28 + i * 10, x2: 9, y2: 28 + i * 10, stroke: '#c9c2b0', 'stroke-width': 2 }, armR));
+  armL.setAttribute('transform', 'translate(-32 -74)');
+  armR.setAttribute('transform', 'translate(30 -84) rotate(-8)');
+  const head = el('g', {}, body);
+  el('ellipse', { cx: 0, cy: -120, rx: 40, ry: 32, fill: 'url(#pearl)' }, head);
+  el('path', { d: 'M-34 -140 l-8 -22 l20 12 z', fill: '#8d72e6' }, head); el('path', { d: 'M34 -140 l8 -22 l-20 12 z', fill: '#8d72e6' }, head);
+  const lensL = el('g', { transform: 'translate(-15 -120)' }, head); el('circle', { r: 15, fill: '#191d33' }, lensL); el('circle', { r: 7, fill: eye('claude'), filter: 'url(#glow)' }, lensL);
+  const lensR = el('g', { transform: 'translate(15 -120)' }, head); el('circle', { r: 15, fill: '#191d33' }, lensR); el('circle', { r: 7, fill: eye('claude'), filter: 'url(#glow)' }, lensR);
+  el('circle', { cx: 15, cy: -120, r: 18, fill: 'none', stroke: '#e9c46a', 'stroke-width': 3 }, head); // monocle
+  el('path', { d: 'M31 -112 q10 14 4 30', fill: 'none', stroke: '#e9c46a', 'stroke-width': 1.5 }, head);
+  el('path', { d: 'M-5 -104 l5 7 l5 -7z', fill: '#f6b73c' }, head);
+  tag(root, 'verifier', 'claude', '#8d72e6');
+  return { root, body, head, armL, armR, eyes: [lensL, lensR], checks };
+}
+// researcher: floating drone orb with halo ring and a book
+function makeResearcher() {
+  const root = el('g', {}, layer); shadow(root, 24);
+  const body = el('g', {}, root);
+  const ringEl = el('ellipse', { cx: 0, cy: -96, rx: 44, ry: 12, fill: 'none', stroke: '#58c49a', 'stroke-width': 4, opacity: 0.85 }, body);
+  el('circle', { cx: 0, cy: -96, r: 32, fill: 'url(#mint)' }, body);
+  el('path', { d: 'M-44 -96 A44 12 0 0 0 44 -96', fill: 'none', stroke: '#3fa37b', 'stroke-width': 4 }, body);
+  el('ellipse', { cx: 0, cy: -100, rx: 18, ry: 14, fill: '#0f1a1f' }, body);
+  const lamp = el('circle', { cx: 0, cy: -100, r: 7, fill: '#9effe5', filter: 'url(#glow)' }, body);
+  el('line', { x1: 0, y1: -128, x2: 0, y2: -146, stroke: '#3fa37b', 'stroke-width': 3 }, body);
+  const prop = el('ellipse', { cx: 0, cy: -148, rx: 22, ry: 4, fill: '#b9f0dc', opacity: 0.8 }, body);
+  const book = el('g', { transform: 'translate(30 -74) rotate(-12)' }, body);
+  el('rect', { x: -2, y: 0, width: 30, height: 22, rx: 3, fill: '#e7b85c' }, book); el('line', { x1: 13, y1: 0, x2: 13, y2: 22, stroke: '#a7772c', 'stroke-width': 2 }, book);
+  tag(root, 'researcher', 'codex', '#58c49a');
+  return { root, body, head: body, armL: book, armR: book, eyes: [lamp], ring: ringEl, prop };
+}
+const lead = makeLead(), builder = makeBuilder(), verifier = makeVerifier(), researcher = makeResearcher();
+
+// seats (in front of each desk)
+const seat = { builder: [3.0, 2.75], verifier: [8.35, 2.9], researcher: [1.95, 7.2], lead: [9.0, 7.45] };
+
+// ---------- bubbles & packets ----------
+const fx = el('g', {});
+function makeBubble(color = '#ffffff', ink = '#1b2233') {
+  const g = el('g', { opacity: 0 }, fx);
+  const shade = el('rect', { rx: 16, fill: '#000', opacity: 0.18, filter: 'url(#blur8)' }, g);
+  const box = el('rect', { rx: 16, fill: color }, g);
+  const tail = el('path', { fill: color }, g);
+  const text = el('text', { 'font-size': 16, fill: ink, 'font-weight': 600 }, g);
+  return { g, shade, box, tail, text, show(x, y, lines, side = 'left') {
+    text.textContent = '';
+    lines.forEach((line, i) => { const t = el('tspan', { x: 0, dy: i ? 22 : 0 }, text); t.textContent = line; });
+    const w = Math.max(...lines.map(l => [...l].reduce((s, ch) => s + (ch.charCodeAt(0) > 255 ? 16 : 9), 0))) + 36, h = lines.length * 22 + 22;
+    const bx = side === 'left' ? x - 30 : x - w + 30, by = y - h - 18;
+    [box, shade].forEach(r => { r.setAttribute('x', bx); r.setAttribute('y', by); r.setAttribute('width', w); r.setAttribute('height', h); });
+    shade.setAttribute('y', by + 6);
+    tail.setAttribute('d', `M${x - 10} ${by + h - 2} L${x} ${y - 4} L${x + 10} ${by + h - 2}Z`);
+    text.setAttribute('transform', `translate(${bx + 18} ${by + 29})`);
+    [...text.children].forEach(t => t.setAttribute('x', 0));
+  } };
+}
+const bubbles = { lead: makeBubble(), builder: makeBubble(), verifier: makeBubble('#f1ecff', '#3b2a8a'), researcher: makeBubble() };
+function makePacket(color) { const g = el('g', { opacity: 0 }, fx); el('circle', { r: 16, fill: color, opacity: 0.35, filter: 'url(#blur8)' }, g); el('rect', { x: -12, y: -9, width: 24, height: 18, rx: 4, fill: '#fffaf0', stroke: color, 'stroke-width': 2.5 }, g); el('path', { d: 'M-12 -8 l12 9 l12 -9', fill: 'none', stroke: color, 'stroke-width': 2 }, g); return g; }
+const planPacket = makePacket('#ff8a6b'), workPacket = makePacket('#12a594'), verdictPacket = makePacket('#7b5cf0');
+const trail = el('path', { fill: 'none', stroke: '#ffd38a', 'stroke-width': 3, 'stroke-dasharray': '3 10', 'stroke-linecap': 'round', opacity: 0 }, fx);
+const sparks = [...Array(8)].map(() => el('circle', { r: 3, fill: '#ffd36a', opacity: 0 }, fx));
+const confetti = [...Array(26)].map((_, i) => el('rect', { width: 7, height: 11, rx: 2, fill: ['#ff8a6b', '#12a594', '#7b5cf0', '#ffcd3c', '#58c49a'][i % 5], opacity: 0 }, fx));
+
+// ---------- timeline ----------
+const T = 22; // seconds per loop
+const ease = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const lerp2 = (p, q, k) => [lerp(p[0], q[0], k), lerp(p[1], q[1], k)];
+const arcPoint = (p, q, k, lift = 120) => { const m = [(p[0] + q[0]) / 2, Math.min(p[0] && p[1], q[1]) - lift]; const a = lerp2(p, m, k), b = lerp2(m, q, k); return lerp2(a, b, k); };
+const relayTop = P(5.6, 5.1, 1.0);
+const at = (x, y, z = 0) => P(x, y, z);
+
+function place(c, x, y, extra = '') { const p = P(x, y); c.root.setAttribute('transform', `translate(${p[0]} ${p[1]}) ${extra}`); return p; }
+function steps(name) { document.querySelectorAll('.bar span').forEach(s => s.classList.toggle('on', s.dataset.step === name)); }
+
+let start = performance.now(), paused = false, pausedAt = 0;
+document.getElementById('pause').addEventListener('click', e => { paused = !paused; if (paused) pausedAt = performance.now(); else start += performance.now() - pausedAt; e.target.textContent = paused ? '재생' : '일시정지'; });
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function typing(c, t, speed = 1, amp = 1) { // arms bob while typing
+  const a = Math.sin(t * 18 * speed) * 7 * amp, b = Math.sin(t * 18 * speed + 1.7) * 7 * amp;
+  return [a, b];
+}
+function screenLines(id, t, speed) {
+  screens[id].forEach((line, i) => {
+    const k = (Math.sin(t * speed + i * 1.3) + 1) / 2;
+    const end = P(0, 0); // unused
+    const len = line.len * (0.35 + 0.65 * k);
+    const b = [line.a[0] + len * CO * S, line.a[1] + len * 0.5 * S];
+    line.el.setAttribute('x2', b[0]); line.el.setAttribute('y2', b[1]);
+  });
+}
+function bubbleAt(b, who, lines, side, show) {
+  if (!show) { b.g.setAttribute('opacity', 0); return; }
+  const r = who.root.transform.baseVal.consolidate(); const m = r ? r.matrix : { e: 0, f: 0 };
+  b.show(m.e + (side === 'left' ? 12 : -12), m.f - 180, lines, side); b.g.setAttribute('opacity', show);
+}
+function gateOn(i, k) { const on = k > 0; gates[i].dot.setAttribute('fill', on ? (i === 3 ? '#f6b73c' : '#3ecf72') : '#3a425b'); if (i === 3 && k >= 1) gates[i].dot.setAttribute('fill', '#3ecf72'); gates[i].halo.setAttribute('fill', gates[i].dot.getAttribute('fill')); gates[i].halo.setAttribute('opacity', on ? 0.75 : 0); }
+
+function frame(now) {
+  const t = reduced ? 9.5 : ((paused ? pausedAt : now) - start) / 1000 % T;
+  // --- phase marks
+  const phase = t < 3 ? 'work' : t < 7.5 ? 'plan' : t < 12.5 ? 'build' : t < 17 ? 'review' : 'done';
+  steps(phase);
+
+  // --- lead: walks to relay (3-5), drops plan, walks back (6.5-8), later returns at 17 to announce
+  const goOut = ease(seg(t, 3, 5)), goBack = ease(seg(t, 6.6, 8.4));
+  const leadStand = [7.3, 4.9];
+  let lp = goBack > 0 ? lerp2(leadStand, seat.lead, goBack) : lerp2(seat.lead, leadStand, goOut);
+  const leadWalking = (t > 3 && t < 5) || (t > 6.6 && t < 8.4);
+  const hover = Math.sin(t * 3) * 4 + (leadWalking ? Math.abs(Math.sin(t * 9)) * -6 : 0);
+  place(lead, lp[0], lp[1]);
+  lead.body.setAttribute('transform', `translate(0 ${hover})`);
+  const leadTyping = t < 3 || t > 8.4 && t < 17;
+  const [la, lb] = typing(lead, t, 0.8, leadTyping ? 0.7 : 0);
+  const wave = t > 17.2 && t < 21 ? Math.sin(t * 8) * 25 - 70 : (t > 4.6 && t < 6.6 ? -40 : 14 + la);
+  lead.armL.setAttribute('transform', `translate(-22 -88) rotate(${wave})`);
+  lead.armR.setAttribute('transform', `translate(22 -88) rotate(${-22 + lb})`);
+  screenLines('lead', t, leadTyping ? 5 : 0.5);
+
+  // --- builder: types, then fast build with sparks (8.4-12), hands work packet at 12
+  const bp = place(builder, ...seat.builder);
+  const building = t > 8.2 && t < 12.2;
+  const [ba, bb] = typing(builder, t, building ? 1.8 : 1, t < 3 || building || t > 17 ? 1 : 0.25);
+  builder.armL.setAttribute('transform', `translate(-38 -80) rotate(${30 + ba})`);
+  builder.armR.setAttribute('transform', `translate(38 -80) rotate(${-30 + bb})`);
+  builder.body.setAttribute('transform', `translate(0 ${building ? Math.abs(Math.sin(t * 16)) * -3 : 0})`);
+  const nod = t > 7 && t < 8 ? Math.sin((t - 7) * Math.PI * 4) * 6 : 0;
+  builder.head.setAttribute('transform', `rotate(${nod} 0 -110)`);
+  screenLines('builder', t, building ? 14 : 4);
+  sparks.forEach((s, i) => { if (!building) { s.setAttribute('opacity', 0); return; } const k = ((t * 2.2 + i / sparks.length) % 1); const base = P(2.9, 1.45, 0.95); s.setAttribute('cx', base[0] + Math.cos(i * 2.4) * 40 * k); s.setAttribute('cy', base[1] - 20 - Math.sin(i * 1.7 + 1) * 30 * k + 40 * k * k); s.setAttribute('opacity', 1 - k); });
+
+  // --- verifier: reads books, then reviews (12.6-16.5): lenses zoom, checks appear
+  place(verifier, ...seat.verifier);
+  const reviewing = t > 13.2 && t < 16.8;
+  const [va, vb] = typing(verifier, t, 0.6, t < 3 ? 0.8 : 0.2);
+  verifier.armR.setAttribute('transform', `translate(30 -84) rotate(${-8 + (reviewing ? -18 : vb * 0.5)})`);
+  verifier.armL.setAttribute('transform', `translate(-32 -74) rotate(${va * 0.6})`);
+  const zoom = reviewing ? 1 + 0.25 * (0.5 + 0.5 * Math.sin(t * 6)) : 1;
+  verifier.eyes.forEach((lens, i) => lens.setAttribute('transform', `translate(${i ? 15 : -15} -120) scale(${zoom})`));
+  verifier.head.setAttribute('transform', `rotate(${reviewing ? Math.sin(t * 2.4) * 8 : Math.sin(t * 0.8) * 3} 0 -100)`);
+  verifier.checks.forEach((c, i) => c.setAttribute('opacity', t > 14 + i * 0.7 && t < T ? 1 : 0));
+  screenLines('verifier', t, reviewing ? 9 : 2);
+
+  // --- researcher: floats, reads, glances
+  place(researcher, ...seat.researcher);
+  researcher.body.setAttribute('transform', `translate(0 ${Math.sin(t * 2.2) * 8})`);
+  researcher.ring.setAttribute('transform', `rotate(${Math.sin(t * 1.5) * 6} 0 -96)`);
+  researcher.prop.setAttribute('rx', 22 * Math.abs(Math.cos(t * 30)) + 4);
+  screenLines('researcher', t, 3);
+
+  // --- relay pulse when something passes through
+  const through = (t > 5 && t < 6.6) || (t > 12.2 && t < 13.4) || (t > 16.4 && t < 17.4);
+  relayGlow.setAttribute('opacity', through ? 0.95 : 0.45 + Math.sin(t * 2) * 0.1);
+  ring.setAttribute('rx', 40 + (through ? Math.sin(t * 10) * 6 : 0));
+
+  // --- packets (harness-mediated handoffs)
+  const leadHand = lerp2(P(...leadStand, 1.2), P(...leadStand, 1.2), 0);
+  // plan: lead -> relay (5.0-5.7) -> builder (5.9-7.0)
+  if (t > 5 && t < 7.05) {
+    const k1 = ease(seg(t, 5, 5.7)), k2 = ease(seg(t, 5.9, 7.0));
+    const p = k2 > 0 ? arcPoint(relayTop, P(seat.builder[0], seat.builder[1], 2.0), k2, 160) : arcPoint(P(leadStand[0], leadStand[1], 1.6), relayTop, k1, 60);
+    planPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); planPacket.setAttribute('opacity', 1);
+  } else planPacket.setAttribute('opacity', 0);
+  // work: builder -> relay (12.2-12.9) -> verifier (13.0-13.6)
+  if (t > 12.2 && t < 13.65) {
+    const k1 = ease(seg(t, 12.2, 12.9)), k2 = ease(seg(t, 13.0, 13.6));
+    const p = k2 > 0 ? arcPoint(relayTop, P(seat.verifier[0], seat.verifier[1], 2.0), k2, 150) : arcPoint(P(seat.builder[0], seat.builder[1], 2.0), relayTop, k1, 120);
+    workPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); workPacket.setAttribute('opacity', 1);
+  } else workPacket.setAttribute('opacity', 0);
+  // verdict: verifier -> relay -> lead (16.4-17.4)
+  if (t > 16.4 && t < 17.45) {
+    const k1 = ease(seg(t, 16.4, 16.9)), k2 = ease(seg(t, 16.95, 17.4));
+    const p = k2 > 0 ? arcPoint(relayTop, P(seat.lead[0], seat.lead[1], 2.0), k2, 110) : arcPoint(P(seat.verifier[0], seat.verifier[1], 2.0), relayTop, k1, 120);
+    verdictPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); verdictPacket.setAttribute('opacity', 1);
+  } else verdictPacket.setAttribute('opacity', 0);
+
+  // --- gates
+  gateOn(0, t > 8.6 ? 1 : 0); gateOn(1, t > 10.4 ? 1 : 0); gateOn(2, t > 11.6 ? 1 : 0);
+  gateOn(3, t > 13.4 ? (t > 16.2 ? 1 : 0.5) : 0); gateOn(4, t > 16.6 ? 1 : 0);
+  cards[2].setAttribute('opacity', t > 16.6 ? 1 : 0.25);
+
+  // --- bubbles
+  bubbleAt(bubbles.lead, lead, ['계획 확정!', 'R1 마감일, R2 빨간 표시'], 'left', t > 4.2 && t < 6.4 ? 1 : 0);
+  if (t > 17.4 && t < 21.2) bubbleAt(bubbles.lead, lead, ['완료 보고했어요', '게이트 5개 통과 ✓'], 'right', 1);
+  bubbleAt(bubbles.builder, builder, t < 8.2 ? ['좋아요, 바로 시작!'] : ['npm test 통과', '결과 넘길게요'], 'left', (t > 7.1 && t < 8.3) || (t > 11.4 && t < 12.6) ? 1 : 0);
+  bubbleAt(bubbles.verifier, verifier, t < 15.6 ? ['R2 증거 확인 중…', 'test/app.test.mjs:42'] : ['PASS', '요구사항 2개 모두 확인'], 'right', t > 13.7 && t < 16.8 ? 1 : 0);
+  bubbleAt(bubbles.researcher, researcher, ['(조사 요청 없음 · 대기)'], 'left', t > 1 && t < 2.8 ? 0.85 : 0);
+
+  // --- celebration
+  const party = seg(t, 17.4, 20.5);
+  confetti.forEach((c, i) => {
+    if (party <= 0 || party >= 1) { c.setAttribute('opacity', 0); return; }
+    const k = (party * 1.4 + (i % 7) * 0.05) % 1, base = P(5.6, 5.1, 2.8);
+    const x = base[0] + Math.cos(i * 1.37) * (60 + i * 9) * k, y = base[1] - 40 + (k * k * 260) - Math.sin(i) * 60 * k;
+    c.setAttribute('transform', `translate(${x} ${y}) rotate(${i * 40 + k * 540})`); c.setAttribute('opacity', 1 - k * 0.8);
+  });
+  if (party > 0 && party < 1) { const hop = Math.abs(Math.sin(t * 7)) * -10; builder.body.setAttribute('transform', `translate(0 ${hop})`); verifier.body.setAttribute('transform', `translate(0 ${Math.abs(Math.sin(t * 7 + 1)) * -10})`); }
+
+  if (!reduced) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__seek = s => { start = performance.now() - s * 1000; };
+})();
+</script>
+</body>
+</html>
