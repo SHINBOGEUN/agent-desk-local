@@ -334,3 +334,19 @@ test('serve starts the local server, reports its port and stops on abort', async
   assert.equal(await done, 0);
   assert.ok(parseArgs(['serve', '--port', '80']).errors.length === 1);
 });
+
+test('show lists runs and prints one run with its gates and report details', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
+  const { deps, out } = harness(project, runtime);
+  assert.equal(await main(['run', 'Which port?', '--runtime', 'fake', '--project', project], deps), 0);
+  out.length = 0;
+  assert.equal(await main(['show', '--project', project], deps), 0);
+  assert.match(out.join(''), /completed\s+\S+\s+Which port\?/);
+  const runId = /^\s*(\d+)\s/.exec(out.join(''))?.[1];
+  out.length = 0;
+  assert.equal(await main(['show', String(runId)], deps), 0);
+  assert.match(out.join(''), /Run \d+: completed/);
+  assert.match(out.join(''), /> classify \(lead\)/);
+  assert.equal(await main(['show', '999'], deps), 64);
+});

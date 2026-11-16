@@ -54,6 +54,7 @@ export const USAGE = `Usage:
   agent-desk init [--project <dir>] [--yes]  look at a project and draft .agent-desk/ settings (writes only with --yes, never overwrites)
   agent-desk skills check [--project <dir>]  check .agent-desk/skills/*/SKILL.md structure and descriptions
   agent-desk memory [add "<fact>"]          show project memory, or add a fact to .agent-desk/memory.md
+  agent-desk show [<run id>]             list recent runs, or show one run's gates, redo reasons and reports
   agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
   agent-desk serve [--port <n>]          start the local dashboard server (127.0.0.1 only, default port 4317)
   agent-desk doctor [--project <dir>]    check Codex, settings and project config
@@ -121,6 +122,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   const project = path.resolve(deps.cwd, parsed.project ?? '.');
   if (parsed.command === 'doctor') return doctor(parsed, project, deps);
   if (parsed.command === 'run') return run(parsed, project, deps);
+  if (parsed.command === 'show') return show(parsed, deps);
   if (parsed.command === 'serve') return serve(parsed, deps);
   if (parsed.command === 'revert') return revert(parsed, deps);
   if (parsed.command === 'init') return init(parsed, project, deps);
@@ -245,6 +247,34 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
   if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
   if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
   return EXIT_CODES[result.status] ?? 1;
+}
+
+async function show(parsed: Parsed, deps: CliDeps): Promise<number> {
+  const dbFile = path.join(dataDirectory(deps.env, deps.platform), 'agent-desk.db');
+  if (!fs.existsSync(dbFile)) { deps.err('no runs recorded yet\n'); return 64; }
+  const store = new RunStore(dbFile);
+  try {
+    if (!parsed.request) {
+      const rows = store.listRuns(parsed.project ? path.resolve(deps.cwd, parsed.project) : undefined, 20);
+      for (const row of rows) deps.out(`${String(row.id).padStart(5)}  ${row.status.padEnd(12)} ${row.startedAt}  ${row.request.replace(/\s+/g, ' ').slice(0, 70)}  [${row.project}]\n`);
+      return 0;
+    }
+    const runId = Number(parsed.request);
+    const row = Number.isInteger(runId) ? store.getRun(runId) : null;
+    if (!row) { deps.err(`run ${parsed.request} not found\n`); return 64; }
+    deps.out(`Run ${row.id}: ${row.status}${row.reason ? ` - ${row.reason}` : ''}\nProject: ${row.project}\nRequest: ${row.request.replace(/\s+/g, ' ').slice(0, 300)}\nTokens: ${store.usageTotal(runId)}\n\n`);
+    for (const stored of store.events(runId)) {
+      const event = stored.data;
+      if (event.type === 'step_started') deps.out(`> ${event.step} (${event.role})\n`);
+      else if (event.type === 'gate') deps.out(`  gate ${event.result.gate}${event.result.attempt ? `#${event.result.attempt}` : ''}: ${event.result.ok ? 'ok' : 'FAILED'} - ${event.result.detail}${event.result.problems?.length ? `\n${event.result.problems.map(problem => `      - ${problem}`).join('\n')}` : ''}\n`);
+      else if (event.type === 'redo') deps.out(`  redo ${event.attempt} (${event.mode}):\n${event.reasons.map(reason => `      - ${reason}`).join('\n')}\n`);
+      else if (event.type === 'report') deps.out(`  report ${event.kind} ${event.accepted ? 'accepted' : 'rejected'}: ${event.detail.slice(0, 600)}\n`);
+      else if (event.type === 'retry') deps.out(`  retry ${event.step}: ${event.reason}\n`);
+    }
+    return 0;
+  } finally {
+    store.close();
+  }
 }
 
 async function serve(parsed: Parsed, deps: CliDeps): Promise<number> {
