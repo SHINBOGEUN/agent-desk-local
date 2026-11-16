@@ -3,9 +3,7 @@ import type { FormEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
 import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
-import type { BenchSet, BenchSummary, GateResult, StoredEvent, Timeline } from './model.ts';
-import { sceneOf } from './scene.ts';
-import type { Mood } from './scene.ts';
+import type { BenchSet, BenchSummary, GateResult, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, remainingText, translate, useI18n } from './i18n.ts';
 import type { I18n, Lang } from './i18n.ts';
 
@@ -304,61 +302,6 @@ function RoleTable({ timeline, detail }: { timeline: Timeline; detail: RunDetail
   );
 }
 
-function RobotFigure({ mood, initial }: { mood: Mood; initial: string }) {
-  return (
-    <svg className={`robot mood-${mood}`} viewBox="0 0 80 96" role="img" aria-hidden="true">
-      <line x1="40" y1="16" x2="40" y2="7" stroke="currentColor" strokeWidth="2" />
-      <circle className="bulb" cx="40" cy="5" r="3.5" fill="currentColor" />
-      <rect className="head" x="12" y="16" width="56" height="40" rx="14" fill="currentColor" fillOpacity="0.14" stroke="currentColor" strokeWidth="2" />
-      {mood === 'done' ? <><path d="M25 36 q5 -7 10 0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /><path d="M45 36 q5 -7 10 0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></>
-        : mood === 'failed' ? <><path d="M26 31 l8 8 M34 31 l-8 8 M46 31 l8 8 M54 31 l-8 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></>
-        : <><circle className="eye" cx="30" cy="35" r="4.5" fill="currentColor" /><circle className="eye" cx="50" cy="35" r="4.5" fill="currentColor" /></>}
-      {mood === 'done' ? <path d="M32 44 q8 8 16 0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-        : mood === 'failed' ? <path d="M32 49 q8 -7 16 0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-        : mood === 'working' ? <ellipse cx="40" cy="46" rx="4" ry="3" fill="currentColor" />
-        : mood === 'asking' ? <circle cx="40" cy="46" r="3" fill="none" stroke="currentColor" strokeWidth="2" />
-        : <line x1="34" y1="46" x2="46" y2="46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />}
-      <rect x="22" y="60" width="36" height="28" rx="8" fill="currentColor" fillOpacity="0.14" stroke="currentColor" strokeWidth="2" />
-      <text x="40" y="79" textAnchor="middle" fontSize="14" fontWeight="500" fill="currentColor">{initial}</text>
-      <circle className="hand hand-l" cx="14" cy="74" r="5" fill="currentColor" />
-      <circle className="hand hand-r" cx="66" cy="74" r="5" fill="currentColor" />
-      {mood === 'asking' ? <text className="mark" x="62" y="14" fontSize="18" fontWeight="600" fill="currentColor">?</text> : null}
-      {mood === 'failed' ? <text className="mark" x="62" y="14" fontSize="18" fontWeight="600" fill="currentColor">!</text> : null}
-    </svg>
-  );
-}
-
-function SceneView({ timeline, asking, replaying, canReplay, onReplay }: { timeline: Timeline; asking: boolean; replaying: boolean; canReplay: boolean; onReplay: () => void }) {
-  const { t } = useI18n();
-  const scene = sceneOf(timeline, asking);
-  const who = (name: string): string => (name === 'you' ? t('toYou') : name);
-  const speaking = scene.speaking;
-  const bubbleText = (): string => (speaking ? `${t('bubbleTo', { who: who(speaking.to) })}: ${speaking.text}` : '');
-  return (
-    <div className="card scene">
-      <div className="step-head"><h2>{t('sceneTitle')}</h2>{replaying ? <span className="muted">{t('replaying')}</span> : null}
-        {canReplay || replaying ? <button className="push small" onClick={onReplay}>{replaying ? t('replayStop') : t('replay')}</button> : null}</div>
-      <div className="robots">
-        {scene.robots.map(robot => (
-          <div key={robot.role} className={`robot-slot role-${robot.role}`}>
-            <div className="bubble-space">{speaking && speaking.from === robot.role ? <div className={`bubble tone-${speaking.tone}`}>{bubbleText()}</div> : null}</div>
-            <RobotFigure mood={robot.mood} initial={robot.role.charAt(0).toUpperCase()} />
-            <strong>{robot.role}</strong>
-            <span className="muted">{t(`mood_${robot.mood}` as 'mood_idle')}{robot.activity && robot.mood === 'working' ? ` · ${robot.activity}` : ''}</span>
-          </div>
-        ))}
-      </div>
-      <div className="harness">
-        <strong>Harness</strong><span className="muted">{t('harnessHint')}</span>
-        <span className="chips">{scene.gates.slice(-8).map((gate, index) => <span key={index} className={`badge tone-${gate.skipped ? 'neutral' : gate.ok ? 'success' : 'danger'}`}>{gate.gate}</span>)}</span>
-        {speaking && speaking.from === 'harness' ? <div className={`bubble tone-${speaking.tone}`}>{bubbleText()}</div> : null}
-      </div>
-      {scene.bubbles.length ? <ul className="chatlog">{scene.bubbles.slice(-4).map(bubble => <li key={bubble.id}><span className="muted">{who(bubble.from)} → {who(bubble.to)}</span> {bubble.text}</li>)}</ul> : <p className="muted">{t('sceneEmpty')}</p>}
-      <p className="muted note">{t('sceneNote')}</p>
-    </div>
-  );
-}
-
 function RunView({ runId, active, onFinished }: { runId: number; active: ActiveRun | null; onFinished: () => void }) {
   const { t } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -366,9 +309,6 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState('');
   const [revertNote, setRevertNote] = useState('');
-  const [events, setEvents] = useState<StoredEvent[]>([]);
-  const [replay, setReplay] = useState<Timeline | null>(null);
-  const replayTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const finished = useRef(onFinished);
   finished.current = onFinished;
 
@@ -377,34 +317,15 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
   }, [runId]);
 
   useEffect(() => {
-    setDetail(null); setTimeline(emptyTimeline()); setPending(null); setError(''); setRevertNote(''); setEvents([]); setReplay(null);
+    setDetail(null); setTimeline(emptyTimeline()); setPending(null); setError(''); setRevertNote('');
     void reload();
     return followRun(runId, {
-      onEvent: event => { setTimeline(current => applyEvents(current, [event])); setEvents(current => (current.some(item => item.seq === event.seq) ? current : [...current, event])); },
+      onEvent: event => setTimeline(current => applyEvents(current, [event])),
       onPending: setPending,
       onDone: () => { void reload(); finished.current(); },
       onError: () => { /* EventSource retries; the next event or done message clears this */ },
     });
   }, [runId, reload]);
-
-  const stopReplay = useCallback((): void => {
-    if (replayTimer.current) clearInterval(replayTimer.current);
-    replayTimer.current = null;
-    setReplay(null);
-  }, []);
-  useEffect(() => stopReplay, [runId, stopReplay]);
-  const toggleReplay = (): void => {
-    if (replay) { stopReplay(); return; }
-    const keys = events.filter(event => ['step_started', 'step_finished', 'gate', 'redo', 'report', 'run_finished'].includes(event.data.type));
-    let shown = emptyTimeline();
-    let index = 0;
-    setReplay(shown);
-    replayTimer.current = setInterval(() => {
-      if (index >= keys.length) { if (replayTimer.current) clearInterval(replayTimer.current); replayTimer.current = null; return; }
-      shown = applyEvents(shown, [keys[index++]!]);
-      setReplay(shown);
-    }, 600);
-  };
 
   const isActive = active?.runId === runId;
   const status = detail?.run.status ?? 'running';
@@ -434,7 +355,6 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
       </div>
       {pending && isActive ? <PendingCard pending={pending} /> : null}
       {detail && status !== 'running' ? <ReportCard report={detail.report} workflow={detail.run.workflow} /> : null}
-      <SceneView timeline={replay ?? timeline} asking={replay === null && pending !== null && isActive} replaying={replay !== null} canReplay={status !== 'running' && events.length > 0} onReplay={toggleReplay} />
       <RoleTable timeline={timeline} detail={detail} />
       <div className="card"><TimelineView timeline={timeline} /></div>
     </div>
