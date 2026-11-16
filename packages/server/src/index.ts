@@ -23,6 +23,8 @@ export interface ServerOptions {
   port?: number;
   /** How often SSE streams look for new events. */
   pollMs?: number;
+  /** Folder with the built dashboard (index.html and assets). Omitted: only the API is served. */
+  staticDir?: string;
 }
 
 interface ActiveRun {
@@ -37,6 +39,7 @@ const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 's
 const REVIEWS = new Set(['always', 'auto', 'never']);
 const RUNTIMES = new Set(['codex', 'claude', 'fake']);
 const MAX_BODY = 256 * 1024;
+const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json; charset=utf-8' };
 
 class HttpError extends Error {
   readonly status: number;
@@ -203,7 +206,27 @@ export function createServer(options: ServerOptions): LocalServer {
       const loaded = loadProject(project);
       return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets) });
     }
+    if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);
     throw new HttpError(404, 'not found');
+  }
+
+  function serveStatic(res: http.ServerResponse, urlPath: string): void {
+    const root = path.resolve(options.staticDir!);
+    let relative: string;
+    try { relative = decodeURIComponent(urlPath); } catch { throw new HttpError(400, 'bad path'); }
+    if (relative.includes('\0')) throw new HttpError(400, 'bad path');
+    let file = path.resolve(root, `.${relative}`);
+    if (file !== root && !file.startsWith(root + path.sep)) throw new HttpError(404, 'not found');
+    const isFile = (candidate: string): boolean => { try { return fs.statSync(candidate).isFile(); } catch { return false; } };
+    if (!isFile(file)) {
+      // Single-page app: unknown paths without an extension get the shell; missing assets stay 404.
+      if (path.extname(relative)) throw new HttpError(404, 'not found');
+      file = path.join(root, 'index.html');
+      if (!isFile(file)) throw new HttpError(404, 'The dashboard is not built. Run "npm run web:build" first.');
+    }
+    const type = MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': file.endsWith('index.html') ? 'no-store' : 'public, max-age=3600' });
+    fs.createReadStream(file).pipe(res);
   }
 
   const server = http.createServer((req, res) => {

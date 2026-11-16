@@ -21,7 +21,11 @@
   },
   "scripts": {
     "agent-desk": "node packages/cli/src/bin.ts",
-    "test": "node --test \"packages/*/test/*.test.ts\"",
+    "test": "node --test \"packages/*/test/*.test.ts\" \"web/test/*.test.ts\"",
+    "web:install": "npm --prefix web install",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:typecheck": "npm --prefix web run typecheck",
     "typecheck": "tsc -p tsconfig.json",
     "legacy:start": "npm --prefix legacy start",
     "legacy:check": "npm --prefix legacy run check",

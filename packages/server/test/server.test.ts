@@ -126,3 +126,32 @@ test('unknown runs and routes are 404, project info reports config problems and 
     assert.ok(Array.isArray(info.errors));
   } finally { await server.close(); }
 });
+
+test('serves the built dashboard: shell for app routes, assets by type, no path traversal, API untouched', async () => {
+  const dist = tmp();
+  fs.mkdirSync(path.join(dist, 'assets'));
+  fs.writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>desk</title>');
+  fs.writeFileSync(path.join(dist, 'assets', 'app.js'), 'console.log(1)');
+  fs.writeFileSync(path.join(path.dirname(dist), 'secret.txt'), 'nope');
+  const home = tmp();
+  const server = createServer({ env: { AGENT_DESK_HOME: home }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, staticDir: dist });
+  const { port } = await server.listen();
+  try {
+    const root = await call(port, 'GET', '/');
+    assert.equal(root.status, 200);
+    assert.match(String(root.headers['content-type']), /text\/html/);
+    assert.match(root.body, /<title>desk<\/title>/);
+    assert.match(String(root.headers['content-security-policy']), /script-src 'self'/);
+    assert.match((await call(port, 'GET', '/runs/12')).body, /<title>desk<\/title>/);
+    const asset = await call(port, 'GET', '/assets/app.js');
+    assert.match(String(asset.headers['content-type']), /javascript/);
+    assert.equal((await call(port, 'GET', '/assets/missing.js')).status, 404);
+    assert.equal((await call(port, 'GET', '/..%2fsecret.txt')).status, 404);
+    assert.equal((await call(port, 'GET', '/%2e%2e/secret.txt')).status, 404);
+    assert.equal((await call(port, 'GET', '/api/nothing')).status, 404);
+    assert.equal((await call(port, 'GET', '/api/health')).status, 200);
+  } finally { await server.close(); }
+  const bare = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0 });
+  const started = await bare.listen();
+  try { assert.equal((await call(started.port, 'GET', '/')).status, 404); } finally { await bare.close(); }
+});

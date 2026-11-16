@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
 import { planText, revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
@@ -278,10 +279,12 @@ async function show(parsed: Parsed, deps: CliDeps): Promise<number> {
 }
 
 async function serve(parsed: Parsed, deps: CliDeps): Promise<number> {
-  const server = createServer({ env: deps.env, platform: deps.platform, createRuntime: deps.createRuntime, port: parsed.port ?? Number(deps.env.AGENT_DESK_PORT || 4317) });
+  const staticDir = deps.env.AGENT_DESK_WEB || fileURLToPath(new URL('../../../web/dist', import.meta.url));
+  const server = createServer({ env: deps.env, platform: deps.platform, createRuntime: deps.createRuntime, port: parsed.port ?? Number(deps.env.AGENT_DESK_PORT || 4317), ...(fs.existsSync(staticDir) ? { staticDir } : {}) });
   try {
     const { port } = await server.listen();
     deps.out(`agent-desk server listening on http://127.0.0.1:${port} (Ctrl+C to stop)\n`);
+    if (!fs.existsSync(staticDir)) deps.out('The dashboard is not built yet (npm run web:build); only the API is available.\n');
   } catch (error) {
     deps.err(`could not start the server: ${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

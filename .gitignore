@@ -10,3 +10,4 @@ node_modules/
 .agents/
 .DS_Store
 coverage/
+web/dist/
