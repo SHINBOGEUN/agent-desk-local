@@ -69,7 +69,7 @@ function FolderPicker({ start, onPick, onClose }: { start: string; onPick: (path
 }
 
 function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted: (runId: number) => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [project, setProject] = useState(readProject);
   const [request, setRequest] = useState('');
   const [runtime, setRuntime] = useState<'codex' | 'claude' | ''>('');
@@ -98,7 +98,7 @@ function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted:
     setBusy(true);
     try {
       saveProject(project.trim());
-      const { runId } = await api.start({ project: project.trim(), request: request.trim(), ...(runtime ? { runtime } : {}), ...(review ? { review } : {}) });
+      const { runId } = await api.start({ project: project.trim(), request: request.trim(), ...(runtime ? { runtime } : {}), ...(review ? { review } : {}), language: lang });
       setRequest('');
       onStarted(runId);
     } catch (caught) { setError(errorText(caught)); } finally { setBusy(false); }

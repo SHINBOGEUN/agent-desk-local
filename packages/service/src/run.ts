@@ -25,6 +25,8 @@ export interface ExecuteOptions {
   runtime?: RuntimeKind | undefined;
   verify?: string[];
   review?: ReviewPolicy | undefined;
+  /** Language for answers and harness messages; default: config.language, then English. */
+  language?: 'en' | 'ko' | undefined;
   maxTokens?: number | undefined;
   maxMinutes?: number | undefined;
   /** Stop when the 5-hour Codex limit grows by this many percentage points during the run (default: config.limits.codexUsagePercent). */
@@ -91,6 +93,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     const maxTokens = options.maxTokens ?? config.limits?.tokens;
     const maxMinutes = options.maxMinutes ?? config.limits?.minutes;
     const review = options.review ?? config.review;
+    const language = options.language ?? config.language;
     const ask = options.ask;
     const memory = loadMemory(project);
     const started = Date.now();
@@ -114,6 +117,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       ...(config.ignore ? { ignore: config.ignore } : {}),
       ...(maxTokens || maxMinutes ? { budget: { ...(maxTokens ? { maxTokens } : {}), ...(maxMinutes ? { maxMillis: maxMinutes * 60000 } : {}) } } : {}),
       ...(review ? { review } : {}),
+      ...(language ? { language } : {}),
       ...(config.limits?.redo !== undefined ? { redoLimit: config.limits.redo } : {}),
     };
     const usageLimit = options.maxUsagePercent ?? config.limits?.codexUsagePercent;

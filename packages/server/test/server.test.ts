@@ -82,6 +82,7 @@ test('bad start requests are rejected; a second run while one is active gets 409
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project: 'relative', request: 'x' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: '  ' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', review: 'sometimes' } })).status, 400);
+    assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', language: 'fr' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project: path.join(project, 'missing'), request: 'x', runtime: 'fake' } })).status, 400);
     const started = await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Add storage', runtime: 'fake' } });
     assert.equal(started.status, 202);

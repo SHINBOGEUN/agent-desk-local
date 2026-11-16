@@ -114,6 +114,8 @@ export function createServer(options: ServerOptions): LocalServer {
     if (runtime !== undefined && !(typeof runtime === 'string' && RUNTIMES.has(runtime))) throw new HttpError(400, 'unknown runtime');
     const review = body.review;
     if (review !== undefined && !(typeof review === 'string' && REVIEWS.has(review))) throw new HttpError(400, 'review must be always, auto or never');
+    const language = body.language;
+    if (language !== undefined && language !== 'en' && language !== 'ko') throw new HttpError(400, 'language must be en or ko');
     const verify = Array.isArray(body.verify) ? body.verify.filter((item): item is string => typeof item === 'string') : [];
     const controller = new AbortController();
     const ask = (question: UserQuestion): Promise<string> => new Promise(resolve => {
@@ -128,6 +130,7 @@ export function createServer(options: ServerOptions): LocalServer {
         project, request, env: options.env, platform: options.platform, createRuntime: options.createRuntime,
         ...(runtime ? { runtime: runtime as RuntimeKind } : {}),
         ...(review ? { review: review as ReviewPolicy } : {}),
+        ...(language ? { language } : {}),
         verify, ask, signal: controller.signal,
         onStarted: ({ runId }) => { started = true; active = { runId, project, request, controller, pending: null }; resolveId(runId); },
       }).then(outcome => {

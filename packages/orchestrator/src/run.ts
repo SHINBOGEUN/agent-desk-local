@@ -48,6 +48,8 @@ const DEFAULT_VERIFY_TIMEOUT_MS = 120_000;
 class RunContext {
   readonly config: RunConfig;
   readonly events: RunEvent[] = [];
+  /** The harness's own messages in the run's language. */
+  say(english: string, korean: string): string { return this.config.language === 'ko' ? korean : english; }
   readonly gates: GateResult[] = [];
   readonly warnings: string[] = [];
   restorePoint?: RestorePointInfo;
@@ -163,7 +165,7 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
   const skills = config.skills?.[role] ?? [];
   return ctx.runtimeFor(role).startSession({
     role, cwd: config.cwd, access: accessFor(ctx, role), skills, tools: toolsFor(ctx, step, role, holder),
-    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills),
+    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills, config.language),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
@@ -203,10 +205,10 @@ function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Parti
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
-  if (failure.kind === 'interrupted') return finish(ctx, 'interrupted', 'The run was stopped before it finished.', extra);
-  if (failure.kind === 'budget') return finish(ctx, 'interrupted', `Stopped by the budget. ${failure.reason}`, { ...extra, resume: { step: failure.step, redo: ctx.redo, note: 'Start a new run with the remaining requirements; earlier changes stay in the folder.' } });
-  if (failure.kind === 'needs_user') return finish(ctx, 'needs_user', `The agent needs an answer from you: ${failure.question}`, extra);
-  if (failure.type === 'environment') return finish(ctx, 'failed', `Environment problem: ${failure.reason} Fix it (run \`agent-desk doctor\`), then start the run again.`, { ...extra, failureType: 'environment' });
+  if (failure.kind === 'interrupted') return finish(ctx, 'interrupted', ctx.say('The run was stopped before it finished.', '실행이 끝나기 전에 중지되었습니다.'), extra);
+  if (failure.kind === 'budget') return finish(ctx, 'interrupted', ctx.say(`Stopped by the budget. ${failure.reason}`, `예산 한도에 도달해 중단되었습니다. ${failure.reason}`), { ...extra, resume: { step: failure.step, redo: ctx.redo, note: ctx.say('Start a new run with the remaining requirements; earlier changes stay in the folder.', '남은 요구사항으로 새 실행을 시작하세요. 이전 변경은 폴더에 그대로 남아 있습니다.') } });
+  if (failure.kind === 'needs_user') return finish(ctx, 'needs_user', ctx.say(`The agent needs an answer from you: ${failure.question}`, `에이전트가 답변을 기다립니다: ${failure.question}`), extra);
+  if (failure.type === 'environment') return finish(ctx, 'failed', ctx.say(`Environment problem: ${failure.reason} Fix it (run \`agent-desk doctor\`), then start the run again.`, `환경 문제: ${failure.reason} \`agent-desk doctor\`로 확인해 고친 뒤 다시 실행하세요.`), { ...extra, failureType: 'environment' });
   return finish(ctx, 'failed', failure.reason, { ...extra, failureType: failure.type });
 }
 
@@ -253,7 +255,7 @@ async function runClassify(ctx: RunContext, request: string, lead: LeadCollector
   const changes = ctx.recordGate(checkNoChanges({ attempt: 0, step: 'classify', diff: diffSnapshots(before, after) }));
   ctx.emit({ type: 'step_finished', step: 'classify', ok: !failure && changes.ok && !violation, detail: failure ? 'failed' : 'report accepted' });
   if (violation) return finish(ctx, 'failed', violation);
-  if (!changes.ok) return finish(ctx, 'needs_review', changes.problems[0] ?? 'A read-only step changed files.', failure ? {} : { classify: lead.classify!, workflow: lead.classify!.workflow, requirements: lead.classify!.requirements });
+  if (!changes.ok) return finish(ctx, 'needs_review', changes.problems[0] ?? ctx.say('A read-only step changed files.', '읽기 전용 단계에서 파일이 변경되었습니다.'), failure ? {} : { classify: lead.classify!, workflow: lead.classify!.workflow, requirements: lead.classify!.requirements });
   return failure ? failureResult(ctx, failure) : null;
 }
 
@@ -266,7 +268,7 @@ async function guardedReadOnly(ctx: RunContext, step: StepKind, work: () => Prom
   const violation = protectedViolation(ctx, before, after);
   const changes = ctx.recordGate(checkNoChanges({ attempt: 0, step, diff: diffSnapshots(before, after) }));
   if (violation) return { failure, stop: finish(ctx, 'failed', violation) };
-  if (!changes.ok) return { failure, stop: finish(ctx, 'needs_review', changes.problems[0] ?? 'A read-only step changed files.') };
+  if (!changes.ok) return { failure, stop: finish(ctx, 'needs_review', changes.problems[0] ?? ctx.say('A read-only step changed files.', '읽기 전용 단계에서 파일이 변경되었습니다.')) };
   return { failure, stop: null };
 }
 
@@ -324,7 +326,7 @@ async function runInvestigate(ctx: RunContext, request: string, requirements: Re
   const answer: AnswerReport = { answer: text, sources: [...new Set(reports.flatMap(report => report.sources))] };
   ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
   ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'investigation assembled' });
-  return finish(ctx, 'completed', `Investigated ${reports.length} angle(s). No files were changed.`, { ...base, answer, research: reports });
+  return finish(ctx, 'completed', ctx.say(`Investigated ${reports.length} angle(s). No files were changed.`, `${reports.length}개 관점을 조사했습니다. 변경된 파일은 없습니다.`), { ...base, answer, research: reports });
 }
 
 async function runBuild(ctx: RunContext, request: string, requirements: Requirement[], base: Partial<RunResult>, plan?: PlanReport): Promise<RunResult> {
@@ -395,7 +397,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       }
       if (ctx.redo >= redoLimit) {
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'redo limit reached' });
-        return finish(ctx, 'needs_review', `Still failing after ${ctx.redo} redo round(s): ${reasons[0]?.split('\n')[0] ?? 'unknown problem'}`, { ...base, builder: report, unverified: report.unverified });
+        return finish(ctx, 'needs_review', ctx.say(`Still failing after ${ctx.redo} redo round(s): ${reasons[0]?.split('\n')[0] ?? 'unknown problem'}`, `재작업 ${ctx.redo}회 후에도 실패합니다: ${reasons[0]?.split('\n')[0] ?? '원인을 알 수 없음'}`), { ...base, builder: report, unverified: report.unverified });
       }
       ctx.redo++;
       const mode = ctx.redo === 1 ? 'same-session' : 'new-session';
@@ -464,22 +466,22 @@ function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g
   const testFiles = (g2.data?.testFilesChanged as string[] | undefined) ?? [];
   if (testFiles.length) ctx.warnings.push(`Test or check files changed: ${testFiles.join(', ')}. Confirm the change was required by the request.`);
   const openIds = report.requirements.filter(entry => entry.status === 'unverified').map(entry => entry.id);
-  const unverified = [...openIds.map(id => `Requirement ${id} was reported as unverified.`), ...report.unverified];
-  if (g3.skipped) ctx.warnings.push('No automatic verification: no verify commands are configured.');
+  const unverified = [...openIds.map(id => ctx.say(`Requirement ${id} was reported as unverified.`, `요구사항 ${id}은(는) 검증되지 않은 것으로 보고되었습니다.`)), ...report.unverified];
+  if (g3.skipped) ctx.warnings.push(ctx.say('No automatic verification: no verify commands are configured.', '자동 검증이 없습니다: 검증 명령이 설정되어 있지 않습니다.'));
   const reviewExtra: Partial<RunResult> = review.kind === 'verdict' ? { review: review.report } : review.kind === 'skipped' ? { reviewSkipped: review.reason } : {};
   if (review.kind === 'verdict' && review.report.verdict === 'BLOCKED') {
     const why = review.report.blocking.map(finding => finding.reason).join('; ');
-    if (g3.skipped) return finish(ctx, 'needs_review', `The reviewer could not decide and no verify command is configured: ${why}`, { ...base, ...reviewExtra, builder: report, unverified });
-    unverified.push(`Review could not decide: ${why}`);
+    if (g3.skipped) return finish(ctx, 'needs_review', ctx.say(`The reviewer could not decide and no verify command is configured: ${why}`, `리뷰어가 판단하지 못했고 검증 명령도 설정되어 있지 않습니다: ${why}`), { ...base, ...reviewExtra, builder: report, unverified });
+    unverified.push(ctx.say(`Review could not decide: ${why}`, `리뷰가 판단하지 못했습니다: ${why}`));
   }
   ctx.emit({ type: 'step_finished', step: 'build', ok: true, detail: 'gates passed' });
   if (openIds.length && g3.skipped) {
-    return finish(ctx, 'needs_review', `The builder could not verify ${openIds.join(', ')} and no verify command is configured to check them.`, { ...base, ...reviewExtra, builder: report, unverified });
+    return finish(ctx, 'needs_review', ctx.say(`The builder could not verify ${openIds.join(', ')} and no verify command is configured to check them.`, `빌더가 ${openIds.join(', ')}을(를) 검증하지 못했고, 확인할 검증 명령도 설정되어 있지 않습니다.`), { ...base, ...reviewExtra, builder: report, unverified });
   }
   ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
   ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'build reported' });
-  const note = unverified.length ? ` Not verified by the builder: ${unverified.length} item(s), listed in the result.` : '';
-  return finish(ctx, 'completed', `Every requirement is done and the gates passed.${note}`, { ...base, ...reviewExtra, builder: report, unverified });
+  const note = unverified.length ? ctx.say(` Not verified by the builder: ${unverified.length} item(s), listed in the result.`, ` 빌더가 검증하지 못한 항목 ${unverified.length}개가 결과에 정리되어 있습니다.`) : '';
+  return finish(ctx, 'completed', ctx.say(`Every requirement is done and the gates passed.${note}`, `모든 요구사항이 완료되었고 게이트를 통과했습니다.${note}`), { ...base, ...reviewExtra, builder: report, unverified });
 }
 
 export async function runRequest(request: string, config: RunConfig): Promise<RunResult> {
@@ -495,7 +497,7 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
     if (classify.workflow === 'answer') {
       ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
       ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'answered without changing files' });
-      return finish(ctx, 'completed', 'Answered from the project files. No files were changed.', { ...base, answer: lead.answer! });
+      return finish(ctx, 'completed', ctx.say('Answered from the project files. No files were changed.', '프로젝트 파일을 바탕으로 답했습니다. 변경된 파일은 없습니다.'), { ...base, answer: lead.answer! });
     }
     if (classify.workflow === 'build') return await runBuild(ctx, request, classify.requirements, base);
     if (classify.workflow === 'investigate') return await runInvestigate(ctx, request, classify.requirements, base);
@@ -503,11 +505,11 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
       const planned = await runPlan(ctx, request, classify.requirements, base);
       if ('stop' in planned) return planned.stop;
       if (config.confirmPlan && !(await config.confirmPlan(planned.plan, classify.requirements))) {
-        return finish(ctx, 'needs_user', 'You stopped the run after reading the plan. Nothing was changed.', { ...base, plan: planned.plan });
+        return finish(ctx, 'needs_user', ctx.say('You stopped the run after reading the plan. Nothing was changed.', '계획을 읽고 실행을 멈추셨습니다. 변경된 것은 없습니다.'), { ...base, plan: planned.plan });
       }
       return await runBuild(ctx, request, classify.requirements, { ...base, plan: planned.plan }, planned.plan);
     }
-    return finish(ctx, 'failed', `The "${classify.workflow}" workflow is not available in this version.`, base);
+    return finish(ctx, 'failed', ctx.say(`The "${classify.workflow}" workflow is not available in this version.`, `"${classify.workflow}" 워크플로는 이 버전에서 사용할 수 없습니다.`), base);
   } catch (error) {
     return finish(ctx, 'failed', error instanceof Error ? error.message : String(error));
   }

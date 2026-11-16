@@ -41,6 +41,7 @@ interface Parsed {
   yes: boolean;
   runtime?: RuntimeKind | undefined;
   review?: ReviewPolicy;
+  language?: 'en' | 'ko';
   verify: string[];
   maxTokens?: number | undefined;
   maxMinutes?: number | undefined;
@@ -100,6 +101,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--port': { const n = number(value(i, arg), arg); if (n !== undefined && (!Number.isInteger(n) || n < 1024 || n > 65535)) parsed.errors.push('--port expects 1024-65535'); else parsed.port = n; i++; break; }
       case '--max-minutes': parsed.maxMinutes = number(value(i, arg), arg); i++; break;
       case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
+      case '--language': { const v = value(i, arg); if (v === 'en' || v === 'ko') parsed.language = v; else if (v) parsed.errors.push('--language expects en or ko'); i++; break; }
       case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto or never'); i++; break; }
       default:
         if (arg.startsWith('--')) parsed.errors.push(`unknown option ${arg}`);
@@ -224,6 +226,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     runtime: parsed.runtime,
     verify: parsed.verify,
     review: parsed.review,
+    language: parsed.language,
     maxTokens: parsed.maxTokens,
     maxMinutes: parsed.maxMinutes,
     maxUsagePercent: parsed.maxUsagePercent,

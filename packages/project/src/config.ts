@@ -20,6 +20,8 @@ export interface ProjectConfig {
   skills?: string[];
   verify?: string[];
   review?: ReviewPolicy;
+  /** Language of answers, summaries and the harness's messages. Default "en". */
+  language?: 'en' | 'ko';
   ignore?: string[];
   /** Extra shell command prefixes Claude sessions may run without asking. */
   allowCommands?: string[];
@@ -37,7 +39,7 @@ const KINDS = ['codex', 'claude', 'fake'];
 export function validateConfig(raw: unknown): ConfigResult {
   const errors: string[] = [];
   if (!isRecord(raw)) return { ok: false, errors: ['config: expected a JSON object'] };
-  for (const key of Object.keys(raw)) if (!['runtimes', 'roles', 'skills', 'verify', 'review', 'ignore', 'allowCommands', 'limits'].includes(key)) errors.push(`config.${key}: unknown key`);
+  for (const key of Object.keys(raw)) if (!['runtimes', 'roles', 'skills', 'verify', 'review', 'language', 'ignore', 'allowCommands', 'limits'].includes(key)) errors.push(`config.${key}: unknown key`);
   if (raw.runtimes !== undefined) {
     if (!isRecord(raw.runtimes)) errors.push('config.runtimes: expected an object like { "primary": "codex", "review": "claude" }');
     else for (const [slot, kind] of Object.entries(raw.runtimes)) {
@@ -61,6 +63,7 @@ export function validateConfig(raw: unknown): ConfigResult {
   if (raw.ignore !== undefined && !stringList(raw.ignore)) errors.push('config.ignore: expected a list of path patterns');
   if (raw.allowCommands !== undefined && !stringList(raw.allowCommands)) errors.push('config.allowCommands: expected a list of command prefixes');
   if (raw.review !== undefined && !['always', 'auto', 'never'].includes(raw.review as string)) errors.push('config.review: expected "always", "auto" or "never"');
+  if (raw.language !== undefined && !['en', 'ko'].includes(raw.language as string)) errors.push('config.language: expected "en" or "ko"');
   if (raw.limits !== undefined) {
     if (!isRecord(raw.limits)) errors.push('config.limits: expected an object');
     else for (const [key, value] of Object.entries(raw.limits)) {

@@ -45,6 +45,8 @@ export interface RunConfig {
   access?: Partial<Record<RoleId, Access>>;
   models?: Partial<Record<RoleId, string>>;
   effort?: Partial<Record<RoleId, Effort>>;
+  /** Language of everything the user reads: agents are told to write answers, summaries and reasons in it, and the harness's own messages follow it. Default "en". */
+  language?: 'en' | 'ko';
   /** Extra text appended to a role's instructions (project rules). */
   roleNotes?: Partial<Record<RoleId, string>>;
   /** Skills per role (from role files). Each session gets them as SessionOptions.skills and as a list in its instructions; SKILL.md is read only when needed. */

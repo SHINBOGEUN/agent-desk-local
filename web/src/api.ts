@@ -43,7 +43,7 @@ export interface ProjectConfigView { runtimes?: { primary?: string; review?: str
 export interface ProjectInfo { config: ProjectConfigView; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
 export interface LimitWindowView { kind: string; windowDurationMins: number | null; usedPercent: number; remainingPercent: number; resetsAt: number | null }
 export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string }
-export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; verify?: string[] }
+export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; language?: 'en' | 'ko'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
 export interface FolderEntry { name: string; path: string; isProject: boolean }

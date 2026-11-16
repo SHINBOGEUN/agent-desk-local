@@ -32,6 +32,17 @@ test('answer fast path: one lead session, no builder, files untouched', async ()
   assert.deepEqual(fs.readdirSync(cwd), []);
 });
 
+test('language ko: agents are told to write in Korean and the harness result message is Korean; default stays English', async () => {
+  const ko = new FakeRuntime({ scripts: { lead: [script([usage(100), { report: answerReport }])], builder: [] } });
+  const korean = await runRequest('Which port does the server use?', { cwd: tmp(), runtime: ko, language: 'ko' });
+  assert.match(korean.reason, /프로젝트 파일을 바탕으로/);
+  assert.match(ko.turns[0]!.options.instructions ?? '', /in Korean/);
+  const en = new FakeRuntime({ scripts: { lead: [script([usage(100), { report: answerReport }])], builder: [] } });
+  const english = await runRequest('Which port does the server use?', { cwd: tmp(), runtime: en });
+  assert.match(english.reason, /Answered from the project files/);
+  assert.doesNotMatch(en.turns[0]!.options.instructions ?? '', /in Korean/);
+});
+
 test('build workflow follows classify -> build -> report and records usage per step', async () => {
   const cwd = tmp();
   const runtime = new FakeRuntime({ scripts: { lead: [script([usage(50), { report: buildClassify }])], builder: [script([write('ping.js'), write('ping.test.js'), usage(400), { report: doneReport }])] } });
