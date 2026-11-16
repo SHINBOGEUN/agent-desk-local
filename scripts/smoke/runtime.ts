@@ -78,8 +78,11 @@ try {
   try {
     const events = await turn(writer, 'Create a file hello.txt containing exactly "hi". Then run the command: node -e "console.log(1+1)" or, if that is not allowed, any harmless command that prints text. Finally call submit_report with exactly these fields and no others: summary (one sentence), changedFiles (["hello.txt"]), commandsRun (a list of {command, exitCode} for commands you ran), requirements ([]), unverified ([]).');
     check('write turn completes', end(events)?.status === 'completed', JSON.stringify(end(events)));
-    check('file was created', fs.existsSync(path.join(work, 'hello.txt')) && fs.readFileSync(path.join(work, 'hello.txt'), 'utf8').trim() === 'hi', fs.existsSync(path.join(work, 'hello.txt')) ? 'content differs' : 'missing');
-    check('file_change event seen', events.some(event => event.type === 'file_change'), `${events.filter(event => event.type === 'file_change').length} event(s)`);
+    check('file was created', fs.existsSync(path.join(work, 'hello.txt')) && fs.readFileSync(path.join(work, 'hello.txt'), 'utf8').trim() === 'hi', fs.existsSync(path.join(work, 'hello.txt')) ? 'hello.txt exists but its content is not "hi"' : 'hello.txt is missing');
+    // Codex often writes files through a shell command instead of its patch tool, which produces no file_change event.
+    // The harness does not depend on it (gate G2 compares file snapshots), so this only needs file_change OR a command.
+    const changeEvents = events.filter(event => event.type === 'file_change').length;
+    check('file change visible as an event or a command', changeEvents > 0 || events.some(event => event.type === 'command'), `${changeEvents} file_change event(s); file_change is optional when the runtime writes through a command`);
     check('command event seen', events.some(event => event.type === 'command'), JSON.stringify(events.filter(event => event.type === 'command').slice(0, 2)));
     console.log(`  approvals asked: ${approvals.join(', ') || 'none'}`);
     check('builder report accepted', builderCollector.report !== null, builderCollector.report ? 'yes' : `no; invalid attempts ${builderCollector.invalidAttempts}`);

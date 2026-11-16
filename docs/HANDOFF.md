@@ -203,3 +203,10 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 151개 테스트와 `tsc` 통과. 실제 Claude에서 검증된 것: stream-json 다중 턴, usage 증분, `approve` 권한 호출, `--tools` 쉼표 목록, 중단. 아직 미검증: 수정 후 보고 제출, codex 전부.
 - 다음 사람이 할 일: 사용자가 `git pull` 후 `node scripts/smoke/runtime.ts claude`·`codex` 재실행하고 `scripts/smoke/results/*.json`을 전달.
 
+
+
+### 2026-11-16 · Claude (21차)
+- 한 일: 두 런타임 스모크 재실행 결과 반영. Claude 전 항목 통과. Codex는 보고 제출·읽기 전용·중단 등 통과, `file_change` 이벤트만 0건(셸 명령으로 파일 작성) → 스모크 점검을 완화하고 `docs/WORKLOG.md`에 기록. 이벤트 필드 이름은 이 실행에서 usage·message·command·turn_end·보고가 모두 동작해 대체로 확인됨.
+- 아직 없는 것: Codex `account/rateLimits/read` 실제 응답, Codex `fileChange` 이벤트(patch 도구 사용 시), 2-10 측정.
+- 다음 사람이 할 일: 사용자 PC에서 2-10(`npm run bench:run -- --adapter v2 --label v2-codex-auto --review auto`).
+

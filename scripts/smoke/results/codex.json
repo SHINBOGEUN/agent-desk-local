@@ -1,0 +1,215 @@
+{
+  "runtime": "codex",
+  "at": "2026-11-16T06:09:08.846Z",
+  "platform": "win32",
+  "node": "v24.20.0",
+  "ok": false,
+  "results": [
+    {
+      "name": "codex executable",
+      "ok": true,
+      "detail": "codex-cli 0.167.2"
+    },
+    {
+      "name": "read-only turn completes",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "usage events arrive",
+      "ok": true,
+      "detail": "38347 tokens in 3 event(s)"
+    },
+    {
+      "name": "messages are translated",
+      "ok": true,
+      "detail": "2 message event(s)"
+    },
+    {
+      "name": "report accepted through MCP",
+      "ok": true,
+      "detail": "{\"answer\":\"pineapple\",\"sources\":[\"notes.txt\"]}"
+    },
+    {
+      "name": "report content correct",
+      "ok": true,
+      "detail": "answer mentions the secret word"
+    },
+    {
+      "name": "read-only session cannot write",
+      "ok": true,
+      "detail": "verified below by the workspace check"
+    },
+    {
+      "name": "second turn in the same session",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "read-only session left files untouched",
+      "ok": true,
+      "detail": "notes.txt"
+    },
+    {
+      "name": "write turn completes",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "file was created",
+      "ok": true,
+      "detail": "content differs"
+    },
+    {
+      "name": "file_change event seen",
+      "ok": false,
+      "detail": "0 event(s)"
+    },
+    {
+      "name": "command event seen",
+      "ok": true,
+      "detail": "[{\"type\":\"command\",\"command\":\"\\\"C:\\\\\\\\WINDOWS\\\\\\\\System32\\\\\\\\WindowsPowerShell\\\\\\\\v1.0\\\\\\\\powershell.exe\\\" -Command \\\"[System.IO.File]::WriteAllText('hello.txt', 'hi', [System.Text.UTF8Encoding]::new(\\\"'$false))'\",\"exitCode\":0,\"output\":\"\"},{\"type\":\"command\",\"command\":\"\\\"C:\\\\\\\\WINDOWS\\\\\\\\System32\\\\\\\\WindowsPowerShell\\\\\\\\v1.0\\\\\\\\powershell.exe\\\" -Command 'node -e \\\"console.log(1+1)\\\"'\",\"exitCode\":0,\"output\":\"2\\n\"}]"
+    },
+    {
+      "name": "builder report accepted",
+      "ok": true,
+      "detail": "yes"
+    },
+    {
+      "name": "abort interrupts the turn",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"interrupted\"} after 6020 ms"
+    }
+  ],
+  "transcript": [
+    {
+      "type": "message",
+      "text": "I’ll read the file and submit the requested report.",
+      "final": false
+    },
+    {
+      "type": "command",
+      "command": "\"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'Get-Content -LiteralPath notes.txt'",
+      "exitCode": 0,
+      "output": "The secret word is pineapple.\r\n"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 12434,
+        "cachedInputTokens": 0,
+        "outputTokens": 89,
+        "reasoningTokens": 0,
+        "totalTokens": 12523
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 12847,
+        "cachedInputTokens": 12288,
+        "outputTokens": 40,
+        "reasoningTokens": 0,
+        "totalTokens": 12887
+      }
+    },
+    {
+      "type": "message",
+      "text": "Report submitted.",
+      "final": true
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 12930,
+        "cachedInputTokens": 12672,
+        "outputTokens": 7,
+        "reasoningTokens": 0,
+        "totalTokens": 12937
+      }
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "text": "OK",
+      "final": true
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 12956,
+        "cachedInputTokens": 12800,
+        "outputTokens": 5,
+        "reasoningTokens": 0,
+        "totalTokens": 12961
+      }
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "text": "I’ll create the file, run the requested command, and submit the report.",
+      "final": false
+    },
+    {
+      "type": "command",
+      "command": "\"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command \"[System.IO.File]::WriteAllText('hello.txt', 'hi', [System.Text.UTF8Encoding]::new(\"'$false))'",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "type": "command",
+      "command": "\"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'node -e \"console.log(1+1)\"'",
+      "exitCode": 0,
+      "output": "2\n"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 12777,
+        "cachedInputTokens": 0,
+        "outputTokens": 150,
+        "reasoningTokens": 0,
+        "totalTokens": 12927
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 13274,
+        "cachedInputTokens": 12800,
+        "outputTokens": 117,
+        "reasoningTokens": 0,
+        "totalTokens": 13391
+      }
+    },
+    {
+      "type": "message",
+      "text": "Created [hello.txt](C:/Users/SHINBO~1/AppData/Local/Temp/agent-desk-smoke-codex-UuLVtS/hello.txt) containing exactly `hi`. The Node command printed `2`, and the report was accepted.",
+      "final": true
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 13434,
+        "cachedInputTokens": 0,
+        "outputTokens": 60,
+        "reasoningTokens": 0,
+        "totalTokens": 13494
+      }
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "turn_end",
+      "status": "interrupted"
+    }
+  ]
+}

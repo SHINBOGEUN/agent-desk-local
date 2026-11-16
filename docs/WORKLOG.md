@@ -15,6 +15,7 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 | 결과 | `claude` 스모크: 실행·사용량·메시지·파일 변경·명령·중단·두 번째 턴 통과(Claude Code 2.1.322). 실패: 보고 제출(두 번)과 builder 보고 |
 | 원인 | `submit_report` MCP 입력 스키마가 비어(`properties: {}`) Claude Code가 목록 필드를 JSON 문자열로 보냄 → "expected array, got string". 스모크 스크립트도 `classify` 수집기에 answer 필드를 요구해 모순이었음 |
 | 수정 | 도구 스키마에 필드별 타입 선언, `ReportCollector`가 첫 검증 실패 시에만 JSON 문자열을 값으로 되돌려 재검증(정상 보고의 문자열은 건드리지 않음), 스모크는 answer 수집기·정확한 필드 지시, 실행 파일은 탐색 로직 사용(Windows `codex.cmd`) |
+| 재실행 | claude 전부 통과. codex(0.167.2) 통과, 단 `file_change` 이벤트 0건: Codex가 PowerShell 명령으로 파일을 써서 patch 이벤트가 없음. G2는 스냅샷 비교라 영향 없음 → 점검을 "file_change 또는 command"로 완화. Codex는 이 스모크에서 승인 질문 0건(approvalPolicy never), 한 보고에 약 38k 토큰 |
 | 관찰 | Claude Bash 승인: `node -e`는 정책대로 거부, `echo`는 허용. 승인 질문이 Read·Write·Bash 모두 `approve`로 들어옴(가정한 형식 동작). 이 스모크에서 한 번의 보고 시도당 약 6~10k 토큰 |
 
 ## 2026-11-13 · 4단계 진행(4-3)
