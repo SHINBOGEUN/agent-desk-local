@@ -123,3 +123,8 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 5-5: the 2D robot scene was removed from the UI (quality; the user wants 3D later). `scene.ts` and its tests stay for reuse.
 - Language: `RunConfig.language` ('en' | 'ko'; option > `config.language` > en). 'ko' adds a Korean-output note to every role's instructions and localizes the harness's own result/warning messages (`ctx.say`). Dashboard sends the UI language with each run; CLI has `--language`. Not localized: gate problem texts, runtime/tool error messages, and the plan-confirm question text.
 - Language (cont.): gates G2/G3/G5 messages, protected-path warning and the plan-confirm question follow `language`. Agent-facing texts (report validation errors, tool approval denials) stay English on purpose.
+
+## 24차 — 4-5 범용성 검증 구현
+- 샘플 2종 추가(`bench/samples/python-inventory`, `web-notes`)와 과제 6개(P01–P03, W01–W03: 버그/기능/읽기 전용 질문).
+- 러너 일반화: `task.json`의 `sample`, `SAMPLES`(런타임·verify·touch), Python unittest 채점, `--set python|web|general|all`, v2 어댑터가 샘플별 verify 사용.
+- `validate-tasks`·`selftest`·`npm test`(172) 통과. 실측(v2 + Codex)은 사용자 PC에서: `node bench/run.mjs --adapter v2 --label v2-general --set general`.

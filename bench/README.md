@@ -80,3 +80,17 @@ T01~T10은 에이전트가 모두 성공해서 구성 차이가 성공률에 드
 node bench/validate-tasks.mjs                                  # 모든 과제 공정성 검증
 node bench/run.mjs --label v1-13-hard --set hard --repeat 3    # v1 어려운 과제 3회
 ```
+
+## 범용성 검증 (generality check)
+
+`sample-app`(Node) 외에 서로 다른 종류의 프로젝트 두 개를 더 둬서, 하네스가 특정 언어·프로젝트 형태에 묶여 있지 않음을 검증합니다.
+
+| 샘플 | 종류 | 테스트 | 과제 |
+|---|---|---|---|
+| `sample-app` | Node 서버 | `node --test` | T01–T10, H01–H05 |
+| `samples/python-inventory` | Python 표준 라이브러리 | `python -m unittest` | P01 버그, P02 기능, P03 질문 |
+| `samples/web-notes` | 정적 웹(HTML + ES 모듈) | `node --test` | W01 버그, W02 기능, W03 질문 |
+
+- `task.json`의 `sample` 필드로 샘플을 고릅니다(생략 시 `sample-app`). 샘플별 실행 방식과 verify 명령은 `lib/evaluate.mjs`의 `SAMPLES`에 있습니다.
+- 실행: `node bench/run.mjs --adapter v2 --label v2-general --set general` (`python`, `web`, `all`도 가능). Python 3가 필요하며 `BENCH_PYTHON`으로 실행 파일을 지정할 수 있습니다.
+- 검증: `node bench/validate-tasks.mjs`가 모든 샘플의 과제를 증명합니다(미해결 시 숨은 테스트 실패, 참조 해법 적용 시 통과).

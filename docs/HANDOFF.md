@@ -252,3 +252,5 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 필요한 변경: `bench/tasks/<id>/task.json`에 `sample` 필드(어느 샘플을 복사할지), 채점 테스트를 `.mjs` 고정이 아니라 샘플별 명령(예: `python -m unittest`)으로 실행하도록 러너(`bench/run.mjs`, `bench/lib`) 일반화. 각 과제는 기존처럼 "원본에서 실패, 모범 답안에서 통과"를 `validate-tasks`로 증명.
 - 규모 제안: 샘플당 과제 3개(버그 수정, 기능 추가, 코드를 바꾸지 않는 질문 1개), 총 9개. 측정은 사용자 PC.
 - 순서: Python 샘플 → 러너 일반화 → 나머지 샘플 → `validate-tasks` 통과 → 사용자 PC 측정.
+
+- (24차) 4-5 범용성 검증 구현 완료. 남은 것: PC에서 `--set general` 실측 후 결과 정리.

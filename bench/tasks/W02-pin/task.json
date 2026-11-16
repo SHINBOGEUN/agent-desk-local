@@ -1,0 +1,8 @@
+{
+  "id": "W02",
+  "sample": "web-notes",
+  "title": "메모 고정 기능 (웹)",
+  "category": "feature",
+  "kind": "code",
+  "prompt": "메모 고정 기능을 추가해줘. src/notes.mjs에 pinNote(notes, id)를 export해서, 해당 id 메모의 pinned 값을 반전시킨 새 배열을 돌려줘(원본 배열은 바꾸지 말고, 없는 id면 에러를 던져). 그리고 sortNotes가 고정된 메모를 먼저, 그 안에서는 최신순으로 정렬하게 하고, 고정된 메모의 <li>에는 class=\"pinned\"를 붙여줘. 기존 테스트는 계속 통과해야 해."
+}

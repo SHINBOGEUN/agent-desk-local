@@ -1,0 +1,12 @@
+{
+  "id": "W03",
+  "sample": "web-notes",
+  "title": "설정 질문 (읽기 전용, 웹)",
+  "category": "question",
+  "kind": "answer",
+  "prompt": "이 프로젝트에서 메모를 브라우저 localStorage에 저장할 때 쓰는 키 이름과, 메모 제목의 최대 글자 수가 뭐야? 코드는 수정하지 말고 답만 알려줘.",
+  "expect": {
+    "answerIncludes": ["webnotes.v1", "280"],
+    "noFileChanges": true
+  }
+}

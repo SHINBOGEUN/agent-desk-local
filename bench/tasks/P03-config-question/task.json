@@ -1,0 +1,12 @@
+{
+  "id": "P03",
+  "sample": "python-inventory",
+  "title": "설정 질문 (읽기 전용, Python)",
+  "category": "question",
+  "kind": "answer",
+  "prompt": "이 프로젝트에서 재고 부족으로 판단하는 기본 기준 수량이 몇 개이고, 데이터를 저장하는 기본 파일 이름이 뭐야? 코드는 수정하지 말고 답만 알려줘.",
+  "expect": {
+    "answerIncludes": ["8", "inventory.json"],
+    "noFileChanges": true
+  }
+}

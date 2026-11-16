@@ -28,7 +28,7 @@ export function loadResults(resultsDir, labels) {
   return chosen.map(label => {
     const directory = path.join(resultsDir, label);
     if (!fs.existsSync(directory)) throw new Error(`no results for label "${label}" in ${resultsDir}`);
-    const files = fs.readdirSync(directory).filter(name => /^[TH]\d+.*-r\d+\.json$/.test(name));
+    const files = fs.readdirSync(directory).filter(name => /^[THPW]\d+.*-r\d+\.json$/.test(name));
     const results = files.map(name => JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')));
     const configFile = path.join(directory, '_config.json');
     const config = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile, 'utf8')) : null;

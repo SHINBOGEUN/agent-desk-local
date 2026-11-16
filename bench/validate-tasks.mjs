@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { loadTasks, prepareWorkspace, evaluate } from './lib/evaluate.mjs';
+import { loadTasks, prepareWorkspace, evaluate, sampleOf } from './lib/evaluate.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-desk-bench-validate-'));
 let problems = 0;
@@ -16,22 +16,22 @@ const report = (ok, message) => { if (!ok) problems++; console.log(`${ok ? 'ok  
 try {
   for (const task of loadTasks(null, 'all')) {
     if (task.kind === 'answer') {
-      const workspace = prepareWorkspace(path.join(scratch, `${task.id}-answer`));
-      const good = evaluate(task, workspace.path, { answer: `기본 포트는 ${task.expect.answerIncludes.join(', 경로는 ')} 입니다.`, before: workspace.snapshot });
+      const workspace = prepareWorkspace(path.join(scratch, `${task.id}-answer`), task);
+      const good = evaluate(task, workspace.path, { answer: `답: ${task.expect.answerIncludes.join(', ')} 입니다.`, before: workspace.snapshot });
       report(good.success, `${task.id} accepts a correct answer`);
-      const bad = evaluate(task, workspace.path, { answer: '기본 포트는 8080입니다.', before: workspace.snapshot });
+      const bad = evaluate(task, workspace.path, { answer: '잘 모르겠습니다.', before: workspace.snapshot });
       report(!bad.success, `${task.id} rejects an incorrect answer`);
-      fs.writeFileSync(path.join(workspace.path, 'src', 'config.mjs'), '// edited\n', { flag: 'a' });
+      fs.writeFileSync(path.join(workspace.path, sampleOf(task).touch), '// edited\n', { flag: 'a' });
       const edited = evaluate(task, workspace.path, { answer: task.expect.answerIncludes.join(' '), before: workspace.snapshot });
       report(!edited.success, `${task.id} rejects an answer that modified files`);
       continue;
     }
-    const base = prepareWorkspace(path.join(scratch, `${task.id}-base`));
+    const base = prepareWorkspace(path.join(scratch, `${task.id}-base`), task);
     const before = evaluate(task, base.path, { before: base.snapshot });
     report(before.visible.pass, `${task.id} sample app tests pass before changes`);
     report(!before.acceptance.pass, `${task.id} hidden test fails on the untouched sample app`);
 
-    const solved = prepareWorkspace(path.join(scratch, `${task.id}-solved`));
+    const solved = prepareWorkspace(path.join(scratch, `${task.id}-solved`), task);
     const { apply } = await import(pathToFileURL(path.join(task.directory, 'solution.mjs')).href);
     apply(solved.path);
     const after = evaluate(task, solved.path, { before: solved.snapshot });

@@ -5,7 +5,7 @@
 // specific Agent Desk version is the adapter's job (bench/adapters/<name>.mjs);
 // preparing workspaces, grading and recording results are shared here.
 //
-//   node bench/run.mjs --label v1-13 [--adapter v1] [--set standard|hard] [--tasks T01,T05] [--repeat 1]
+//   node bench/run.mjs --label v1-13 [--adapter v1] [--set standard|hard|python|web|general|all] [--tasks T01,T05] [--repeat 1]
 //                      [--url http://127.0.0.1:4317] [--timeout-min 40]
 //                      [v2 only: --review always|auto|never] [--runtime codex] [--verify "npm test"] [--max-tokens N] [--max-minutes N]
 //                      [--usage-limit 20] [--work-dir <dir>] [--results-dir <dir>]
@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { benchDirectory, loadTasks, prepareWorkspace, evaluate } from './lib/evaluate.mjs';
+import { benchDirectory, loadTasks, prepareWorkspace, evaluate, sampleOf, SET_PATTERNS } from './lib/evaluate.mjs';
 
 const ADAPTERS = ['v1', 'v2'];
 
@@ -44,7 +44,7 @@ export function parseArgs(argv) {
     else if (key === 'cli') options.cli = JSON.parse(value);
     else throw new Error(`unknown option --${key}`);
   }
-  if (!['standard', 'hard'].includes(options.set)) throw new Error('--set must be standard or hard');
+  if (!Object.keys(SET_PATTERNS).includes(options.set)) throw new Error(`--set must be one of: ${Object.keys(SET_PATTERNS).join(', ')}`);
   if (!options.label || !/^[\w.-]{1,60}$/.test(options.label)) throw new Error('--label is required (letters, digits, . _ -)');
   if (!ADAPTERS.includes(options.adapter)) throw new Error(`--adapter must be one of: ${ADAPTERS.join(', ')}`);
   if (options.review && !['always', 'auto', 'never'].includes(options.review)) throw new Error('--review must be always, auto or never');
@@ -60,8 +60,8 @@ async function loadAdapter(options) {
 
 async function executeTask(adapter, task, attempt, options, log) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const workspace = prepareWorkspace(path.join(options.workDir, options.label, `${task.id}-r${attempt}-${stamp}`));
-  const run = await adapter.execute({ task, workspacePath: workspace.path, label: options.label, attempt, timeoutMin: options.timeoutMin, log });
+  const workspace = prepareWorkspace(path.join(options.workDir, options.label, `${task.id}-r${attempt}-${stamp}`), task);
+  const run = await adapter.execute({ task, verify: sampleOf(task).verify, workspacePath: workspace.path, label: options.label, attempt, timeoutMin: options.timeoutMin, log });
   const grade = evaluate(task, workspace.path, { answer: run.answer, before: workspace.snapshot });
   const claimedSuccess = run.status === 'completed';
   const lastVerdict = run.metrics.verifierVerdicts.at(-1) || null;

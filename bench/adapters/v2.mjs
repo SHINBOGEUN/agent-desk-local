@@ -65,7 +65,9 @@ export function runMetrics(result, durationSec) {
   };
 }
 
-export function createAdapter({ cli, review, verify = ['npm test'], maxTokens, maxMinutes, runtime } = {}) {
+export function createAdapter({ cli, review, verify: verifyOption, maxTokens, maxMinutes, runtime } = {}) {
+  const explicitVerify = Array.isArray(verifyOption) && verifyOption.length > 0;
+  const verify = explicitVerify ? verifyOption : ['npm test'];
   const command = cli || [process.execPath, path.join(repoRoot, 'packages', 'cli', 'src', 'bin.ts')];
   const base = [...command.slice(1)];
 
@@ -86,9 +88,9 @@ export function createAdapter({ cli, review, verify = ['npm test'], maxTokens, m
         skills: [],
       };
     },
-    async execute({ task, workspacePath, timeoutMin, log = () => {} }) {
+    async execute({ task, workspacePath, timeoutMin, verify: sampleVerify, log = () => {} }) {
       const args = [...base, 'run', task.prompt, '--project', workspacePath, '--unattended', '--json'];
-      for (const item of verify) args.push('--verify', item);
+      for (const item of (explicitVerify ? verify : [sampleVerify || verify[0]])) args.push('--verify', item);
       if (review) args.push('--review', review);
       if (maxTokens) args.push('--max-tokens', String(maxTokens));
       if (maxMinutes) args.push('--max-minutes', String(maxMinutes));

@@ -1,0 +1,8 @@
+{
+  "id": "P02",
+  "sample": "python-inventory",
+  "title": "검색 기능 추가 (Python)",
+  "category": "feature",
+  "kind": "code",
+  "prompt": "재고 검색 기능을 추가해줘. Inventory에 search(query) 메서드를 만들어서 SKU나 이름에 query가 (대소문자 구분 없이) 포함된 Item 목록을 SKU 순으로 돌려줘. 빈 문자열이나 공백만 있는 query는 빈 목록이야. 그리고 CLI에 `search <query>` 명령을 추가해서 일치하는 항목을 `list`와 같은 형식으로 한 줄씩 출력해줘. 기존 테스트는 계속 통과해야 해."
+}

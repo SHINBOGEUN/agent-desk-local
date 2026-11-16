@@ -8,18 +8,36 @@ import { fileURLToPath } from 'node:url';
 
 export const benchDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const sampleDirectory = path.join(benchDirectory, 'sample-app');
+export const samplesRoot = path.join(benchDirectory, 'samples');
 export const tasksDirectory = path.join(benchDirectory, 'tasks');
 const ACCEPTANCE_DIR = '.bench-acceptance';
-const IGNORED = new Set(['.git', ACCEPTANCE_DIR, 'node_modules', 'data']);
+const IGNORED = new Set(['.git', ACCEPTANCE_DIR, 'node_modules', 'data', '__pycache__']);
+
+// Sample projects the tasks run against. The first (minitodo, Node) is the
+// original benchmark target; the others prove the harness is not tied to one
+// language or project shape. `runtime` picks how the visible tests and the
+// hidden acceptance test are run, `verify` is the command given to the harness,
+// `touch` is a file used to prove answer tasks reject modified workspaces.
+export const SAMPLES = {
+  'sample-app': { directory: sampleDirectory, runtime: 'node', verify: 'npm test', touch: 'src/config.mjs' },
+  'python-inventory': { directory: path.join(samplesRoot, 'python-inventory'), runtime: 'python', verify: 'python -m unittest discover -s tests', touch: 'inventory/store.py' },
+  'web-notes': { directory: path.join(samplesRoot, 'web-notes'), runtime: 'node', verify: 'npm test', touch: 'src/notes.mjs' },
+};
+export const sampleOf = task => {
+  const sample = SAMPLES[task?.sample || 'sample-app'];
+  if (!sample) throw new Error(`task ${task?.id} uses unknown sample "${task.sample}"`);
+  return sample;
+};
 
 // Task sets: "standard" (T01-T10, the original benchmark), "hard" (H01-H05,
-// multi-file tasks with hidden edge cases) or "all". Defaults to "standard" so
+// multi-file tasks with hidden edge cases), "python" (P*) and "web" (W*) for the
+// generality check, "general" (both), or "all". Defaults to "standard" so
 // existing labels keep their meaning.
-const SET_PATTERNS = { standard: /^T\d+/, hard: /^H\d+/, all: /^[TH]\d+/ };
+export const SET_PATTERNS = { standard: /^T\d+/, hard: /^H\d+/, python: /^P\d+/, web: /^W\d+/, general: /^[PW]\d+/, all: /^[THPW]\d+/ };
 
 export function loadTasks(filter = null, set = 'standard') {
   const pattern = SET_PATTERNS[set];
-  if (!pattern) throw new Error(`unknown task set "${set}" (standard, hard, all)`);
+  if (!pattern) throw new Error(`unknown task set "${set}" (${Object.keys(SET_PATTERNS).join(', ')})`);
   const wanted = filter ? new Set(filter.map(id => id.toUpperCase())) : null;
   return fs.readdirSync(tasksDirectory, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && pattern.test(entry.name))
@@ -46,9 +64,9 @@ export function copyDirectory(source, destination) {
 // A fresh copy of the sample app. `git init` makes the workspace its own
 // repository root so coding agents do not pick up instructions (AGENTS.md)
 // from a parent repository. Git is optional.
-export function prepareWorkspace(destination) {
+export function prepareWorkspace(destination, task = null) {
   if (fs.existsSync(destination)) throw new Error(`workspace already exists: ${destination}`);
-  copyDirectory(sampleDirectory, destination);
+  copyDirectory(sampleOf(task).directory, destination);
   const git = (...args) => spawnSync('git', args, { cwd: destination, stdio: 'ignore', windowsHide: true });
   const initialized = git('init', '-q').status === 0
     && git('add', '-A').status === 0
@@ -83,6 +101,27 @@ function runNodeTests(cwd, files) {
   return { pass: result.status === 0, passed: count('pass'), failed: count('fail'), timedOut: result.error?.code === 'ETIMEDOUT', output: output.slice(-4000) };
 }
 
+let pythonCommand;
+function findPython() {
+  if (pythonCommand !== undefined) return pythonCommand;
+  const candidates = process.env.BENCH_PYTHON ? [process.env.BENCH_PYTHON] : ['python3', 'python', 'py'];
+  pythonCommand = candidates.find(command => spawnSync(command, ['--version'], { stdio: 'ignore', windowsHide: true }).status === 0) || null;
+  return pythonCommand;
+}
+
+// unittest discovery in `startDirectory`, run from the workspace root so the
+// package under test is importable. Output goes to stderr ("Ran N tests").
+function runPythonTests(cwd, startDirectory, pattern = 'test*.py') {
+  const python = findPython();
+  if (!python) return { pass: false, passed: 0, failed: 0, output: 'Python was not found (install Python 3 or set BENCH_PYTHON)' };
+  if (!fs.existsSync(path.join(cwd, startDirectory))) return { pass: false, passed: 0, failed: 0, output: `no ${startDirectory} directory found` };
+  const result = spawnSync(python, ['-B', '-m', 'unittest', 'discover', '-s', startDirectory, '-p', pattern], { cwd, encoding: 'utf8', timeout: 120_000, windowsHide: true, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+  const output = `${result.stdout || ''}${result.stderr || ''}`;
+  const ran = Number(output.match(/^Ran (\d+) test/m)?.[1] || 0);
+  const failed = Number(output.match(/failures=(\d+)/)?.[1] || 0) + Number(output.match(/errors=(\d+)/)?.[1] || 0);
+  return { pass: result.status === 0 && ran > 0, passed: Math.max(0, ran - failed), failed, timedOut: result.error?.code === 'ETIMEDOUT', output: output.slice(-4000) };
+}
+
 function listTests(directory, root = directory) {
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -94,14 +133,21 @@ function listTests(directory, root = directory) {
 
 // Runs the workspace's own tests (regression) and the hidden acceptance test.
 export function evaluateCode(task, workspace) {
-  const visible = runNodeTests(workspace, listTests(path.join(workspace, 'test'), workspace));
+  const { runtime } = sampleOf(task);
   const hiddenDirectory = path.join(workspace, ACCEPTANCE_DIR);
+  const visible = runtime === 'python' ? runPythonTests(workspace, 'tests') : runNodeTests(workspace, listTests(path.join(workspace, 'test'), workspace));
   fs.rmSync(hiddenDirectory, { recursive: true, force: true });
   fs.mkdirSync(hiddenDirectory);
   try {
-    fs.copyFileSync(path.join(tasksDirectory, '_shared', 'harness.mjs'), path.join(hiddenDirectory, 'harness.mjs'));
-    fs.copyFileSync(path.join(task.directory, 'acceptance.test.mjs'), path.join(hiddenDirectory, 'acceptance.test.mjs'));
-    const acceptance = runNodeTests(workspace, [path.join(ACCEPTANCE_DIR, 'acceptance.test.mjs')]);
+    let acceptance;
+    if (runtime === 'python') {
+      fs.copyFileSync(path.join(task.directory, 'acceptance_test.py'), path.join(hiddenDirectory, 'acceptance_test.py'));
+      acceptance = runPythonTests(workspace, ACCEPTANCE_DIR, 'acceptance_test.py');
+    } else {
+      fs.copyFileSync(path.join(tasksDirectory, '_shared', 'harness.mjs'), path.join(hiddenDirectory, 'harness.mjs'));
+      fs.copyFileSync(path.join(task.directory, 'acceptance.test.mjs'), path.join(hiddenDirectory, 'acceptance.test.mjs'));
+      acceptance = runNodeTests(workspace, [path.join(ACCEPTANCE_DIR, 'acceptance.test.mjs')]);
+    }
     return { success: visible.pass && acceptance.pass, visible, acceptance };
   } finally {
     fs.rmSync(hiddenDirectory, { recursive: true, force: true });

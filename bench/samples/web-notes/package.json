@@ -1,0 +1,10 @@
+{
+  "name": "web-notes",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static notes page (HTML + ES modules) used as an Agent Desk benchmark target",
+  "scripts": {
+    "test": "node --test test/notes.test.mjs test/render.test.mjs"
+  }
+}
