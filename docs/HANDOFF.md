@@ -214,3 +214,4 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 ## 22차 (2026-11-16)
 - 대시보드 1차 구현 커밋(`b7fb6cb`). 빌드 검증은 사용자 PC에서: `npm run web:install` → `npm run web:typecheck` → `npm run web:build` → `npm run agent-desk -- serve`.
 - 다음: 5-3 설정/스킬/사용량 패널, 5-4 벤치마크 비교 화면(`bench/results`), 서버 API 추가 필요.
+- 마지막 단계 할 일(README와 함께): **UI 사용 매뉴얼** 작성 (화면별 사용법, 스크린샷 포함). 대시보드 완성 후에 작성.
