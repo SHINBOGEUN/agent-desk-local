@@ -286,6 +286,51 @@ export function translate(lang: Lang, key: Key, values: Record<string, string | 
 
 export const detectLanguage = (stored: string | null, browser: string): Lang => (stored === 'en' || stored === 'ko' ? stored : browser.toLowerCase().startsWith('ko') ? 'ko' : 'en');
 
+// Server error messages are stable English strings; the dashboard shows Korean for them when the UI is Korean.
+const koApiErrors: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  [/^use the local address$/, () => '로컬 주소(127.0.0.1)로 접속해 주세요.'],
+  [/^requests from other sites are not allowed$/, () => '다른 사이트에서 온 요청은 허용되지 않습니다.'],
+  [/^reload the page and try again$/, () => '페이지를 새로고침한 뒤 다시 시도해 주세요.'],
+  [/^JSON body required$/, () => 'JSON 본문이 필요합니다.'],
+  [/^request too large$/, () => '요청이 너무 큽니다.'],
+  [/^invalid JSON$/, () => '올바르지 않은 JSON입니다.'],
+  [/^run (\S+) is still active$/, match => `실행 ${match[1]}이(가) 아직 진행 중입니다.`],
+  [/^project must be an absolute path$/, () => '프로젝트는 절대 경로여야 합니다.'],
+  [/^request is empty$/, () => '요청 내용이 비어 있습니다.'],
+  [/^unknown runtime$/, () => '알 수 없는 런타임입니다.'],
+  [/^review must be always, auto or never$/, () => '검토 방식은 always, auto, never 중 하나여야 합니다.'],
+  [/^language must be en or ko$/, () => '언어는 en 또는 ko여야 합니다.'],
+  [/^run not found$/, () => '실행을 찾을 수 없습니다.'],
+  [/^run is still running$/, () => '실행이 아직 진행 중입니다.'],
+  [/^another run is active; wait for it to finish$/, () => '다른 실행이 진행 중입니다. 끝난 뒤 다시 시도해 주세요.'],
+  [/^no restore point$/, () => '복원 지점이 없습니다.'],
+  [/^no active run$/, () => '진행 중인 실행이 없습니다.'],
+  [/^no question is waiting$/, () => '대기 중인 질문이 없습니다.'],
+  [/^answer must be text$/, () => '답변은 텍스트여야 합니다.'],
+  [/^path must be an existing absolute folder$/, () => '존재하는 폴더의 절대 경로여야 합니다.'],
+  [/^path must be absolute$/, () => '경로는 절대 경로여야 합니다.'],
+  [/^cannot open this folder$/, () => '이 폴더를 열 수 없습니다.'],
+  [/^the chosen folder does not exist$/, () => '선택한 폴더가 존재하지 않습니다.'],
+  [/^not found$/, () => '찾을 수 없습니다.'],
+  [/^bad path$/, () => '잘못된 경로입니다.'],
+  [/^internal error$/, () => '서버 내부 오류가 발생했습니다.'],
+  [/^The dashboard is not built\./, () => '대시보드가 빌드되지 않았습니다. "npm run web:build"를 먼저 실행해 주세요.'],
+];
+
+// Set by the app so module-level helpers can follow the UI language.
+let activeLang: Lang = 'en';
+export const setActiveLang = (lang: Lang): void => { activeLang = lang; };
+export const currentLang = (): Lang => activeLang;
+
+export function apiErrorText(lang: Lang, message: string): string {
+  if (lang !== 'ko') return message;
+  for (const [pattern, build] of koApiErrors) {
+    const match = message.match(pattern);
+    if (match) return build(match);
+  }
+  return message;
+}
+
 export function durationText(lang: Lang, ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '-';
   const seconds = Math.round(ms / 1000);

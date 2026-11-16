@@ -128,3 +128,8 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 샘플 2종 추가(`bench/samples/python-inventory`, `web-notes`)와 과제 6개(P01–P03, W01–W03: 버그/기능/읽기 전용 질문).
 - 러너 일반화: `task.json`의 `sample`, `SAMPLES`(런타임·verify·touch), Python unittest 채점, `--set python|web|general|all`, v2 어댑터가 샘플별 verify 사용.
 - `validate-tasks`·`selftest`·`npm test`(172) 통과. 실측(v2 + Codex)은 사용자 PC에서: `node bench/run.mjs --adapter v2 --label v2-general --set general`.
+
+## 24차 — 다듬기
+- 대시보드: 서버 오류 메시지(영어, API는 그대로)를 UI가 한국어일 때 한국어로 표시(`apiErrorText`).
+- `package-lock.json` 커밋(devDependencies 고정), `h04-r*.txt` 임시 파일은 .gitignore.
+- `legacy/agents/*.md` 변경분은 v1 실행이 덮어쓴 것이라 커밋하지 않고 보류(사용자 판단).

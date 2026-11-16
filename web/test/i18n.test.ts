@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { detectLanguage, durationText, remainingText, translate } from '../src/i18n.ts';
+import { apiErrorText, detectLanguage, durationText, remainingText, translate } from '../src/i18n.ts';
 
 test('language detection prefers the saved choice, then the browser', () => {
   assert.equal(detectLanguage('en', 'ko-KR'), 'en');
@@ -21,4 +21,11 @@ test('remaining time reads as days, hours and minutes', () => {
   assert.equal(remainingText('en', 1440), '1d');
   assert.equal(remainingText('en', 125), '2h 5m');
   assert.equal(remainingText('en', 0), '1m');
+});
+
+test('known server errors are shown in Korean, others pass through', () => {
+  assert.equal(apiErrorText('ko', 'run not found'), '실행을 찾을 수 없습니다.');
+  assert.equal(apiErrorText('ko', 'run 12 is still active'), '실행 12이(가) 아직 진행 중입니다.');
+  assert.equal(apiErrorText('ko', 'something unexpected'), 'something unexpected');
+  assert.equal(apiErrorText('en', 'run not found'), 'run not found');
 });

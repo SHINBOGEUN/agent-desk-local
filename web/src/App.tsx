@@ -4,13 +4,13 @@ import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
 import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, Timeline } from './model.ts';
-import { detectLanguage, durationText, I18nContext, remainingText, translate, useI18n } from './i18n.ts';
+import { apiErrorText, currentLang, detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Lang } from './i18n.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
 const readProject = (): string => { try { return localStorage.getItem(PROJECT_KEY) ?? ''; } catch { return ''; } };
 const saveProject = (value: string): void => { try { localStorage.setItem(PROJECT_KEY, value); } catch { /* storage may be unavailable */ } };
-const errorText = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? error.message : 'Something went wrong');
+const errorText = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? apiErrorText(currentLang(), error.message) : currentLang() === 'ko' ? '문제가 발생했습니다.' : 'Something went wrong');
 
 function Badge({ status }: { status: string }) {
   const { t } = useI18n();
@@ -442,6 +442,7 @@ function BenchmarkView() {
 export function App() {
   const [lang, setLangState] = useState<Lang>(() => { let stored: string | null = null; try { stored = localStorage.getItem('agent-desk.lang'); } catch { /* storage may be unavailable */ } return detectLanguage(stored, navigator.language); });
   const setLang = (next: Lang): void => { setLangState(next); try { localStorage.setItem('agent-desk.lang', next); } catch { /* storage may be unavailable */ } };
+  setActiveLang(lang);
   const i18n: I18n = { lang, setLang, t: (key, values) => translate(lang, key, values) };
   const [active, setActive] = useState<ActiveRun | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
