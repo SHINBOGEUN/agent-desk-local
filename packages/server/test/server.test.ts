@@ -175,3 +175,18 @@ test('folder picker lists only subfolders, hides dot folders, rejects relative p
     assert.ok(roots.entries.length >= 1);
   } finally { await server.close(); }
 });
+
+test('pick-folder needs the token and returns the chosen folder or a cancel', async () => {
+  const chosen = tmp();
+  let answer: { supported: boolean; path?: string | null } = { supported: true, path: chosen };
+  const server = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, pickFolder: async () => answer as never });
+  const { port, token } = await server.listen();
+  try {
+    assert.equal((await call(port, 'POST', '/api/pick-folder', { body: {} })).status, 403);
+    assert.deepEqual(JSON.parse((await call(port, 'POST', '/api/pick-folder', { token, body: {} })).body), { supported: true, path: chosen });
+    answer = { supported: true, path: null };
+    assert.deepEqual(JSON.parse((await call(port, 'POST', '/api/pick-folder', { token, body: {} })).body), { supported: true, path: null });
+    answer = { supported: false };
+    assert.deepEqual(JSON.parse((await call(port, 'POST', '/api/pick-folder', { token, body: {} })).body), { supported: false });
+  } finally { await server.close(); }
+});

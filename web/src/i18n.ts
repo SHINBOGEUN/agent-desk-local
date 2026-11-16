@@ -1,0 +1,150 @@
+// English and Korean UI text. Product and technical names (Agent Desk, Codex, Claude, G1-G5, lead/builder/...) stay in English.
+
+import { createContext, useContext } from 'react';
+
+export type Lang = 'en' | 'ko';
+
+const en = {
+  subtitle: 'v2',
+  language: 'Language',
+  serverDown: "Can't reach the server",
+  projectFolder: 'Project folder',
+  chooseFolder: 'Choose a folder',
+  browse: 'Browse…',
+  whatToDo: 'What should be done?',
+  requestPlaceholder: 'Add a due date field to todos',
+  runtime: 'Runtime',
+  review: 'Review',
+  fromConfig: 'From config',
+  reviewAuto: 'Auto',
+  reviewAlways: 'Always',
+  reviewNever: 'Never',
+  run: 'Run',
+  runIsActive: 'Run {id} is active',
+  needFolder: 'Enter or choose the project folder.',
+  needRequest: 'Describe what should be done.',
+  noRuns: 'No runs yet. Start one above.',
+  selectRun: 'Select a run, or start a new one.',
+  runTitle: 'Run {id}',
+  tokens: 'tokens',
+  stop: 'Stop run',
+  previewRevert: 'Preview revert',
+  applyRevert: 'Apply revert',
+  revertDone: 'Reverted: restore {restore} file(s), remove {remove} file(s).',
+  revertPreview: 'Would revert: restore {restore} file(s), remove {remove} file(s). Press "Apply revert" to do it.',
+  waitingStep: 'Waiting for the first step…',
+  failedTag: 'failed',
+  commands: '{n} command(s)',
+  fileChanges: '{n} file change(s)',
+  redo: 'redo {n} ({mode})',
+  gateOk: 'ok',
+  gateFailed: 'failed',
+  gateSkipped: 'skipped',
+  gateFailedTimes: 'failed x{n}',
+  needsAnswer: 'Claude needs an answer',
+  yourAnswer: 'Your answer',
+  send: 'Send',
+  needAnswerText: 'Enter an answer first.',
+  pickerTitle: 'Choose a project folder',
+  close: 'Close',
+  computer: 'Computer',
+  home: 'Home',
+  up: '.. (up)',
+  projectTag: 'project',
+  noSubfolders: 'No subfolders.',
+  selectDrive: 'Select a drive',
+  selectThisFolder: 'Select this folder',
+  dialogTitle: 'Select project folder',
+  dialogOpen: 'A folder window is open on your computer. Choose a folder there.',
+  seconds: 's',
+  minutes: 'min',
+  status_running: 'Running',
+  status_completed: 'Completed',
+  status_needs_review: 'Needs review',
+  status_needs_user: 'Needs your answer',
+  status_interrupted: 'Interrupted',
+  status_failed: 'Failed',
+};
+
+export type Key = keyof typeof en;
+
+const ko: Record<Key, string> = {
+  subtitle: 'v2',
+  language: '언어',
+  serverDown: '서버에 연결할 수 없습니다',
+  projectFolder: '프로젝트 폴더',
+  chooseFolder: '폴더를 선택하세요',
+  browse: '찾아보기…',
+  whatToDo: '무엇을 할까요?',
+  requestPlaceholder: '할 일에 마감일 필드를 추가해 줘',
+  runtime: '런타임',
+  review: '리뷰',
+  fromConfig: '설정 따름',
+  reviewAuto: '자동',
+  reviewAlways: '항상',
+  reviewNever: '안 함',
+  run: '실행',
+  runIsActive: '실행 {id}번이 진행 중입니다',
+  needFolder: '프로젝트 폴더를 입력하거나 선택하세요.',
+  needRequest: '할 일을 입력하세요.',
+  noRuns: '아직 실행 기록이 없습니다. 위에서 시작해 보세요.',
+  selectRun: '실행을 선택하거나 새로 시작하세요.',
+  runTitle: '실행 {id}',
+  tokens: '토큰',
+  stop: '실행 중지',
+  previewRevert: '되돌리기 미리보기',
+  applyRevert: '되돌리기 적용',
+  revertDone: '되돌렸습니다: 파일 {restore}개 복원, {remove}개 삭제.',
+  revertPreview: '되돌리면: 파일 {restore}개 복원, {remove}개 삭제. 실제로 하려면 "되돌리기 적용"을 누르세요.',
+  waitingStep: '첫 단계를 기다리는 중…',
+  failedTag: '실패',
+  commands: '명령 {n}개',
+  fileChanges: '파일 변경 {n}개',
+  redo: '재작업 {n}회 ({mode})',
+  gateOk: '통과',
+  gateFailed: '실패',
+  gateSkipped: '건너뜀',
+  gateFailedTimes: '실패 {n}회',
+  needsAnswer: 'Claude가 답변을 기다립니다',
+  yourAnswer: '답변 입력',
+  send: '보내기',
+  needAnswerText: '답변을 먼저 입력하세요.',
+  pickerTitle: '프로젝트 폴더 선택',
+  close: '닫기',
+  computer: '내 컴퓨터',
+  home: '홈',
+  up: '.. (위로)',
+  projectTag: '프로젝트',
+  noSubfolders: '하위 폴더가 없습니다.',
+  selectDrive: '드라이브를 선택하세요',
+  selectThisFolder: '이 폴더 선택',
+  dialogTitle: '프로젝트 폴더 선택',
+  dialogOpen: '컴퓨터에 폴더 선택 창이 열렸습니다. 그 창에서 폴더를 고르세요.',
+  seconds: '초',
+  minutes: '분',
+  status_running: '실행 중',
+  status_completed: '완료',
+  status_needs_review: '검토 필요',
+  status_needs_user: '답변 필요',
+  status_interrupted: '중단됨',
+  status_failed: '실패',
+};
+
+const dictionaries: Record<Lang, Record<Key, string>> = { en, ko };
+
+export function translate(lang: Lang, key: Key, values: Record<string, string | number> = {}): string {
+  return dictionaries[lang][key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ''));
+}
+
+export const detectLanguage = (stored: string | null, browser: string): Lang => (stored === 'en' || stored === 'ko' ? stored : browser.toLowerCase().startsWith('ko') ? 'ko' : 'en');
+
+export function durationText(lang: Lang, ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '-';
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds} ${translate(lang, 'seconds')}`;
+  return `${Math.floor(seconds / 60)} ${translate(lang, 'minutes')} ${seconds % 60} ${translate(lang, 'seconds')}`;
+}
+
+export interface I18n { lang: Lang; setLang(lang: Lang): void; t(key: Key, values?: Record<string, string | number>): string }
+export const I18nContext = createContext<I18n>({ lang: 'en', setLang: () => undefined, t: (key, values) => translate('en', key, values) });
+export const useI18n = (): I18n => useContext(I18nContext);

@@ -14,6 +14,8 @@ import type { ReviewPolicy } from '#orchestrator';
 import { loadMemory, loadProject, memoryFacts } from '#project';
 import type { RuntimeKind } from '#project';
 import { dataDirectory, executeRun } from '#service';
+import { pickFolderNative } from './pick-folder.ts';
+import type { PickResult } from './pick-folder.ts';
 import { RunStore, redactSecrets } from '#store';
 
 export interface ServerOptions {
@@ -26,6 +28,8 @@ export interface ServerOptions {
   pollMs?: number;
   /** Folder with the built dashboard (index.html and assets). Omitted: only the API is served. */
   staticDir?: string;
+  /** Opens the OS folder dialog (tests replace it). Default: the native dialog on Windows and macOS. */
+  pickFolder?: (startPath: string, title: string) => Promise<PickResult>;
 }
 
 interface ActiveRun {
@@ -206,6 +210,14 @@ export function createServer(options: ServerOptions): LocalServer {
       if (!path.isAbsolute(project) || !fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new HttpError(400, 'path must be an existing absolute folder');
       const loaded = loadProject(project);
       return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets) });
+    }
+    if (method === 'POST' && p === '/api/pick-folder') {
+      const body = await readBody(req);
+      const start = typeof body.start === 'string' && path.isAbsolute(body.start) && fs.existsSync(body.start) ? body.start : '';
+      const title = typeof body.title === 'string' ? body.title.slice(0, 100) : 'Select project folder';
+      const result = await (options.pickFolder ?? ((startPath, label) => pickFolderNative(options.platform, startPath, label, options.env)))(start, title);
+      if (result.supported && result.path && (!path.isAbsolute(result.path) || !fs.existsSync(result.path))) throw new HttpError(400, 'the chosen folder does not exist');
+      return send(res, 200, result);
     }
     if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);

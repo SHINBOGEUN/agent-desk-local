@@ -54,6 +54,7 @@ export const api = {
   state: async (): Promise<ServerState> => { const state = await request<ServerState>('GET', '/api/state'); setToken(state.csrf); return state; },
   runs: (project?: string): Promise<{ runs: RunRow[] }> => request('GET', `/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
   run: (id: number): Promise<RunDetail> => request('GET', `/api/runs/${id}`),
+  pickFolder: (start: string, title: string): Promise<{ supported: boolean; path?: string | null }> => request('POST', '/api/pick-folder', { start, title }),
   folder: (path: string): Promise<FolderListing> => request('GET', `/api/fs?path=${encodeURIComponent(path)}`),
   project: (path: string): Promise<ProjectInfo> => request('GET', `/api/project?path=${encodeURIComponent(path)}`),
   start: (body: StartRequest): Promise<{ runId: number }> => request('POST', '/api/runs', body),
