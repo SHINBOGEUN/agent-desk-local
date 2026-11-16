@@ -1,11 +1,26 @@
-<!-- 이 파일은 Claude 문서 "Agent Desk v2 전체 설계서"(개정 3, 2026-11-13)를 마크다운으로 내보낸 사본입니다. 원본: https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6
+<!-- 이 파일은 Claude 문서 "Agent Desk v2 전체 설계서"(개정 4, 2026-11-16)를 마크다운으로 내보낸 사본입니다. 원본: https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6
      내보내기에서 그림(실행 흐름 도식) 1개가 빠졌고, 날짜·멘션 칩은 글자로 바뀌었습니다. 설계를 바꾸면 이 사본과 원본을 함께 고치고, 바꾼 이유는 docs/adr/에 남깁니다. -->
 
 # Agent Desk v2 전체 설계서
 
-Nov 13, 2026 · @bogeun
+Nov 16, 2026 (개정 4) · @bogeun
 
 v2는 코드가 작업 순서와 완료 판정을 결정하고, 모델은 교체 가능한 런타임(Codex·Claude)으로 작업만 하는 로컬 하네스입니다. TypeScript, 같은 저장소의 `legacy/` 분리, 대시보드 신규 작성을 전제로 합니다.
+
+## 개정 4에서 바뀐 것
+
+5단계 대시보드를 실제로 쓰면서 나온 요구와 "어떤 프로젝트든 범용으로"라는 목표를 반영했습니다. 런타임 조합의 근거는 [ADR 0009](adr/0009-runtime-modes.md)에 있습니다.
+
+| 구분 | 변경 |
+| --- | --- |
+| 추가 | **런타임 모드 4종**: `codex`, `claude`, `codex+claude`(**기본값**: Codex가 만들고 Claude가 검토), `claude+codex`. `config.mode`, `--mode`, 대시보드에서 선택. 우선순위는 `--runtime` > `--mode`·대시보드 > `config.mode` > `config.runtimes` > 기본값. 기본값일 때 Claude가 없으면 Codex가 검토까지 맡음 |
+| 추가 | 역할 파일의 `model-codex`·`model-claude`: 역할이 실제로 배정된 런타임의 모델을 씀. `run_started` 이벤트에 역할별 런타임 기록 |
+| 변경 | **대시보드를 채팅형으로**: 왼쪽 프로젝트 목록 → 가운데 프로젝트별 대화(요청과 팀 응답, 진행·질문·결과가 한 흐름) → 오른쪽 팀 패널(역할별 런타임·상태, 사용량). 질문 대기 중이면 입력창이 답변으로 전송 |
+| 추가 | 대시보드 디자인 원칙: 모델 정체성(Codex 청록, Claude 보라)만 강조, 상태색은 게이트·결과에만 |
+| 추가 | 대시보드 영어/한국어 전환과 실행 언어(`config.language`, 에이전트 답변·하네스 문구), 서버 오류의 한국어 표시 |
+| 추가 | 실행 결과 보고서 저장(스키마 v2), OS 폴더 선택 창, 실행 기록 삭제(프로젝트별, 벤치마크 작업 폴더 일괄) |
+| 추가 | **범용성 검증**: Node 외 Python(`samples/python-inventory`)·정적 웹(`samples/web-notes`) 샘플과 과제 P01~P03·W01~W03, 과제의 `sample` 필드로 샘플별 테스트 방식을 고름 |
+| 보류 | 3D 에이전트 장면(5-5)은 런타임 조합·책 대비 빈 곳을 채운 뒤. Claude 사용량 게이지(5-7)는 조회 방법 확인 후 |
 
 ## 개정 3에서 바뀐 것
 
@@ -312,7 +327,7 @@ type VerifierReport = {
 
 ```json
 {
-  "runtimes": { "primary": "codex", "review": "claude" },
+  "mode": "codex+claude",
   "roles": {
     "lead":       { "runtime": "primary", "effort": "low" },
     "builder":    { "runtime": "primary", "effort": "high", "access": "workspace-write" },
@@ -326,7 +341,7 @@ type VerifierReport = {
 ```
 
 - 설정이 없는 프로젝트는 `doctor`가 `package.json` 등을 보고 초안을 만들어 사용자가 확인합니다.
-- `review`를 `codex`로 바꾸면 Codex 단독, `primary`를 `claude`로 바꾸면 Claude 단독입니다.
+- `mode`는 `codex`, `claude`, `codex+claude`(기본값), `claude+codex` 중 하나입니다(개정 4). 역할별로 다르게 배정하려면 `mode` 대신 `runtimes`(`primary`·`review`)와 `roles.<role>.runtime`을 씁니다. 둘을 함께 쓰면 오류입니다.
 - 개인 PC별 값(경로, 토큰, 로그)은 프로젝트가 아니라 Agent Desk 데이터 폴더에 둡니다.
 
 **역할 정의 파일.** 역할의 지침은 `config.json`이 아니라 `.agent-desk/agents/<role>.md`에 둡니다("파일이 없으면 존재하지 않는다"). 프론트매터에 `access`·`effort`·`skills`를, 본문에 지침을 적습니다. 하네스는 역할 4개(`lead`·`builder`·`verifier`·`researcher`)의 파일이 모두 있는지 `doctor`로 확인하고, 없으면 내장 기본값을 쓰되 알려 줍니다. `config.json`에는 런타임 배정, `verify`, 한도만 남습니다. 위 예시의 `roles` 항목 중 `access`·`effort`·스킬은 이 파일로 옮겨지고, 런타임 배정(`runtime`)만 설정에 남습니다.
@@ -413,14 +428,16 @@ Claude는 계정 사용률을 읽는 공식 경로를 아직 확인하지 못했
 
 | 메서드 · 경로 | 용도 |
 | --- | --- |
-| `GET /api/projects` · `POST /api/projects` | 프로젝트 목록·연결 |
-| `POST /api/projects/:id/doctor` | 런타임·설정·검증 명령 점검 |
-| `POST /api/runs` | Run 시작 (요청, 이미지, 워크플로 강제 선택 가능) |
-| `GET /api/runs/:id` | Run·Step·보고·게이트·토큰 상세 |
-| `POST /api/runs/:id/cancel` · `/resume` | 중단·이어하기 |
-| `GET /api/runs/:id/events` (SSE) | 실시간 이벤트 |
-| `GET /api/approvals` · `POST /api/approvals/:id` | 승인 대기열·응답 |
-| `GET /api/usage` | 토큰·한도 사용률 집계 |
+| `GET /api/state` | CSRF 토큰, 진행 중 Run과 대기 질문, Codex·Claude 설치 여부 |
+| `GET /api/runs` · `GET /api/runs/:id` | Run 목록(프로젝트 필터) · 상세(Step, 토큰, 보고서) |
+| `POST /api/runs` | Run 시작 (요청, `mode`·`runtime`, 리뷰 정책, 언어) |
+| `GET /api/runs/:id/events` (SSE) | 실시간 이벤트 (마지막 번호 이후만 재전송) |
+| `POST /api/runs/active/cancel` · `/answer` | 중단 · 질문에 답하기 |
+| `POST /api/runs/:id/revert` | 복원 지점으로 되돌리기 (미리보기 → 적용) |
+| `POST /api/history/delete` | 대시보드 기록 삭제 (프로젝트별 또는 벤치마크 작업 폴더 일괄, 파일은 그대로) |
+| `GET /api/project` | 프로젝트 설정·모드·스킬·메모 (읽기 전용) |
+| `GET /api/fs` · `POST /api/pick-folder` | 폴더 탐색 · OS 폴더 선택 창 |
+| `GET /api/usage` · `GET /api/bench` | Codex 한도 사용률 · 벤치마크 요약 |
 
 모든 변경 요청은 CSRF 토큰을 요구합니다. API 타입은 `core`에서 정의해 서버와 `web`이 같이 씁니다.
 
@@ -431,18 +448,18 @@ Claude는 계정 사용률을 읽는 공식 경로를 아직 확인하지 못했
 - 글자 단위로 흐르는 메시지는 일정 간격으로 묶어 보냅니다.
 - 회귀 테스트: 응답을 읽지 않는 연결을 붙여 둔 채 이벤트를 대량으로 발생시켜도 서버 메모리가 늘지 않는지 확인합니다.
 
-**대시보드 화면**
+**대시보드 화면** (개정 4: 채팅형)
 
-| 화면 | 보여주는 것 | v1과 다른 점 |
-| --- | --- | --- |
-| 작업 콘솔 | 요청 입력, 진행 중 Run의 Step 타임라인, 승인 카드 | 에이전트 13개 상태 대신 Workflow 단계를 보여줌 |
-| Run 상세 | 요구사항별 상태, 게이트 G1\~G5 결과, diff, verify 출력, Step별 토큰 | 완료 근거를 한눈에 확인 |
-| 프로젝트 설정 | `.agent-desk/config.json` 편집, 역할별 런타임 선택, doctor 결과 | 설정이 파일로 남아 Git으로 추적 |
-| 스킬 | SKILL.md 목록·편집, 설명 필수 항목 점검 | 트리거·제외 조건 누락 경고 |
-| 사용량 | Run별·역할별·런타임별 토큰, 한도 사용률 추이 | 턴 증분 기반의 정확한 숫자 |
-| 벤치마크 | 라벨별 성공률·거짓 완료·성공당 토큰 비교 차트 | 신규 |
+| 영역 | 보여주는 것 |
+| --- | --- |
+| 사이드바 | 프로젝트 목록(연 폴더 + 실행 기록이 있는 폴더, 최근 순), 프로젝트 열기, 기록 삭제, 벤치마크 작업 폴더 그룹, 벤치마크 탭, 언어 전환 |
+| 대화 | 프로젝트의 Run을 대화로: 내 요청 말풍선 → 팀 응답(진행 중 Step과 담당 런타임, 에이전트 질문, 결과 보고서, 게이트, 되돌리기). "과정 보기"로 Step 타임라인과 역할별 시간·토큰 |
+| 입력창 | Enter 전송, 질문 대기 중이면 답변으로 전송, 팀 구성(모드)·리뷰 정책 선택 |
+| 팀 패널 | 역할 4개와 각 역할의 런타임(Codex/Claude), 작업 중·완료 상태, Codex 사용량 |
+| 벤치마크 | 세트별(일반·어려운·다른 종류 프로젝트) 성공률·거짓 완료·토큰·시간 비교 |
 
-화면 상세 디자인은 코어가 돌아간 뒤(5단계) 별도 목업으로 정합니다.
+남은 것: 팀 패널에서 역할 파일·스킬·트리거 설명 보기와 편집, 3D 장면(5-5).
+
 
 ## 테스트·벤치마크 전략
 
@@ -461,7 +478,7 @@ Claude는 계정 사용률을 읽는 공식 경로를 아직 확인하지 못했
 **벤치마크 운영**
 
 - `bench/adapters/`에 v1·v2 어댑터를 두고, 과제·채점·리포트는 그대로 공유합니다. v1 어댑터는 구현됐고, 측정 중 서버 중단에도 이어서 돌도록 보강했습니다.
-- **과제 세트 2종**: 쉬운 세트 T01\~T10(고정, 수정하지 않음)과 어려운 세트 H01\~(여러 파일·얽힌 요구사항·함정 포함, 작성 예정). v1이 쉬운 세트를 모두 성공해서 성공률 차이는 어려운 세트에서만 볼 수 있습니다. 어려운 세트도 v2 코어를 쓰기 전에 커밋해 고정합니다.
+- **과제 세트 3종**(개정 4에서 범용성 세트 추가): 쉬운 세트 T01\~T10(고정, 수정하지 않음)과 어려운 세트 H01\~(여러 파일·얽힌 요구사항·함정 포함, 작성 예정). v1이 쉬운 세트를 모두 성공해서 성공률 차이는 어려운 세트에서만 볼 수 있습니다. 어려운 세트도 v2 코어를 쓰기 전에 커밋해 고정합니다. 범용성 세트(`--set general`)는 Python 샘플(P01~P03)과 정적 웹 샘플(W01~W03)로, 하네스가 Node 프로젝트에 묶여 있지 않은지 봅니다.
 - **측정 라벨**
 
   | 라벨 | 구성 | 답하는 질문 |
@@ -471,8 +488,9 @@ Claude는 계정 사용률을 읽는 공식 경로를 아직 확인하지 못했
   | `v2-codex-noreview` | v2, Codex, 리뷰 never | 독립 리뷰가 비용만큼 가치가 있나 |
   | `v2-codex-auto` | v2, Codex, 리뷰 auto | 선택적 리뷰로 둘 다 얻을 수 있나 |
   | `v2-claude` | v2, Claude | 런타임 교체 |
-  | `v2-mixed` | Codex 구현 + Claude 리뷰 | 다른 모델의 교차 검증 효과 |
-- 같은 모델·같은 추론 수준으로 맞춰 비교하고, 조건은 결과의 `_config.json`에 기록합니다. 각 라벨은 과제당 2회, 최종 측정은 3회 반복합니다.
+  | `v2-mixed` | Codex 구현 + Claude 리뷰 (`--mode codex+claude`, 개정 4의 기본값) | 다른 모델의 교차 검증 효과 |
+  | `v2-general` | v2, 범용성 세트 | Node 외 프로젝트에서도 같은 품질인가 |
+- 개정 4부터 기본 모드가 `codex+claude`이므로, Codex 단독 라벨은 `--mode codex`를 명시합니다. 같은 모델·같은 추론 수준으로 맞춰 비교하고, 조건은 결과의 `_config.json`에 기록합니다. 각 라벨은 과제당 2회, 최종 측정은 3회 반복합니다.
 - 주 지표는 토큰·판정 정확도·소요 시간입니다. 5시간 한도 사용률은 측정 중 다른 작업이 섞이므로 참고값입니다.
 - 설계 변경은 벤치마크 결과와 함께 ADR(`docs/adr/`)로 남겨, 어떤 변경이 몇 %를 바꿨는지 추적합니다.
 
