@@ -4,7 +4,7 @@ import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
 import { applyEvents, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
 import type { GateResult, Timeline } from './model.ts';
-import { detectLanguage, durationText, I18nContext, translate, useI18n } from './i18n.ts';
+import { detectLanguage, durationText, I18nContext, remainingText, translate, useI18n } from './i18n.ts';
 import type { I18n, Lang } from './i18n.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
@@ -223,7 +223,7 @@ function ReportCard({ report, workflow }: { report: RunReport | null; workflow: 
 }
 
 function UsageGauge() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const load = useCallback(async (): Promise<void> => {
@@ -242,7 +242,7 @@ function UsageGauge() {
         const tone = window.usedPercent >= 90 ? 'danger' : window.usedPercent >= 70 ? 'warning' : 'success';
         return (
           <div key={window.kind} className="gauge">
-            <div className="step-head"><span>{windowName(window.windowDurationMins)}</span><span className="muted push">{t('usageUsed', { pct: Math.round(window.usedPercent) })}{left !== null ? ` · ${t('usageResets', { n: left })}` : ''}</span></div>
+            <div className="step-head"><span>{windowName(window.windowDurationMins)}</span><span className="muted push">{t('usageUsed', { pct: Math.round(window.usedPercent) })}{left !== null ? ` · ${t('usageResets', { n: remainingText(lang, left) })}` : ''}</span></div>
             <div className="bar"><div className={`fill tone-${tone}`} style={{ width: `${Math.min(100, Math.max(0, window.usedPercent))}%` }} /></div>
           </div>
         );

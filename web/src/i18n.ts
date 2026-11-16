@@ -93,7 +93,7 @@ const en = {
   usageLoading: 'Checking…',
   usageUnavailable: 'Not available: {reason}',
   usageUsed: '{pct}% used',
-  usageResets: 'resets in {n} min',
+  usageResets: 'resets in {n}',
   window5h: '5-hour window',
   windowWeek: 'Weekly window',
   windowOther: '{n}-minute window',
@@ -214,7 +214,7 @@ const ko: Record<Key, string> = {
   usageLoading: '확인 중…',
   usageUnavailable: '확인할 수 없습니다: {reason}',
   usageUsed: '{pct}% 사용',
-  usageResets: '{n}분 후 초기화',
+  usageResets: '{n} 후 초기화',
   window5h: '5시간 한도',
   windowWeek: '주간 한도',
   windowOther: '{n}분 한도',
@@ -257,6 +257,16 @@ export function durationText(lang: Lang, ms: number): string {
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds} ${translate(lang, 'seconds')}`;
   return `${Math.floor(seconds / 60)} ${translate(lang, 'minutes')} ${seconds % 60} ${translate(lang, 'seconds')}`;
+}
+
+/** "2d 3h 5m" / "2일 3시간 5분"; zero units are left out, and under a minute still reads as 1 minute. */
+export function remainingText(lang: Lang, totalMinutes: number): string {
+  const minutes = Math.max(1, Math.round(totalMinutes));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const rest = minutes % 60;
+  const unit = lang === 'ko' ? { d: '일', h: '시간', m: '분' } : { d: 'd', h: 'h', m: 'm' };
+  return [days ? `${days}${unit.d}` : '', hours ? `${hours}${unit.h}` : '', rest || (!days && !hours) ? `${rest}${unit.m}` : ''].filter(Boolean).join(' ');
 }
 
 export interface I18n { lang: Lang; setLang(lang: Lang): void; t(key: Key, values?: Record<string, string | number>): string }
