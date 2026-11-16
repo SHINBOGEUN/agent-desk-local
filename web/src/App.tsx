@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import { api, ApiError, followRun } from './api.ts';
+import type { ClipboardEvent, KeyboardEvent } from 'react';
+import { api, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
+import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
-import { apiErrorText, currentLang, detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
+import { detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Key, Lang } from './i18n.ts';
+import { SettingsPanel } from './settings.tsx';
+import { errorText } from './util.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
 const PROJECTS_KEY = 'agent-desk.projects';
@@ -13,9 +15,10 @@ const MODES_KEY = 'agent-desk.modes';
 const read = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, value: string): void => { try { localStorage.setItem(key, value); } catch { /* storage may be unavailable */ } };
 const readJson = <T,>(key: string, fallback: T): T => { try { return JSON.parse(read(key) ?? '') as T; } catch { return fallback; } };
-const errorText = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? apiErrorText(currentLang(), error.message) : currentLang() === 'ko' ? '문제가 발생했습니다.' : 'Something went wrong');
 const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
 type Installed = { codex: boolean; claude: boolean };
+type Attachment = { name: string; dataUrl: string };
+const readAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error ?? new Error('read failed')); reader.readAsDataURL(file); });
 
 /** Runtime per role for a mode, before a run reports the real assignment. */
 const previewRuntimes = (mode: RuntimeMode): Record<string, string> => {
@@ -171,6 +174,14 @@ function UsageGauge() {
           </div>
         );
       })}
+      {usage?.claude ? (
+        <div className="gauge claude-usage">
+          <div className="step-head"><span className="rt rt-claude">Claude</span><span className="muted">{t('claudeUsageTitle')}</span></div>
+          <p>{t('claudeUsage5h', { tokens: formatTokens(usage.claude.last5h), runs: usage.claude.runs5h })}</p>
+          <p className="muted">{t('claudeUsage7d', { tokens: formatTokens(usage.claude.last7d) })}</p>
+          <p className="editor-note">{t('claudeUsageNote')}</p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -381,8 +392,8 @@ function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, o
 }
 
 /** One request and the team's reply. Live runs follow the event stream; finished runs load their saved report. */
-function Exchange({ run, live, onPending, onTimeline, onFinished }: {
-  run: RunRow; live: boolean; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
+function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished }: {
+  run: RunRow; live: boolean; canResume: boolean; onResume: (run: RunRow) => void; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
 }) {
   const { t, lang } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -409,6 +420,9 @@ function Exchange({ run, live, onPending, onTimeline, onFinished }: {
   useEffect(() => { if (live) callbacks.current.onTimeline(timeline); }, [live, timeline]);
 
   const status = detail?.run.status ?? run.status;
+  const settings = detail?.settings ?? null;
+  const runtimes = timeline.runtimes ?? settings?.runtimes;
+  const resumable = !running && (status === 'interrupted' || ((status === 'needs_review' || status === 'failed') && detail?.report?.resume !== undefined));
   const current = timeline.steps.at(-1);
   const summary = gateSummary(timeline);
   const time = new Date(run.startedAt).toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
@@ -423,7 +437,7 @@ function Exchange({ run, live, onPending, onTimeline, onFinished }: {
     <article className="exchange">
       <div className="msg msg-user">
         <div className="bubble">{run.request}</div>
-        <span className="msg-meta">{t('you')} · {time}</span>
+        <span className="msg-meta">{t('you')} · {time}{settings?.images ? ` · ${t('imagesAttached', { n: settings.images })}` : ''}{settings?.resumeOf ? ` · ${t('resumedFrom', { id: settings.resumeOf })}` : ''}</span>
       </div>
       <div className={`msg msg-team status-${statusTone(status)}`}>
         <div className="bubble">
@@ -432,6 +446,8 @@ function Exchange({ run, live, onPending, onTimeline, onFinished }: {
             {detail ? <span className="msg-meta">{t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) })}</span> : <span className="msg-meta">#{run.id}</span>}
             {!running ? <button className="link push" onClick={() => setShowSteps(value => !value)}>{showSteps ? t('hideSteps') : t('showSteps')}</button> : null}
           </header>
+          {runtimes ? <div className="team-line" aria-label={t('teamUsed')}>{(['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>)}{settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}</div> : null}
+          {settings?.fallback ? <p className="msg-meta warn-text">{settings.fallback}</p> : null}
           {running ? (
             <div className="live-line">
               <span className="pulse" aria-hidden="true" />
@@ -449,11 +465,27 @@ function Exchange({ run, live, onPending, onTimeline, onFinished }: {
           {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
           {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
           {!running && (status === 'needs_review' || status === 'failed') ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
+          {!running && detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} /> : null}
+          {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
           {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
         </div>
         <span className="msg-meta">Agent Desk{durationOf(run, lang)}</span>
       </div>
     </article>
+  );
+}
+
+function MemorySuggestions({ project, facts }: { project: string; facts: string[] }) {
+  const { t } = useI18n();
+  const [added, setAdded] = useState<Record<number, boolean>>({});
+  const [error, setError] = useState('');
+  const add = async (index: number, fact: string): Promise<void> => { try { await api.addMemory(project, fact); setAdded(current => ({ ...current, [index]: true })); setError(''); } catch (caught) { setError(errorText(caught)); } };
+  return (
+    <div className="memory-box">
+      <strong>{t('memoryTitle')}</strong>
+      <ul>{facts.map((fact, index) => <li key={index}><span>{fact}</span>{added[index] ? <span className="badge tone-success">{t('addedToMemory')}</span> : <button className="ghost" onClick={() => { void add(index, fact); }}>{t('addToMemory')}</button>}</li>)}</ul>
+      {error ? <p className="error">{error}</p> : null}
+    </div>
   );
 }
 
@@ -473,7 +505,7 @@ function QuestionBlock({ pending }: { pending: Pending }) {
   );
 }
 
-function TeamRail({ runtimes, timeline, info, installed, modeChoice }: { runtimes: Record<string, string> | null; timeline: Timeline | null; info: ProjectInfo | null; installed: Installed | null; modeChoice: RuntimeMode | '' }) {
+function TeamRail({ runtimes, timeline, info, installed, modeChoice, onEdit }: { runtimes: Record<string, string> | null; timeline: Timeline | null; info: ProjectInfo | null; installed: Installed | null; modeChoice: RuntimeMode | ''; onEdit: (role?: string) => void }) {
   const { t } = useI18n();
   const state = (role: string): 'working' | 'done' | 'idle' => {
     const steps = timeline?.steps.filter(step => step.role === role) ?? [];
@@ -484,12 +516,12 @@ function TeamRail({ runtimes, timeline, info, installed, modeChoice }: { runtime
   return (
     <aside className="rail">
       <section className="rail-block">
-        <h3>{t('teamTitle')}</h3>
+        <div className="rail-head"><h3>{t('teamTitle')}</h3><button className="link push" onClick={() => onEdit()}>{t('editTeam')}</button></div>
         <ul className="team">
           {ROLES.map(role => {
             const now = timeline ? state(role) : 'idle';
             return (
-              <li key={role} className={`member member-${now}`}>
+              <li key={role} className={`member member-${now}`} role="button" tabIndex={0} onClick={() => onEdit(role)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onEdit(role); } }}>
                 <span className={`avatar avatar-${role}`} aria-hidden="true">{role.slice(0, 1).toUpperCase()}</span>
                 <span className="member-text"><span className="member-name">{role}</span><span className="member-desc">{t(`role_${role}` as Key)}</span></span>
                 <span className="member-side"><RuntimeTag kind={runtimes?.[role]} />{now !== 'idle' ? <span className="member-state">{now === 'working' ? t('roleWorking') : t('roleDone')}</span> : null}</span>
@@ -513,7 +545,10 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const [liveTimeline, setLiveTimeline] = useState<Timeline | null>(null);
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [modes, setModes] = useState<Record<string, RuntimeMode | ''>>(() => readJson(MODES_KEY, {}));
-  const [review, setReview] = useState<'always' | 'auto' | 'never' | ''>('');
+  const [review, setReview] = useState<'always' | 'auto' | 'never' | 'self' | ''>('');
+  const [images, setImages] = useState<Attachment[]>([]);
+  const [settingsFor, setSettingsFor] = useState<{ role?: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const mode = modes[project] ?? '';
   const setMode = (next: RuntimeMode | ''): void => { const all = { ...modes, [project]: next }; setModes(all); write(MODES_KEY, JSON.stringify(all)); };
@@ -535,6 +570,24 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const usesDefault = mode === '' && info !== null && !info.config.mode && !info.config.runtimes;
   const railRuntimes = usesDefault && installed && !installed.claude && runtimes && !liveTimeline?.runtimes ? { ...runtimes, verifier: runtimes.builder ?? 'codex' } : runtimes;
 
+  const addFiles = async (files: File[]): Promise<void> => {
+    let next = [...images];
+    for (const file of files) {
+      const verdict = acceptImage(next.length, file);
+      if (verdict !== 'ok') { setError(t(verdict === 'type' ? 'imageType' : verdict === 'size' ? 'imageSize' : 'imageCount')); continue; }
+      try { next = [...next, { name: file.name || `image-${next.length + 1}`, dataUrl: await readAsDataUrl(file) }]; } catch (caught) { setError(errorText(caught)); }
+    }
+    setImages(next);
+  };
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+    if (files.length) { event.preventDefault(); void addFiles(files); }
+  };
+  const askNotifications = (): void => { try { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); } catch { /* not supported */ } };
+  const startRun = async (request: string, extra: { resumeOf?: number } = {}): Promise<void> => {
+    askNotifications();
+    await api.start({ project, request, ...(mode ? { mode } : {}), ...(review ? { review } : {}), ...(images.length && !extra.resumeOf ? { images: images.map(image => image.dataUrl) } : {}), ...extra, language: lang });
+  };
   const submit = async (): Promise<void> => {
     const value = text.trim();
     if (!value || busy) return;
@@ -542,10 +595,14 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
     setBusy(true);
     try {
       if (pending && activeHere) await api.answer(value);
-      else await api.start({ project, request: value, ...(mode ? { mode } : {}), ...(review ? { review } : {}), language: lang });
+      else { await startRun(value); setImages([]); }
       setText('');
       onChanged();
     } catch (caught) { setError(errorText(caught)); } finally { setBusy(false); }
+  };
+  const resume = async (run: RunRow): Promise<void> => {
+    setError('');
+    try { await startRun(run.request, { resumeOf: run.id }); onChanged(); } catch (caught) { setError(errorText(caught)); }
   };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); }
@@ -570,7 +627,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
             </label>
             <label className="control">{t('reviewPolicy')}
               <select value={review} onChange={event => setReview(event.target.value as typeof review)}>
-                <option value="">{t('fromConfig')}</option><option value="auto">{t('reviewAuto')}</option><option value="always">{t('reviewAlways')}</option><option value="never">{t('reviewNever')}</option>
+                <option value="">{t('fromConfig')}</option><option value="auto">{t('reviewAuto')}</option><option value="always">{t('reviewAlways')}</option><option value="never">{t('reviewNever')}</option><option value="self">{t('reviewSelf')}</option>
               </select>
             </label>
           </div>
@@ -584,7 +641,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
               <ProjectPanel project={project} />
             </div>
           ) : shown.map(run => (
-            <Exchange key={run.id} run={run} live={active?.runId === run.id}
+            <Exchange key={run.id} run={run} live={active?.runId === run.id} canResume={active === null} onResume={run => { void resume(run); }}
               onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }} />
           ))}
           <div ref={threadEnd} />
@@ -594,15 +651,25 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
           {activeHere && !answering && active ? <p className="composer-note">{t('composerBusy', { id: active.runId })}</p> : null}
           {missing.length ? <p className="composer-note warn">{t('modeMissing', { name: missing.map(kind => (kind === 'codex' ? 'Codex' : 'Claude')).join(', ') })}</p> : null}
           {error ? <p className="composer-note error">{error}</p> : null}
+          {images.length ? (
+            <div className="attachments">{images.map((image, index) => (
+              <figure key={index} className="thumb"><img src={image.dataUrl} alt={image.name} /><button className="thumb-remove" aria-label={t('removeImage')} title={t('removeImage')} onClick={() => setImages(current => current.filter((_, i) => i !== index))}>×</button></figure>
+            ))}</div>
+          ) : null}
           <div className={`composer${answering ? ' answering' : ''}`}>
-            <textarea value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} rows={2} disabled={blocked}
+            <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={event => { const files = [...(event.target.files ?? [])]; event.target.value = ''; void addFiles(files); }} />
+            <button className="attach" disabled={blocked || answering} aria-label={t('attachImage')} title={t('attachImage')} onClick={() => fileInput.current?.click()}>
+              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M13.5 6.5 7.8 12.2a1.6 1.6 0 0 0 2.3 2.3l6-6a3.2 3.2 0 0 0-4.5-4.5l-6 6a4.8 4.8 0 0 0 6.8 6.8l5.1-5.1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+            <textarea value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} onPaste={onPaste} rows={2} disabled={blocked}
               placeholder={answering ? t('composerAnswer') : t('composerPlaceholder')} aria-label={answering ? t('composerAnswer') : t('composerPlaceholder')} />
             <button className="send" disabled={blocked || busy || !text.trim()} onClick={() => { void submit(); }}>{answering ? t('sendAnswer') : t('sendRequest')}</button>
           </div>
           <p className="composer-hint">{t('sendHint')}</p>
         </div>
       </section>
-      <TeamRail runtimes={railRuntimes} timeline={liveTimeline} info={info} installed={installed} modeChoice={mode} />
+      <TeamRail runtimes={railRuntimes} timeline={liveTimeline} info={info} installed={installed} modeChoice={mode} onEdit={role => setSettingsFor(role ? { role } : {})} />
+      {settingsFor ? <SettingsPanel project={project} runtimes={railRuntimes} busy={activeHere} initialRole={settingsFor.role} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
     </div>
   );
 }
@@ -682,6 +749,19 @@ export function App() {
       await refresh();
     } catch (caught) { setError(errorText(caught)); }
   };
+  // A waiting question: browser notification (if allowed) and a marked tab title until it is answered.
+  const waiting = active?.pending?.question ?? null;
+  useEffect(() => {
+    if (!waiting || !active) { document.title = 'Agent Desk'; return; }
+    document.title = `(${i18n.t('titleWaiting')}) Agent Desk`;
+    try {
+      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+        const notice = new Notification(i18n.t('notifyTitle', { name: projectName(active.project) }), { body: waiting.slice(0, 200), tag: `agent-desk-${active.runId}` });
+        notice.onclick = () => { window.focus(); choose(active.project); notice.close(); };
+      }
+    } catch { /* notifications unavailable */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
   const projects = projectList(saved, runs, active?.project ?? null);
   return (
     <I18nContext.Provider value={i18n}>

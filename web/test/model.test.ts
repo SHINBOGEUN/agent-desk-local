@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { benchSets, changePercent, minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
-import { benchSetOf, modeNeeds, projectList, projectName, sameProject } from '../src/model.ts';
+import { acceptImage, asList, readFrontmatter, benchSetOf, modeNeeds, projectList, projectName, sameProject } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -116,4 +116,21 @@ test('bench labels ending in -general form their own set', () => {
   assert.equal(benchSetOf('v2-general'), 'general');
   assert.equal(benchSetOf('v1-13-hard'), 'hard');
   assert.equal(benchSetOf('v2-codex-auto'), 'standard');
+});
+
+test('frontmatter of role files and skills reads lists in both forms', () => {
+  const role = readFrontmatter('---\ndescription: Builds\naccess: workspace-write\nskills: [a, b]\nmodel-claude: sonnet\n---\nUse tabs.\n');
+  assert.deepEqual(role.data.skills, ['a', 'b']);
+  assert.equal(role.data['model-claude'], 'sonnet');
+  assert.equal(role.body, 'Use tabs.');
+  assert.deepEqual(readFrontmatter('---\nskills:\n  - x\n  - y\n---\n').data.skills, ['x', 'y']);
+  assert.deepEqual(readFrontmatter('no frontmatter').data, {});
+  assert.deepEqual(asList('one'), ['one']);
+});
+
+test('image attachments follow the server limits', () => {
+  assert.equal(acceptImage(0, { type: 'image/png', size: 100 }), 'ok');
+  assert.equal(acceptImage(4, { type: 'image/png', size: 100 }), 'count');
+  assert.equal(acceptImage(0, { type: 'application/pdf', size: 100 }), 'type');
+  assert.equal(acceptImage(0, { type: 'image/jpeg', size: 6 * 1024 * 1024 }), 'size');
 });

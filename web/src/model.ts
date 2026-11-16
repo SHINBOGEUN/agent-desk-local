@@ -270,3 +270,36 @@ export const sameProject = (a: string, b: string): boolean => {
   const key = (path: string): string => (/^[a-z]:\\/i.test(path) ? path.toLowerCase() : path).replace(/[\\/]+$/, '');
   return key(a) === key(b);
 };
+
+/** Frontmatter of a role file or SKILL.md, for display only (the server validates on save). */
+export function readFrontmatter(text: string): { data: Record<string, string | string[]>; body: string } {
+  const normalized = text.replace(/\r\n/g, '\n');
+  if (!normalized.startsWith('---\n')) return { data: {}, body: normalized.trim() };
+  const end = normalized.indexOf('\n---', 4);
+  if (end < 0) return { data: {}, body: normalized };
+  const data: Record<string, string | string[]> = {};
+  let list: string | null = null;
+  for (const line of normalized.slice(4, end).split('\n')) {
+    const item = /^\s*-\s+(.*)$/.exec(line);
+    if (item && list) { (data[list] as string[]).push(item[1]!.trim()); continue; }
+    const pair = /^([A-Za-z][\w-]*)\s*:\s*(.*)$/.exec(line);
+    if (!pair) continue;
+    const key = pair[1]!; const value = pair[2]!.trim();
+    list = null;
+    if (value === '') { data[key] = []; list = key; }
+    else if (value.startsWith('[') && value.endsWith(']')) data[key] = value.slice(1, -1).split(',').map(entry => entry.trim()).filter(Boolean);
+    else data[key] = value.replace(/^["']|["']$/g, '');
+  }
+  return { data, body: normalized.slice(end + 4).replace(/^\n/, '').trim() };
+}
+
+export const asList = (value: string | string[] | undefined): string[] => (Array.isArray(value) ? value : value ? [value] : []);
+
+/** Image files the composer accepts, matching the server's limits. */
+export const IMAGE_LIMITS = { count: 4, bytes: 5 * 1024 * 1024, types: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] };
+export function acceptImage(current: number, file: { type: string; size: number }): 'ok' | 'type' | 'size' | 'count' {
+  if (current >= IMAGE_LIMITS.count) return 'count';
+  if (!IMAGE_LIMITS.types.includes(file.type)) return 'type';
+  if (file.size > IMAGE_LIMITS.bytes) return 'size';
+  return 'ok';
+}

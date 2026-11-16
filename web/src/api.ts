@@ -30,6 +30,8 @@ export interface RunReport {
   failureType?: string;
   redo?: number;
   restorePoint?: { files: number; bytes: number };
+  memorySuggestions?: string[];
+  resume?: { step: string; redo: number; note: string };
 }
 
 export interface RunDetail {
@@ -38,12 +40,18 @@ export interface RunDetail {
   usage: { stepId: string; turn: number; usage: { totalTokens: number } }[];
   usageTotal: number;
   report: RunReport | null;
+  settings?: RunSettings | null;
 }
+
+/** What a run started with (recorded by the server). */
+export interface RunSettings { mode?: string | null; runtimes?: Record<string, string>; fallback?: string; review?: string; verify?: string[]; skills?: Record<string, string[]>; images?: number; resumeOf?: number; noSkills?: boolean; notes?: string[] }
+export interface ProjectFiles { config: { exists: boolean; text: string }; roles: Record<string, { exists: boolean; text: string }>; skills: { id: string; text: string }[] }
+export interface SaveReply { ok: boolean; warnings?: string[]; errors?: string[] }
 export interface ProjectConfigView { mode?: string; runtimes?: { primary?: string; review?: string }; verify?: string[]; review?: string; skills?: string[]; limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number } }
 export interface ProjectInfo { config: ProjectConfigView; mode?: string | null; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
 export interface LimitWindowView { kind: string; windowDurationMins: number | null; usedPercent: number; remainingPercent: number; resetsAt: number | null }
-export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string }
-export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; review?: 'always' | 'auto' | 'never'; language?: 'en' | 'ko'; verify?: string[] }
+export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string; claude?: { last5h: number; last7d: number; runs5h: number } }
+export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; images?: string[]; resumeOf?: number; review?: 'always' | 'auto' | 'never' | 'self'; language?: 'en' | 'ko'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
 export interface FolderEntry { name: string; path: string; isProject: boolean }
@@ -51,7 +59,8 @@ export interface FolderListing { path: string; parent: string | null; home: stri
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  readonly details: string[];
+  constructor(status: number, message: string, details: string[] = []) { super(message); this.status = status; this.details = details; }
 }
 
 let token = '';
@@ -65,7 +74,7 @@ async function request<T>(method: 'GET' | 'POST', url: string, body?: unknown): 
   });
   const text = await response.text();
   const data = text ? (JSON.parse(text) as unknown) : {};
-  if (!response.ok) throw new ApiError(response.status, (data as { error?: string }).error ?? `request failed (${response.status})`);
+  if (!response.ok) throw new ApiError(response.status, (data as { error?: string }).error ?? `request failed (${response.status})`, (data as { errors?: string[] }).errors ?? []);
   return data as T;
 }
 
@@ -81,6 +90,10 @@ export const api = {
   start: (body: StartRequest): Promise<{ runId: number }> => request('POST', '/api/runs', body),
   cancel: (): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/cancel', {}),
   answer: (answer: string): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/answer', { answer }),
+  files: (project: string): Promise<ProjectFiles> => request('GET', `/api/project/files?path=${encodeURIComponent(project)}`),
+  saveFile: (body: { project: string; kind: 'config' | 'role' | 'skill'; id?: string; text?: string; remove?: boolean }): Promise<SaveReply> => request('POST', '/api/project/files', body),
+  initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
+  addMemory: (project: string, fact: string): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact }),
   deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),
   revert: (id: number, yes: boolean): Promise<RevertPlan> => request('POST', `/api/runs/${id}/revert`, { yes }),
 };
