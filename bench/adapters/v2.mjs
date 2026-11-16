@@ -74,7 +74,7 @@ export function createAdapter({ cli, review, verify = ['npm test'], maxTokens, m
     async connect() {
       const { code, stdout, stderr } = await runProcess(command[0], [...base, 'doctor', ...(runtime ? ['--runtime', runtime] : [])], { timeoutMs: 60_000, cwd: repoRoot })
         .catch(error => { throw new Error(`Agent Desk v2 CLI could not start: ${error.message}`); });
-      const failures = stdout.split(/\r?\n/).filter(line => line.startsWith('FAIL') && !/verify commands|project config/.test(line));
+      const failures = stdout.split(/\r?\n/).filter(line => line.startsWith('FAIL') && !/verify commands|project config|role files/.test(line));
       if (failures.length || (code !== 0 && code !== 1)) throw new Error(`Agent Desk v2 doctor reported problems:\n${failures.join('\n') || stderr.trim() || `exit code ${code}`}\nRun "npm run agent-desk -- doctor" for details.`);
     },
     async configure() { /* usage window limits arrive with phase 4 */ },
