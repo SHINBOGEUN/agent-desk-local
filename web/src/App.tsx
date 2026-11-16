@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
-import type { ActiveRun, FolderListing, Pending, RunDetail, RunRow } from './api.ts';
+import type { ActiveRun, FolderListing, Pending, RunDetail, RunReport, RunRow } from './api.ts';
 import { applyEvents, emptyTimeline, formatTokens, gateSummary, statusTone, stepDurationMs } from './model.ts';
 import type { GateResult, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, translate, useI18n } from './i18n.ts';
@@ -181,6 +181,46 @@ function TimelineView({ timeline }: { timeline: Timeline }) {
   );
 }
 
+function List({ title, items }: { title: string; items: string[] }) {
+  if (!items.length) return null;
+  return <div className="section"><div className="label">{title}</div><ul>{items.map((item, index) => <li key={index}>{item}</li>)}</ul></div>;
+}
+
+function ReportCard({ report, workflow }: { report: RunReport | null; workflow: string | null }) {
+  const { t } = useI18n();
+  if (!report) return <div className="card muted">{t('reportMissing')}</div>;
+  const { answer, builder, plan, research, review } = report;
+  const requirementTone = (status: string): string => (status === 'done' ? 'success' : status === 'not_done' ? 'danger' : 'warning');
+  const known = (status: string): boolean => ['done', 'not_done', 'unverified'].includes(status);
+  return (
+    <div className="card report">
+      <h2>{t('reportTitle')}{workflow ? <span className="muted"> · {workflow}</span> : null}</h2>
+      {answer ? <div className="section"><div className="label">{t('answerTitle')}</div><p className="prose">{answer.answer}</p><List title={t('sources')} items={answer.sources} /></div> : null}
+      {builder ? (
+        <>
+          <div className="section"><div className="label">{t('summaryTitle')}</div><p className="prose">{builder.summary}</p></div>
+          <div className="section"><div className="label">{t('changedFiles')}</div>
+            {builder.changedFiles.length ? <ul className="mono">{builder.changedFiles.map(file => <li key={file}>{file}</li>)}</ul> : <p className="muted">{t('noChangedFiles')}</p>}</div>
+          {builder.commandsRun.length ? <div className="section"><div className="label">{t('commandsRun')}</div><ul className="mono">{builder.commandsRun.map((entry, index) => <li key={index}>{entry.command} <span className={`badge tone-${entry.exitCode === 0 ? 'success' : 'danger'}`}>{t('exitCode', { code: entry.exitCode })}</span></li>)}</ul></div> : null}
+          {builder.requirements.length ? <div className="section"><div className="label">{t('requirementsTitle')}</div><ul>{builder.requirements.map(req => {
+            const text = report.requirements?.find(item => item.id === req.id)?.text;
+            return <li key={req.id}><strong>{req.id}</strong> <span className={`badge tone-${requirementTone(req.status)}`}>{known(req.status) ? t(`req_${req.status}` as 'req_done') : req.status}</span> {text ?? ''}<div className="muted">{req.evidence}</div></li>;
+          })}</ul></div> : null}
+        </>
+      ) : null}
+      {plan ? <div className="section"><div className="label">{t('planTitle')}</div><p className="prose">{plan.approach}</p><List title={t('planSteps')} items={plan.steps} /><List title={t('planRisks')} items={plan.risks} /></div> : null}
+      {research?.length ? <div className="section"><div className="label">{t('researchTitle')}</div>{research.map((entry, index) => <div key={index}><strong>{entry.angle}</strong><p className="prose">{entry.summary}</p><List title={t('sources')} items={entry.sources} /></div>)}</div> : null}
+      {review ? <div className="section"><div className="label">{t('reviewTitle')} <span className={`badge tone-${review.verdict === 'PASS' ? 'success' : 'danger'}`}>{['PASS', 'REDO', 'BLOCKED'].includes(review.verdict) ? t(`verdict_${review.verdict}` as 'verdict_PASS') : review.verdict}</span></div>
+        {review.blocking.length ? <ul>{review.blocking.map((finding, index) => <li key={index}>{finding.file ? <span className="mono">{finding.file}{finding.line ? `:${finding.line}` : ''} </span> : null}{finding.reason}<div className="muted">{finding.evidence}</div></li>)}</ul> : null}
+        <List title={t('suggestions')} items={review.optional} /></div> : null}
+      {report.reviewSkipped ? <p className="muted">{t('reviewSkipped', { reason: report.reviewSkipped })}</p> : null}
+      <List title={t('unverifiedTitle')} items={report.unverified ?? []} />
+      <List title={t('warningsTitle')} items={report.warnings ?? []} />
+      <p className="muted">{report.redo ? t('redoCount', { n: report.redo }) : ''}{report.restorePoint ? ` ${t('restorePoint', { files: report.restorePoint.files })}` : ''}</p>
+    </div>
+  );
+}
+
 function RunView({ runId, active, onFinished }: { runId: number; active: ActiveRun | null; onFinished: () => void }) {
   const { t } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -233,6 +273,7 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
         {error ? <p className="error">{error}</p> : null}
       </div>
       {pending && isActive ? <PendingCard pending={pending} /> : null}
+      {detail && status !== 'running' ? <ReportCard report={detail.report} workflow={detail.run.workflow} /> : null}
       <div className="card"><TimelineView timeline={timeline} /></div>
     </div>
   );

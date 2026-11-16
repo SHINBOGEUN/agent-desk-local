@@ -12,7 +12,7 @@ import { sanitize } from './redact.ts';
 
 export { redactSecrets, sanitize } from './redact.ts';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const MAX_STRING = 4000;
 
 export interface RunRow {
@@ -81,7 +81,15 @@ const MIGRATIONS: string[] = [`
   );
   CREATE INDEX runs_project ON runs(project, id);
   CREATE INDEX usage_run ON usage(run_id);
+`, `
+  ALTER TABLE runs ADD COLUMN report TEXT;
 `];
+
+/** What the dashboard shows as the run's report: the reports the agents submitted, not the raw event log. */
+export function reportOf(result: RunResult): Record<string, unknown> {
+  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint } = result;
+  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined };
+}
 
 export class RunStore {
   readonly #db: DatabaseSync;
@@ -129,8 +137,8 @@ export class RunStore {
     const brief = buildRunBrief(request, result);
     this.#db.exec('BEGIN');
     try {
-      this.#db.prepare('UPDATE runs SET status = ?, reason = ?, workflow = ?, brief = ?, finished_at = ? WHERE id = ?')
-        .run(result.status, result.reason, result.workflow ?? null, brief, new Date().toISOString(), runId);
+      this.#db.prepare('UPDATE runs SET status = ?, reason = ?, workflow = ?, brief = ?, report = ?, finished_at = ? WHERE id = ?')
+        .run(result.status, result.reason, result.workflow ?? null, brief, JSON.stringify(sanitize(reportOf(result), MAX_STRING)), new Date().toISOString(), runId);
       const insert = this.#db.prepare('INSERT INTO usage (run_id, step_id, turn, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       for (const entry of result.usageEntries) {
         const delta = entry.delta;
@@ -162,6 +170,13 @@ export class RunStore {
 
   #toRun(row: Record<string, unknown>): RunRow {
     return { id: Number(row.id), project: String(row.project), request: String(row.request), workflow: (row.workflow as string | null) ?? null, status: row.status as RunRow['status'], reason: (row.reason as string | null) ?? null, brief: (row.brief as string | null) ?? null, startedAt: String(row.started_at), finishedAt: (row.finished_at as string | null) ?? null };
+  }
+
+  /** The report saved when the run finished; null for runs that are still running or were recorded before reports were kept. */
+  getReport(runId: number): Record<string, unknown> | null {
+    const row = this.#db.prepare('SELECT report FROM runs WHERE id = ?').get(runId) as { report: string | null } | undefined;
+    if (!row?.report) return null;
+    try { return JSON.parse(row.report) as Record<string, unknown>; } catch { return null; }
   }
 
   getRun(runId: number): RunRow | null {

@@ -17,11 +17,27 @@ export interface RunRow {
 export interface Pending { question: string; options?: string[] }
 export interface ActiveRun { runId: number; project: string; request: string; pending: Pending | null }
 export interface ServerState { csrf: string; active: ActiveRun | null }
+export interface RunReport {
+  answer?: { answer: string; sources: string[] };
+  builder?: { summary: string; changedFiles: string[]; commandsRun: { command: string; exitCode: number }[]; requirements: { id: string; status: string; evidence: string }[]; unverified: string[] };
+  plan?: { approach: string; steps: string[]; files: string[]; risks: string[] };
+  research?: { angle: string; summary: string; findings: { claim: string; evidence: string }[]; sources: string[] }[];
+  review?: { verdict: string; blocking: { file?: string; line?: number; reason: string; evidence: string }[]; optional: string[] };
+  reviewSkipped?: string;
+  requirements?: { id: string; text: string }[];
+  warnings?: string[];
+  unverified?: string[];
+  failureType?: string;
+  redo?: number;
+  restorePoint?: { files: number; bytes: number };
+}
+
 export interface RunDetail {
   run: RunRow;
   steps: { step: string; role: string; ok: boolean | null; detail: string | null }[];
   usage: { stepId: string; turn: number; usage: { totalTokens: number } }[];
   usageTotal: number;
+  report: RunReport | null;
 }
 export interface ProjectInfo { config: Record<string, unknown>; errors: string[]; warnings: string[]; memory: string[] }
 export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; verify?: string[] }

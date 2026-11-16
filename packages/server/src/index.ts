@@ -168,7 +168,7 @@ export function createServer(options: ServerOptions): LocalServer {
       const runId = Number(runMatch[1]);
       const sub = runMatch[2];
       if (method === 'GET' && !sub) {
-        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId) } : null; });
+        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId), report: store.getReport(runId) } : null; });
         if (!detail) throw new HttpError(404, 'run not found');
         return send(res, 200, { ...detail, run: { ...detail.run, request: redactSecrets(detail.run.request), brief: detail.run.brief ? redactSecrets(detail.run.brief) : null } });
       }

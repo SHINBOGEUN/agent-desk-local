@@ -113,3 +113,7 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - State logic is pure TS in `web/src/model.ts` (tested); React files are thin. Server serves `web/dist` via `agent-desk serve`.
 - Not yet built in the sandbox (no npm): the user must run `npm run web:install`, `npm run web:typecheck`, `npm run web:build`.
 - Remaining: settings/skills/usage panel (5-3), benchmark comparison screen (5-4).
+
+## 2026-11-16 5-3 start: result report in the dashboard
+- Found: finished runs kept only a one-line brief, so the answer text was not visible in the UI. The store now saves the submitted reports per run (`runs.report`, schema v2; answer, builder summary, changed files, commands, requirements, plan, research, review, warnings, unverified). Older runs have no report (shown as such).
+- Dashboard: result card on finished runs; folder picker uses the OS dialog; English/Korean switch.

@@ -40,6 +40,19 @@ test('a run is stored with events, steps, usage and a brief', async () => {
   store.close();
 });
 
+test('the report the agents submitted is stored with the run and secrets are masked', async () => {
+  const store = new RunStore(':memory:');
+  const { runId } = await storedRun(store, tmp(), 'make a.txt');
+  const report = store.getReport(runId) as { builder: { changedFiles: string[]; summary: string }; redo: number };
+  assert.deepEqual(report.builder.changedFiles, ['a.txt']);
+  assert.equal(report.builder.summary, 's');
+  assert.equal(report.redo, 0);
+  assert.equal(store.getReport(9999), null);
+  const open = store.startRun(tmp(), 'still running');
+  assert.equal(store.getReport(open), null);
+  store.close();
+});
+
 test('stored usage equals the sum of the per-turn increments in the event log', async () => {
   const store = new RunStore(':memory:');
   const { runId, result } = await storedRun(store, tmp(), 'make a.txt');
@@ -123,7 +136,7 @@ test('an empty database is created with the schema and a newer schema is refused
   const file = path.join(tmp(), 'a.sqlite');
   new RunStore(file).close();
   const raw = new DatabaseSync(file);
-  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 1);
+  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 2);
   raw.exec('PRAGMA user_version = 99');
   raw.close();
   assert.throws(() => new RunStore(file), /newer than this program supports/);
