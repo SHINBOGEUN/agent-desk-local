@@ -8,6 +8,15 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 |---|---|
 | 스킬 전달 | `project.skillsByRole()`: 역할 파일의 `skills`(+ `config.skills` 필터)로 역할별 `SkillRef` 목록, 없는·오류 스킬은 제외하고 이유 안내. `RunConfig.skills` → `SessionOptions.skills`, `instructionsFor`에 id·설명·SKILL.md 경로 목록과 사용 규칙(`skillsText`). 파일은 복사하지 않음(ADR 0008, 설계서 사본 수정). 테스트 2개 추가(전체 149개) |
 
+## 2026-11-16 · 첫 실제 Claude 스모크와 수정
+
+| 항목 | 내용 |
+|---|---|
+| 결과 | `claude` 스모크: 실행·사용량·메시지·파일 변경·명령·중단·두 번째 턴 통과(Claude Code 2.1.322). 실패: 보고 제출(두 번)과 builder 보고 |
+| 원인 | `submit_report` MCP 입력 스키마가 비어(`properties: {}`) Claude Code가 목록 필드를 JSON 문자열로 보냄 → "expected array, got string". 스모크 스크립트도 `classify` 수집기에 answer 필드를 요구해 모순이었음 |
+| 수정 | 도구 스키마에 필드별 타입 선언, `ReportCollector`가 첫 검증 실패 시에만 JSON 문자열을 값으로 되돌려 재검증(정상 보고의 문자열은 건드리지 않음), 스모크는 answer 수집기·정확한 필드 지시, 실행 파일은 탐색 로직 사용(Windows `codex.cmd`) |
+| 관찰 | Claude Bash 승인: `node -e`는 정책대로 거부, `echo`는 허용. 승인 질문이 Read·Write·Bash 모두 `approve`로 들어옴(가정한 형식 동작). 이 스모크에서 한 번의 보고 시도당 약 6~10k 토큰 |
+
 ## 2026-11-13 · 4단계 진행(4-3)
 
 | 항목 | 내용 |

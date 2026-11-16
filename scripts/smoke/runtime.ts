@@ -16,13 +16,16 @@ import type { RuntimeEvent, Session, SessionOptions } from '#core';
 import { ClaudeRuntime } from '#runtime-claude';
 import { CodexRuntime } from '#runtime-codex';
 import { ReportCollector } from '#tools-mcp';
+import { dataDirectory, locate, readMachineSettings } from '#service';
 import { decideApproval } from '#orchestrator';
 
 const [kind, ...rest] = process.argv.slice(2);
 const flag = (name: string) => { const i = rest.indexOf(`--${name}`); return i >= 0 ? rest[i + 1] : undefined; };
 if (kind !== 'codex' && kind !== 'claude') { console.error('usage: node scripts/smoke/runtime.ts codex|claude [--command <path>] [--model <id>]'); process.exit(64); }
 
-const command = flag('command');
+const found = flag('command') ? null : locate(kind, process.env, process.platform, readMachineSettings(dataDirectory(process.env, process.platform)));
+const command = flag('command') ?? found?.path;
+if (found) console.log(`using ${kind} at ${found.path} (${found.source})`);
 const runtime: CodexRuntime | ClaudeRuntime = kind === 'codex' ? new CodexRuntime(command ? { command } : {}) : new ClaudeRuntime(command ? { command } : {});
 const model = flag('model');
 const results: Array<{ name: string; ok: boolean; detail: string }> = [];
@@ -51,12 +54,12 @@ const base = (tools: SessionOptions['tools'], access: SessionOptions['access']):
 
 try {
   // 1. read-only session reads a file and reports through the MCP tool
-  const collector = new ReportCollector('classify');
+  const collector = new ReportCollector('answer');
   const approvals: string[] = [];
   const readTools = { submitReport: collector.submit, requestUserInput: async () => '', approve: async (request: { toolName: string; input: unknown }) => { approvals.push(request.toolName); return decideApproval(request as never, { cwd: work, canWrite: false }); } };
   const reader = await runtime.startSession(base(readTools, 'read-only'));
   try {
-    const events = await turn(reader, 'Read notes.txt. Then call submit_report once with workflow "answer", requirements [], reason "smoke test", answer set to the secret word in that file, and sources ["notes.txt"].');
+    const events = await turn(reader, 'Read notes.txt. Then call submit_report once with exactly two fields: answer (the secret word in that file) and sources (a list containing "notes.txt"). Add no other fields.');
     check('read-only turn completes', end(events)?.status === 'completed', JSON.stringify(end(events)));
     check('usage events arrive', usageOf(events) > 0, `${usageOf(events)} tokens in ${events.filter(event => event.type === 'usage').length} event(s)`);
     check('messages are translated', events.some(event => event.type === 'message'), `${events.filter(event => event.type === 'message').length} message event(s)`);
@@ -73,7 +76,7 @@ try {
   const writeTools = { submitReport: builderCollector.submit, requestUserInput: async () => '', approve: async (request: { toolName: string; input: unknown }) => { approvals.push(request.toolName); return decideApproval(request as never, { cwd: work, canWrite: true }); } };
   const writer = await runtime.startSession(base(writeTools, 'workspace-write'));
   try {
-    const events = await turn(writer, 'Create a file hello.txt containing exactly "hi". Then run the command: node -e "console.log(1+1)" or, if that is not allowed, any harmless command that prints text. Finally call submit_report with kind builder fields: summary, changedFiles ["hello.txt"], commandsRun [], requirements [], unverified [].');
+    const events = await turn(writer, 'Create a file hello.txt containing exactly "hi". Then run the command: node -e "console.log(1+1)" or, if that is not allowed, any harmless command that prints text. Finally call submit_report with exactly these fields and no others: summary (one sentence), changedFiles (["hello.txt"]), commandsRun (a list of {command, exitCode} for commands you ran), requirements ([]), unverified ([]).');
     check('write turn completes', end(events)?.status === 'completed', JSON.stringify(end(events)));
     check('file was created', fs.existsSync(path.join(work, 'hello.txt')) && fs.readFileSync(path.join(work, 'hello.txt'), 'utf8').trim() === 'hi', fs.existsSync(path.join(work, 'hello.txt')) ? 'content differs' : 'missing');
     check('file_change event seen', events.some(event => event.type === 'file_change'), `${events.filter(event => event.type === 'file_change').length} event(s)`);

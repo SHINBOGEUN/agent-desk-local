@@ -1,0 +1,304 @@
+{
+  "runtime": "claude",
+  "at": "2026-11-15T03:49:55.482Z",
+  "platform": "win32",
+  "node": "v24.20.0",
+  "ok": false,
+  "results": [
+    {
+      "name": "claude executable",
+      "ok": true,
+      "detail": "2.1.322 (Claude Code)"
+    },
+    {
+      "name": "read-only turn completes",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "usage events arrive",
+      "ok": true,
+      "detail": "34533 tokens in 6 event(s)"
+    },
+    {
+      "name": "messages are translated",
+      "ok": true,
+      "detail": "1 message event(s)"
+    },
+    {
+      "name": "report accepted through MCP",
+      "ok": false,
+      "detail": "no report; invalid attempts 2"
+    },
+    {
+      "name": "report content correct",
+      "ok": false,
+      "detail": "answer mentions the secret word"
+    },
+    {
+      "name": "read-only session cannot write",
+      "ok": true,
+      "detail": "verified below by the workspace check"
+    },
+    {
+      "name": "second turn in the same session",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "read-only session left files untouched",
+      "ok": true,
+      "detail": "notes.txt"
+    },
+    {
+      "name": "write turn completes",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"completed\"}"
+    },
+    {
+      "name": "file was created",
+      "ok": true,
+      "detail": "content differs"
+    },
+    {
+      "name": "file_change event seen",
+      "ok": true,
+      "detail": "1 event(s)"
+    },
+    {
+      "name": "command event seen",
+      "ok": true,
+      "detail": "[{\"type\":\"command\",\"command\":\"node -e \\\"console.log(1+1)\\\"\",\"exitCode\":1,\"output\":\"Denied: node -e is not allowed; put the code in a file inside the project.\"},{\"type\":\"command\",\"command\":\"echo hello\",\"exitCode\":0,\"output\":\"hello\\nShell cwd was reset to C:\\\\Users\\\\SHINBO~1\\\\AppData\\\\Local\\\\Temp\\\\agent-desk-smoke-claude-rvZPhm\"}]"
+    },
+    {
+      "name": "builder report accepted",
+      "ok": false,
+      "detail": "no; invalid attempts 4"
+    },
+    {
+      "name": "abort interrupts the turn",
+      "ok": true,
+      "detail": "{\"type\":\"turn_end\",\"status\":\"interrupted\"} after 6029 ms"
+    }
+  ],
+  "transcript": [
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 6080,
+        "cachedInputTokens": 0,
+        "outputTokens": 16,
+        "reasoningTokens": 0,
+        "totalTokens": 6096
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 6197,
+        "cachedInputTokens": 6078,
+        "outputTokens": 32,
+        "reasoningTokens": 0,
+        "totalTokens": 6229
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 6447,
+        "cachedInputTokens": 6195,
+        "outputTokens": 8,
+        "reasoningTokens": 0,
+        "totalTokens": 6455
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 7091,
+        "cachedInputTokens": 6445,
+        "outputTokens": 7,
+        "reasoningTokens": 0,
+        "totalTokens": 7098
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 7334,
+        "cachedInputTokens": 7089,
+        "outputTokens": 2,
+        "reasoningTokens": 0,
+        "totalTokens": 7336
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 1319,
+        "reasoningTokens": 538,
+        "totalTokens": 1319
+      }
+    },
+    {
+      "type": "message",
+      "text": "I couldn't submit the report: the harness rejected it twice.\n\n- **Secret word:** notes.txt says \"The secret word is pineapple.\"\n- **First attempt:** I sent everything you asked for. The harness treats this step as a \"classify\" report, so it rejected `answer` and `sources` as unknown fields. It also said `requirements` arrived as a string, not an array.\n- **Second attempt:** I asked whether to drop `answer` and `sources` and got no reply. I resubmitted without them, so that try didn't include the secret word. It was rejected again for the same `requirements` problem. I'm passing `[]`, but it seems to be converted to a string before the harness checks it, and I can't change that from my side.\n\nTo get this through, two things need fixing in the harness or the step setup: `requirements` must arrive as a real array, and this step needs to accept `answer` and `sources`.",
+      "final": true
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 7681,
+        "cachedInputTokens": 7332,
+        "outputTokens": 4,
+        "reasoningTokens": 0,
+        "totalTokens": 7685
+      }
+    },
+    {
+      "type": "message",
+      "text": "OK",
+      "final": true
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 8398,
+        "cachedInputTokens": 0,
+        "outputTokens": 16,
+        "reasoningTokens": 0,
+        "totalTokens": 8414
+      }
+    },
+    {
+      "type": "file_change",
+      "path": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-smoke-claude-rvZPhm\\hello.txt",
+      "kind": "update"
+    },
+    {
+      "type": "command",
+      "command": "node -e \"console.log(1+1)\"",
+      "exitCode": 1,
+      "output": "Denied: node -e is not allowed; put the code in a file inside the project."
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 8755,
+        "cachedInputTokens": 8396,
+        "outputTokens": 17,
+        "reasoningTokens": 0,
+        "totalTokens": 8772
+      }
+    },
+    {
+      "type": "command",
+      "command": "echo hello",
+      "exitCode": 0,
+      "output": "hello\nShell cwd was reset to C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-smoke-claude-rvZPhm"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 8890,
+        "cachedInputTokens": 8753,
+        "outputTokens": 32,
+        "reasoningTokens": 0,
+        "totalTokens": 8922
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 9242,
+        "cachedInputTokens": 8888,
+        "outputTokens": 10,
+        "reasoningTokens": 0,
+        "totalTokens": 9252
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 9669,
+        "cachedInputTokens": 9240,
+        "outputTokens": 7,
+        "reasoningTokens": 0,
+        "totalTokens": 9676
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 9992,
+        "cachedInputTokens": 9667,
+        "outputTokens": 3,
+        "reasoningTokens": 0,
+        "totalTokens": 9995
+      }
+    },
+    {
+      "type": "message",
+      "text": "The file and command are done. I'm retrying the report because the harness keeps reading the list fields as text.",
+      "final": false
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 10421,
+        "cachedInputTokens": 9990,
+        "outputTokens": 275,
+        "reasoningTokens": 0,
+        "totalTokens": 10696
+      }
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 0,
+        "cachedInputTokens": 0,
+        "outputTokens": 1236,
+        "reasoningTokens": 220,
+        "totalTokens": 1236
+      }
+    },
+    {
+      "type": "message",
+      "text": "I created `hello.txt` containing `hi`, but the report never went through. The harness rejected all four attempts.\n\n- **Command:** `node -e \"console.log(1+1)\"` was blocked (\"node -e is not allowed\"), so I ran `echo hello` instead, which printed `hello`.\n- **Report:** `submit_report` keeps saying `changedFiles`, `commandsRun`, `requirements` and `unverified` were \"expected array, got string\", even though I sent them as lists. The tool's schema doesn't say what type the fields are, so the lists seem to arrive as text. I couldn't get around it by dropping `kind` (the harness rejects it as an unknown field) or by wrapping everything in a `report` object (the harness then says the fields are missing). The tool's schema needs to declare those fields as lists before a report can be accepted.",
+      "final": true
+    },
+    {
+      "type": "turn_end",
+      "status": "completed"
+    },
+    {
+      "type": "usage",
+      "delta": {
+        "inputTokens": 6049,
+        "cachedInputTokens": 5398,
+        "outputTokens": 8,
+        "reasoningTokens": 0,
+        "totalTokens": 6057
+      }
+    },
+    {
+      "type": "message",
+      "text": "1 — The first number, where every count starts.\n2 — The only even prime.\n3 — A triangle has three sides.\n4 — Four seasons make a year.\n5 — Most people have five fingers on each hand.\n6 — The first perfect number.\n7 — There are seven days in a week.\n8 — A spider has eight legs.\n9 — The largest single-digit number.\n10 — We count in base ten.\n11 — The first two-digit palindrome.\n12 — A dozen.\n13 — Some people think it's unlucky.\n14 — Two weeks make a fortnight.\n15 — A quarter of an hour in minutes.\n16 — Four squared.\n17 — A prime that's pop",
+      "final": false
+    },
+    {
+      "type": "turn_end",
+      "status": "interrupted"
+    }
+  ]
+}

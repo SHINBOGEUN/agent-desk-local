@@ -7,6 +7,24 @@ import { reportConsistencyErrors, validateReport } from '#core';
 
 const MAX_LISTED_ERRORS = 12;
 
+/**
+ * Some MCP clients deliver arrays and objects as JSON text. When the report fails as sent, try again with strings that
+ * parse as a JSON array or object turned back into values. Only used after a failed first check, so a text field that
+ * happens to look like JSON is never changed in a report that is otherwise valid.
+ */
+export function unstringify(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
+      try { return unstringify(JSON.parse(text)); } catch { return value; }
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(unstringify);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, unstringify(entry)]));
+  return value;
+}
+
 /** Extra rules that depend on the run (for example: the report must cover every requirement id). */
 export type ReportCheck<K extends ReportKind> = (report: ReportByKind[K]) => string[];
 
@@ -37,7 +55,11 @@ export class ReportCollector<K extends ReportKind> {
 
   readonly submit = async (raw: unknown): Promise<ToolResult> => {
     if (this.#report) return { ok: false, message: 'A report was already accepted for this step. Do not submit another one.' };
-    const checked = validateReport(this.kind, raw);
+    let checked = validateReport(this.kind, raw);
+    if (!checked.ok) {
+      const second = validateReport(this.kind, unstringify(raw));
+      if (second.ok) checked = second;
+    }
     const errors = checked.ok ? [...reportConsistencyErrors(this.kind, checked.value), ...(this.#check?.(checked.value) ?? [])] : checked.errors;
     if (!checked.ok || errors.length) {
       this.#invalidAttempts++;

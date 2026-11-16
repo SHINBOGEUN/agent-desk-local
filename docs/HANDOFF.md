@@ -197,3 +197,9 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 확인한 것: 전체 149개 테스트 통과, `tsc` 통과(이 작업 환경에는 저장소 `node_modules`가 없어 외부 `@types/node`를 가리키는 임시 tsconfig로 실행 — 사용자 PC에서 `npm run typecheck` 한 번 확인 권장).
 - 아직 없는 것: 실제 모델이 목록을 보고 SKILL.md를 읽는지(6단계 트리거 검증·스킬 유무 비교), Run 설정 스냅샷에 스킬 목록 기록, 대시보드 표시. 작업 시작 시 `legacy/agents/main.md`·`verifier.md`에 커밋되지 않은 수정이 있었음(이번 작업과 무관, 손대지 않고 커밋에서 제외) — 사용자가 의도한 것인지 확인 필요.
 - 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정, 사용자 PC에서 4-5.
+
+### 2026-11-16 · Claude (20차)
+- 한 일: 사용자 PC 첫 스모크(claude) 결과 반영. `submit_report` 입력 스키마에 필드 타입 선언, `ReportCollector` 문자열→값 재검증, 스모크가 `codex` 탐색 로직 사용.
+- 확인한 것: 전체 151개 테스트와 `tsc` 통과. 실제 Claude에서 검증된 것: stream-json 다중 턴, usage 증분, `approve` 권한 호출, `--tools` 쉼표 목록, 중단. 아직 미검증: 수정 후 보고 제출, codex 전부.
+- 다음 사람이 할 일: 사용자가 `git pull` 후 `node scripts/smoke/runtime.ts claude`·`codex` 재실행하고 `scripts/smoke/results/*.json`을 전달.
+

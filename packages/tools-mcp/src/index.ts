@@ -7,7 +7,7 @@ export { handleMcpLine, runStdioServer } from './stdio-server.ts';
 export type { McpServerOptions, ToolBridge, ToolCallOutcome } from './stdio-server.ts';
 export { ENV_TOKEN, ENV_URL, ToolEndpoint, dispatchTool } from './endpoint.ts';
 export type { ToolRegistration } from './endpoint.ts';
-export { ReportCollector } from './report-tool.ts';
+export { ReportCollector, unstringify } from './report-tool.ts';
 export type { ReportCheck } from './report-tool.ts';
 
 export interface McpServerCommand {

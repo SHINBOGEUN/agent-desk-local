@@ -18,7 +18,28 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       'Submit the structured result of this step to the Agent Desk harness. Call it exactly once, as the last thing you do. '
       + 'Pass the report object exactly as the step instructions describe it. If the harness answers that the report was rejected, '
       + 'fix the listed fields and call this tool again with the complete corrected report.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+    // Field types are declared so clients pass lists as real arrays (an empty schema made Claude Code send them as strings).
+    // Which fields a step needs is stated in the step instructions; the harness validates the rest.
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workflow: { type: 'string' }, reason: { type: 'string' }, answer: { type: 'string' }, summary: { type: 'string' },
+        verdict: { type: 'string' }, approach: { type: 'string' }, angle: { type: 'string' },
+        requirements: { type: 'array', items: { type: 'object' } },
+        sources: { type: 'array', items: { type: 'string' } },
+        changedFiles: { type: 'array', items: { type: 'string' } },
+        commandsRun: { type: 'array', items: { type: 'object' } },
+        unverified: { type: 'array', items: { type: 'string' } },
+        memorySuggestions: { type: 'array', items: { type: 'string' } },
+        blocking: { type: 'array', items: { type: 'object' } },
+        optional: { type: 'array', items: { type: 'string' } },
+        steps: { type: 'array', items: { type: 'string' } },
+        files: { type: 'array', items: { type: 'string' } },
+        risks: { type: 'array', items: { type: 'string' } },
+        findings: { type: 'array', items: { type: 'object' } },
+      },
+      additionalProperties: true,
+    },
   },
   {
     name: 'request_user_input',

@@ -149,3 +149,22 @@ test('bin exits with an error when the environment is missing', async () => {
   const [code] = await once(child, 'exit');
   assert.equal(code, 2);
 });
+
+test('a report whose lists arrive as JSON text is accepted after one retry-parse; valid reports are left alone', async () => {
+  const stringified = new ReportCollector('builder');
+  const result = await stringified.submit({ summary: 'done', changedFiles: '["a.txt"]', commandsRun: '[{"command":"echo hi","exitCode":0}]', requirements: '[]', unverified: '[]' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(stringified.report?.changedFiles, ['a.txt']);
+  const plain = new ReportCollector('answer');
+  assert.equal((await plain.submit({ answer: '[1,2] is the list', sources: [] })).ok, true);
+  assert.equal(plain.report?.answer, '[1,2] is the list');
+  const bad = new ReportCollector('answer');
+  assert.equal((await bad.submit({ answer: 'x', sources: 'not a list' })).ok, false);
+});
+
+test('submit_report declares typed fields so clients send real arrays', () => {
+  const schema = TOOL_DEFINITIONS.find(tool => tool.name === 'submit_report')?.inputSchema as { properties: Record<string, { type: string }> };
+  assert.equal(schema.properties.changedFiles?.type, 'array');
+  assert.equal(schema.properties.requirements?.type, 'array');
+  assert.equal(schema.properties.answer?.type, 'string');
+});
