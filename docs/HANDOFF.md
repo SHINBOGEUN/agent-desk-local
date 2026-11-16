@@ -233,3 +233,4 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 사용자 PC 확인 필요: Codex 사용량 게이지가 실제 값을 보여 주는지 (`account/rateLimits/read` 응답 형태 미검증).
 - 보류: Claude 사용량 게이지. 조회 API가 없고 statusLine 페이로드로만 제공됨(대화형 세션, Pro/Max). Claude 실행 한 번 할 때 응답에 사용량 정보가 오는지 확인 후 결정.
 - 5-4 완료(벤치마크 탭). 다음: 5-5 에이전트 장면 → README/UI 매뉴얼. `bench/results/runs/v2-*` 결과 파일은 아직 git에 올리지 않았음(untracked) — 사용자가 커밋 여부 결정.
+- 5-5 1차 완료(커밋 후 PC 확인 필요). 남은 것: v1/v2 나란히 재생 뷰(데이터 형태 확인 필요), 모양 다듬기. 그 뒤 README/UI 매뉴얼.
