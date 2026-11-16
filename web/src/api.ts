@@ -81,6 +81,7 @@ export const api = {
   start: (body: StartRequest): Promise<{ runId: number }> => request('POST', '/api/runs', body),
   cancel: (): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/cancel', {}),
   answer: (answer: string): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/answer', { answer }),
+  deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),
   revert: (id: number, yes: boolean): Promise<RevertPlan> => request('POST', `/api/runs/${id}/revert`, { yes }),
 };
 

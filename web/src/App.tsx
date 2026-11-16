@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
+import { applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
 import { apiErrorText, currentLang, detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Key, Lang } from './i18n.ts';
@@ -305,23 +305,67 @@ function BenchmarkView() {
 }
 
 
-function Sidebar({ projects, current, activeRunId, onSelect, onOpen, opening, tab, onTab }: {
-  projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void; opening: boolean; tab: 'chat' | 'bench'; onTab: (tab: 'chat' | 'bench') => void;
+function ProjectButton({ project, on, live, onSelect, onForget }: { project: ProjectEntry; on: boolean; live: boolean; onSelect: () => void; onForget: () => Promise<void> }) {
+  const { t } = useI18n();
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <div className="project-item confirm" role="group">
+        <span className="project-text"><span className="project-name">{t('forgetQuestion', { name: project.name })}</span><span className="project-path">{t('forgetNote', { n: project.runs })}</span></span>
+        <span className="confirm-actions">
+          <button className="mini danger" onClick={() => { void onForget().finally(() => setConfirming(false)); }}>{t('delete')}</button>
+          <button className="mini" onClick={() => setConfirming(false)}>{t('cancel')}</button>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={`project-row${on ? ' on' : ''}`}>
+      <button title={project.path} className={`project-item${on ? ' on' : ''}`} onClick={onSelect}>
+        <span className="project-initial" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span>
+        <span className="project-text"><span className="project-name">{project.name}</span><span className="project-path">{project.path}</span></span>
+        {live ? <span className="live-dot" aria-label={t('status_running')} /> : null}
+      </button>
+      {!live ? <button className="forget" aria-label={t('forgetLabel', { name: project.name })} title={t('forgetLabel', { name: project.name })} onClick={() => setConfirming(true)}>×</button> : null}
+    </div>
+  );
+}
+
+function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
+  projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void;
+  onForget: (project: ProjectEntry) => Promise<void>; onForgetBench: () => Promise<void>; opening: boolean; tab: 'chat' | 'bench'; onTab: (tab: 'chat' | 'bench') => void;
 }) {
   const { t, lang, setLang } = useI18n();
+  const [confirmBench, setConfirmBench] = useState(false);
+  const mine = projects.filter(project => !project.bench);
+  const bench = projects.filter(project => project.bench);
+  const benchRuns = bench.reduce((sum, project) => sum + project.runs, 0);
+  const item = (project: ProjectEntry) => (
+    <ProjectButton key={project.path} project={project} on={tab === 'chat' && sameProject(project.path, current)} live={project.active && activeRunId !== null}
+      onSelect={() => { onSelect(project.path); onTab('chat'); }} onForget={() => onForget(project)} />
+  );
   return (
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Agent Desk</span></div>
       <div className="side-head"><span>{t('projects')}</span></div>
       <nav className="project-nav" aria-label={t('projects')}>
-        {projects.map(project => (
-          <button key={project.path} title={project.path} className={`project-item${tab === 'chat' && sameProject(project.path, current) ? ' on' : ''}`} onClick={() => { onSelect(project.path); onTab('chat'); }}>
-            <span className="project-initial" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span>
-            <span className="project-text"><span className="project-name">{project.name}</span><span className="project-path">{project.path}</span></span>
-            {project.active && activeRunId !== null ? <span className="live-dot" aria-label={t('status_running')} /> : null}
-          </button>
-        ))}
-        {!projects.length ? <p className="side-empty">{t('noProjectsYet')}</p> : null}
+        {mine.map(item)}
+        {!mine.length ? <p className="side-empty">{t('noProjectsYet')}</p> : null}
+        {bench.length ? (
+          <details className="bench-group">
+            <summary>{t('benchWorkspaces', { n: bench.length })}</summary>
+            {confirmBench ? (
+              <div className="bench-confirm">
+                <p>{t('forgetBenchQuestion', { n: benchRuns })}</p>
+                <span className="confirm-actions">
+                  <button className="mini danger" onClick={() => { void onForgetBench().finally(() => setConfirmBench(false)); }}>{t('delete')}</button>
+                  <button className="mini" onClick={() => setConfirmBench(false)}>{t('cancel')}</button>
+                </span>
+              </div>
+            ) : <button className="bench-clear" onClick={() => setConfirmBench(true)}>{t('forgetBench')}</button>}
+            {bench.map(item)}
+          </details>
+        ) : null}
       </nav>
       <button className="open-project" disabled={opening} onClick={onOpen}>+ {t('openProject')}</button>
       {opening ? <p className="side-empty">{t('dialogOpen')}</p> : null}
@@ -622,11 +666,27 @@ export function App() {
     } catch (caught) { setError(errorText(caught)); } finally { setOpening(false); }
   };
 
+  const forget = async (entry: ProjectEntry): Promise<void> => {
+    try {
+      await api.deleteHistory({ project: entry.path });
+      setSaved(current => { const next = current.filter(item => !sameProject(item, entry.path)); write(PROJECTS_KEY, JSON.stringify(next)); return next; });
+      if (sameProject(project, entry.path)) { setProject(''); write(PROJECT_KEY, ''); }
+      await refresh();
+    } catch (caught) { setError(errorText(caught)); }
+  };
+  const forgetBench = async (): Promise<void> => {
+    try {
+      await api.deleteHistory({ benchWorkspaces: true });
+      setSaved(current => { const next = current.filter(item => !isBenchWorkspace(item)); write(PROJECTS_KEY, JSON.stringify(next)); return next; });
+      if (isBenchWorkspace(project)) { setProject(''); write(PROJECT_KEY, ''); }
+      await refresh();
+    } catch (caught) { setError(errorText(caught)); }
+  };
   const projects = projectList(saved, runs, active?.project ?? null);
   return (
     <I18nContext.Provider value={i18n}>
       <div className="app">
-        <Sidebar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} opening={opening} tab={tab} onTab={setTab} />
+        <Sidebar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} onForget={forget} onForgetBench={forgetBench} opening={opening} tab={tab} onTab={setTab} />
         <main className="main">
           {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
           {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>

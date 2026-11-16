@@ -50,6 +50,8 @@ const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 's
 const REVIEWS = new Set(['always', 'auto', 'never']);
 const RUNTIMES = new Set(['codex', 'claude', 'fake']);
 const MODES = new Set<string>(RUNTIME_MODES);
+/** Workspaces made by bench/run.mjs live under <tmp>/agent-desk-bench/<label>/<task>-r<n>-<stamp>. */
+export const isBenchWorkspace = (project: string): boolean => /[\\/]agent-desk-bench(?:-validate-[^\\/]*)?[\\/]/.test(project);
 const MAX_BODY = 256 * 1024;
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json; charset=utf-8' };
 
@@ -205,6 +207,20 @@ export function createServer(options: ServerOptions): LocalServer {
         if (!result.ok) throw new HttpError(404, result.error ?? 'no restore point');
         return send(res, 200, { applied: body.yes === true, restore: result.restore, remove: result.remove });
       }
+    }
+    if (method === 'POST' && p === '/api/history/delete') {
+      // Forgets runs: one project's ({ project }) or every benchmark workspace's ({ benchWorkspaces: true }).
+      // Only the dashboard history goes; project files and bench/results are not touched.
+      const body = await readBody(req);
+      const project = typeof body.project === 'string' ? body.project : null;
+      if (!project && body.benchWorkspaces !== true) throw new HttpError(400, 'say which history to delete');
+      if (active && (!project || active.project === project)) throw new HttpError(409, 'another run is active; wait for it to finish');
+      const deleted = withStore(store => {
+        const projects = project ? [project] : store.projects().map(entry => entry.project).filter(isBenchWorkspace);
+        return store.deleteRuns(projects.flatMap(name => store.runIdsForProject(name)));
+      });
+      for (const id of deleted) fs.rmSync(path.join(dir, 'restore', String(id)), { recursive: true, force: true });
+      return send(res, 200, { deleted: deleted.length });
     }
     if (method === 'POST' && p === '/api/runs') {
       const runId = await startRun(await readBody(req));

@@ -141,3 +141,19 @@ test('an empty database is created with the schema and a newer schema is refused
   raw.close();
   assert.throws(() => new RunStore(file), /newer than this program supports/);
 });
+
+test('deleting runs removes their events, steps and usage, and skips running runs', () => {
+  const store = new RunStore(':memory:');
+  const done = store.startRun('/bench/T01-r1', 'a');
+  store.recorder(done)({ type: 'step_started', step: 'build', role: 'builder', seq: 1, at: 'now' } as RunEvent);
+  store.finishRun(done, 'a', { status: 'completed', reason: 'ok', requirements: [], gates: [], redo: 0, warnings: [], unverified: [], usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, totalTokens: 0 }, usageEntries: [], events: [] } as RunResult);
+  const running = store.startRun('/bench/T01-r1', 'b');
+  assert.deepEqual(store.runIdsForProject('/bench/T01-r1').sort(), [done, running].sort());
+  assert.deepEqual(store.deleteRuns([done, running, 999]), [done]);
+  assert.equal(store.getRun(done), null);
+  assert.equal(store.events(done).length, 0);
+  assert.equal(store.steps(done).length, 0);
+  assert.ok(store.getRun(running));
+  assert.deepEqual(store.projects(), [{ project: '/bench/T01-r1', runs: 1 }]);
+  store.close();
+});

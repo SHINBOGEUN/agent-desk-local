@@ -184,6 +184,34 @@ export class RunStore {
     return row ? this.#toRun(row) : null;
   }
 
+  /** Run ids recorded for a project folder (exact path as stored). */
+  runIdsForProject(project: string): number[] {
+    return (this.#db.prepare('SELECT id FROM runs WHERE project = ?').all(project) as { id: number }[]).map(row => row.id);
+  }
+
+  /** Every distinct project path with its run count. */
+  projects(): { project: string; runs: number }[] {
+    return (this.#db.prepare('SELECT project, COUNT(*) AS runs FROM runs GROUP BY project').all() as { project: string; runs: number }[]).map(row => ({ project: row.project, runs: Number(row.runs) }));
+  }
+
+  /** Deletes runs and everything recorded for them (events, steps, usage). Running runs are skipped. Returns the ids deleted. */
+  deleteRuns(ids: number[]): number[] {
+    const deleted: number[] = [];
+    const status = this.#db.prepare('SELECT status FROM runs WHERE id = ?');
+    const statements = ['DELETE FROM usage WHERE run_id = ?', 'DELETE FROM events WHERE run_id = ?', 'DELETE FROM steps WHERE run_id = ?', 'DELETE FROM runs WHERE id = ?'].map(sql => this.#db.prepare(sql));
+    this.#db.exec('BEGIN');
+    try {
+      for (const id of ids) {
+        const row = status.get(id) as { status: string } | undefined;
+        if (!row || row.status === 'running') continue;
+        for (const statement of statements) statement.run(id);
+        deleted.push(id);
+      }
+      this.#db.exec('COMMIT');
+    } catch (error) { this.#db.exec('ROLLBACK'); throw error; }
+    return deleted;
+  }
+
   listRuns(project?: string, limit = 50): RunRow[] {
     const rows = project
       ? this.#db.prepare('SELECT * FROM runs WHERE project = ? ORDER BY id DESC LIMIT ?').all(project, limit)

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { FakeRuntime } from '#runtime-fake';
 import type { FakeScript } from '#runtime-fake';
-import { createServer } from '../src/index.ts';
+import { createServer, isBenchWorkspace } from '../src/index.ts';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'srv-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
@@ -236,4 +236,29 @@ test('bench endpoint summarizes saved benchmark runs and skips environment failu
   const empty = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0 });
   const second = await empty.listen();
   try { assert.deepEqual(JSON.parse((await call(second.port, 'GET', '/api/bench')).body), { summaries: [] }); } finally { await empty.close(); }
+});
+
+test('history delete forgets one project or every benchmark workspace, never the files', async () => {
+  const root = tmp();
+  const bench = path.join(root, 'agent-desk-bench', 'v2-x', 'T01-r1-2026');
+  const mine = path.join(root, 'mine');
+  fs.mkdirSync(bench, { recursive: true }); fs.mkdirSync(mine);
+  fs.writeFileSync(path.join(mine, 'keep.txt'), 'x');
+  const { server, port, token } = await start(new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }]), script([{ report: answerReport }])], builder: [] } }));
+  try {
+    for (const project of [bench, mine]) {
+      const { runId } = JSON.parse((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Which port?', runtime: 'fake' } })).body) as { runId: number };
+      await call(port, 'GET', `/api/runs/${runId}/events`);
+    }
+    assert.equal((await call(port, 'POST', '/api/history/delete', { token, body: {} })).status, 400);
+    const benchOnly = JSON.parse((await call(port, 'POST', '/api/history/delete', { token, body: { benchWorkspaces: true } })).body) as { deleted: number };
+    assert.equal(benchOnly.deleted, 1);
+    const left = JSON.parse((await call(port, 'GET', '/api/runs')).body) as { runs: { project: string }[] };
+    assert.deepEqual(left.runs.map(run => run.project), [mine]);
+    const one = JSON.parse((await call(port, 'POST', '/api/history/delete', { token, body: { project: mine } })).body) as { deleted: number };
+    assert.equal(one.deleted, 1);
+    assert.ok(fs.existsSync(path.join(mine, 'keep.txt')));
+    assert.equal(isBenchWorkspace('C:\\Users\\me\\AppData\\Local\\Temp\\agent-desk-bench\\v1-13\\T01-r1-x'), true);
+    assert.equal(isBenchWorkspace('D:\\work\\agent-desk-local'), false);
+  } finally { await server.close(); }
 });

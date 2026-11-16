@@ -87,6 +87,21 @@ select { padding-right: 28px; }
 .project-name { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-path { font-size: 11px; color: var(--side-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--codex); box-shadow: 0 0 0 4px color-mix(in srgb, var(--codex) 25%, transparent); flex: none; }
+.project-row { position: relative; }
+.forget { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--side-muted); font-size: 15px; line-height: 1; opacity: 0; }
+.project-row:hover .forget, .forget:focus-visible { opacity: 1; }
+.forget:hover { background: var(--side-on); color: var(--side-ink); }
+.project-item.confirm .project-name, .project-item.confirm .project-path { white-space: normal; direction: ltr; }
+.project-item.confirm { flex-wrap: wrap; background: var(--side-hover); cursor: default; align-items: center; }
+.confirm-actions { display: flex; gap: 4px; flex: none; }
+.mini { font-size: 12px; padding: 3px 8px; background: transparent; color: var(--side-ink); border-color: var(--side-muted); }
+.mini.danger { background: #b8352c; border-color: #b8352c; color: #fff; }
+.bench-group { margin-top: 10px; border-top: 1px solid var(--side-hover); padding-top: 8px; }
+.bench-group summary { cursor: pointer; font-size: 12px; color: var(--side-muted); padding: 4px 8px; }
+.bench-group summary:hover { color: var(--side-ink); }
+.bench-clear { display: block; margin: 4px 8px 6px; background: transparent; border: 0; padding: 0; color: #ff8f84; font-size: 12px; }
+.bench-clear:hover { text-decoration: underline; }
+.bench-confirm { margin: 4px 8px 8px; padding: 8px; border-radius: var(--radius-s); background: var(--side-hover); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .side-empty { color: var(--side-muted); font-size: 12.5px; padding: 4px 8px; }
 .open-project { background: transparent; border: 1px dashed var(--side-muted); color: var(--side-ink); border-radius: var(--radius-s); padding: 8px; text-align: left; }
 .open-project:hover:not(:disabled) { background: var(--side-hover); border-color: var(--side-ink); }

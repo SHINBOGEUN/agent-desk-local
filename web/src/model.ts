@@ -237,7 +237,10 @@ export function projectName(path: string): string {
   return parts.at(-1) ?? path;
 }
 
-export interface ProjectEntry { path: string; name: string; lastRunAt: string | null; runs: number; active: boolean }
+export interface ProjectEntry { path: string; name: string; lastRunAt: string | null; runs: number; active: boolean; bench: boolean }
+
+/** Workspaces made by the benchmark runner (<tmp>/agent-desk-bench/<label>/<task>-r<n>-<stamp>); same rule as the server. */
+export const isBenchWorkspace = (path: string): boolean => /[\\/]agent-desk-bench(?:-validate-[^\\/]*)?[\\/]/.test(path);
 
 /**
  * Projects for the sidebar: every folder the user opened (saved) plus every
@@ -250,7 +253,7 @@ export function projectList(saved: string[], runs: { project: string; startedAt:
   const touch = (path: string): ProjectEntry => {
     const k = key(path);
     let entry = map.get(k);
-    if (!entry) { entry = { path, name: projectName(path), lastRunAt: null, runs: 0, active: false }; map.set(k, entry); }
+    if (!entry) { entry = { path, name: projectName(path), lastRunAt: null, runs: 0, active: false, bench: isBenchWorkspace(path) }; map.set(k, entry); }
     return entry;
   };
   for (const path of saved) if (path.trim()) touch(path);
