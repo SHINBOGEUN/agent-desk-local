@@ -103,7 +103,7 @@ class RunContext {
 
   /** Gate G5. Stops the running turn as soon as a limit is crossed. */
   enforceBudget(attempt: number, abortTurn: boolean): boolean {
-    const gate = checkBudget({ attempt, budget: this.config.budget, usage: this.ledger.total(), elapsedMs: Date.now() - this.startedAt });
+    const gate = checkBudget({ attempt, language: this.config.language, budget: this.config.budget, usage: this.ledger.total(), elapsedMs: Date.now() - this.startedAt });
     if (gate.ok) return true;
     this.budgetHit ??= gate.problems[0] ?? 'budget exceeded';
     this.recordGate(gate);
@@ -231,8 +231,8 @@ function protectedViolation(ctx: RunContext, before: Snapshot, after: Snapshot):
   const changed = diffProtected(before, after);
   if (!changed.all.length) return null;
   const outcome = restoreProtected(ctx.config.cwd, before, after);
-  const left = outcome.failed.length ? ` These could not be restored: ${outcome.failed.join(', ')}.` : ' They were restored.';
-  return `A step changed protected paths (${changed.all.join(', ')}).${left}`;
+  const left = outcome.failed.length ? ctx.say(` These could not be restored: ${outcome.failed.join(', ')}.`, ` 다음 파일은 복원하지 못했습니다: ${outcome.failed.join(', ')}.`) : ctx.say(' They were restored.', ' 원래대로 복원했습니다.');
+  return ctx.say(`A step changed protected paths (${changed.all.join(', ')}).${left}`, `한 단계가 보호된 경로(${changed.all.join(', ')})를 바꿨습니다.${left}`);
 }
 
 async function runClassify(ctx: RunContext, request: string, lead: LeadCollector): Promise<RunResult | null> {
@@ -252,7 +252,7 @@ async function runClassify(ctx: RunContext, request: string, lead: LeadCollector
   });
   const after = takeSnapshot(ctx.config.cwd, { mode: 'stat', ignore: ctx.ignore });
   const violation = protectedViolation(ctx, before, after);
-  const changes = ctx.recordGate(checkNoChanges({ attempt: 0, step: 'classify', diff: diffSnapshots(before, after) }));
+  const changes = ctx.recordGate(checkNoChanges({ attempt: 0, language: ctx.config.language, step: 'classify', diff: diffSnapshots(before, after) }));
   ctx.emit({ type: 'step_finished', step: 'classify', ok: !failure && changes.ok && !violation, detail: failure ? 'failed' : 'report accepted' });
   if (violation) return finish(ctx, 'failed', violation);
   if (!changes.ok) return finish(ctx, 'needs_review', changes.problems[0] ?? ctx.say('A read-only step changed files.', '읽기 전용 단계에서 파일이 변경되었습니다.'), failure ? {} : { classify: lead.classify!, workflow: lead.classify!.workflow, requirements: lead.classify!.requirements });
@@ -266,7 +266,7 @@ async function guardedReadOnly(ctx: RunContext, step: StepKind, work: () => Prom
   const failure = await work();
   const after = takeSnapshot(ctx.config.cwd, { mode: 'stat', ignore: ctx.ignore });
   const violation = protectedViolation(ctx, before, after);
-  const changes = ctx.recordGate(checkNoChanges({ attempt: 0, step, diff: diffSnapshots(before, after) }));
+  const changes = ctx.recordGate(checkNoChanges({ attempt: 0, language: ctx.config.language, step, diff: diffSnapshots(before, after) }));
   if (violation) return { failure, stop: finish(ctx, 'failed', violation) };
   if (!changes.ok) return { failure, stop: finish(ctx, 'needs_review', changes.problems[0] ?? ctx.say('A read-only step changed files.', '읽기 전용 단계에서 파일이 변경되었습니다.')) };
   return { failure, stop: null };
@@ -373,8 +373,8 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'protected paths changed' });
         return finish(ctx, 'failed', violation, { ...base, builder: report });
       }
-      const g2 = ctx.recordGate(checkChangeReport({ attempt: ctx.redo, cwd: config.cwd, reported: report.changedFiles, diff: diffSnapshots(before, after), ignore: ctx.ignore }));
-      const verified = await runVerify({ attempt: ctx.redo, cwd: config.cwd, commands: config.verify ?? [], timeoutMs: config.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS });
+      const g2 = ctx.recordGate(checkChangeReport({ attempt: ctx.redo, language: config.language, cwd: config.cwd, reported: report.changedFiles, diff: diffSnapshots(before, after), ignore: ctx.ignore }));
+      const verified = await runVerify({ attempt: ctx.redo, language: config.language, cwd: config.cwd, commands: config.verify ?? [], timeoutMs: config.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS });
       const g3 = ctx.recordGate(verified.result);
       if (g3.data?.unavailable) {
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'verify command unavailable' });

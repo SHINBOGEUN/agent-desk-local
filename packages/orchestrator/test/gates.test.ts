@@ -276,3 +276,12 @@ test('a run makes a restore point before the build; too large a project only war
   const without = new FakeRuntime({ scripts: { lead: lead(), builder: [script([write('ok.txt'), { report: report(['ok.txt']) }])] } });
   assert.equal((await run(without, tmp(), { verify: [NODE_OK] })).restorePoint, undefined);
 });
+
+test('gate messages follow the run language', () => {
+  const diff = { all: ['a.txt'], added: ['a.txt'], modified: [], deleted: [] } as never;
+  const english = checkChangeReport({ attempt: 0, cwd: '/p', reported: [], diff, ignore: [] });
+  const korean = checkChangeReport({ attempt: 0, cwd: '/p', reported: [], diff, ignore: [], language: 'ko' });
+  assert.match(english.problems[0]!, /changed but were not in changedFiles/);
+  assert.match(korean.problems[0]!, /changedFiles에 없습니다/);
+  assert.match(checkBudget({ attempt: 0, budget: undefined, usage: { totalTokens: 0 } as never, elapsedMs: 0, language: 'ko' }).detail, /예산/);
+});

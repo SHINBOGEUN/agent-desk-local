@@ -21,6 +21,9 @@ export interface GateResult {
 
 const TEST_PATH = [/(^|\/)(tests?|__tests__|spec|specs)\//i, /\.(test|spec)\.[a-z0-9]+$/i, /(^|\/)(jest|vitest|playwright|karma|mocha)\.config\.[a-z]+$/i, /(^|\/)\.mocharc/i];
 
+type Language = 'en' | 'ko' | undefined;
+const pick = (language: Language, english: string, korean: string): string => (language === 'ko' ? korean : english);
+
 export const isTestPath = (rel: string): boolean => TEST_PATH.some(pattern => pattern.test(rel));
 
 export function normalizeReportedPath(raw: string, cwd: string): string {
@@ -31,26 +34,26 @@ export function normalizeReportedPath(raw: string, cwd: string): string {
 }
 
 /** G2: what the builder reported must equal what actually changed. */
-export function checkChangeReport(input: { attempt: number; cwd: string; reported: readonly string[]; diff: Diff; ignore: readonly string[] }): GateResult {
+export function checkChangeReport(input: { attempt: number; cwd: string; reported: readonly string[]; diff: Diff; ignore: readonly string[]; language?: Language }): GateResult {
   const reported = new Set(input.reported.map(file => normalizeReportedPath(file, input.cwd)).filter(file => file && !matchesIgnore(file, false, input.ignore)));
   const actual = new Set(input.diff.all);
   const unreported = [...actual].filter(file => !reported.has(file)).sort();
   const falseClaims = [...reported].filter(file => !actual.has(file)).sort();
   const problems: string[] = [];
-  if (unreported.length) problems.push(`These files changed but were not in changedFiles: ${unreported.join(', ')}`);
-  if (falseClaims.length) problems.push(`These files were listed in changedFiles but did not change: ${falseClaims.join(', ')}`);
+  if (unreported.length) problems.push(pick(input.language, `These files changed but were not in changedFiles: ${unreported.join(', ')}`, `다음 파일이 바뀌었지만 changedFiles에 없습니다: ${unreported.join(', ')}`));
+  if (falseClaims.length) problems.push(pick(input.language, `These files were listed in changedFiles but did not change: ${falseClaims.join(', ')}`, `다음 파일은 changedFiles에 있지만 실제로는 바뀌지 않았습니다: ${falseClaims.join(', ')}`));
   const testFilesChanged = [...actual].filter(isTestPath).sort();
   return {
     gate: 'G2', ok: problems.length === 0, attempt: input.attempt,
-    detail: problems.length ? `report and real changes differ (${unreported.length} unreported, ${falseClaims.length} not changed)` : `${actual.size} changed file(s) match the report`,
+    detail: problems.length ? pick(input.language, `report and real changes differ (${unreported.length} unreported, ${falseClaims.length} not changed)`, `보고와 실제 변경이 다릅니다 (보고 누락 ${unreported.length}개, 변경 없음 ${falseClaims.length}개)`) : pick(input.language, `${actual.size} changed file(s) match the report`, `변경된 파일 ${actual.size}개가 보고와 일치합니다`),
     problems, data: { changed: [...actual].sort(), unreported, falseClaims, testFilesChanged },
   };
 }
 
 /** G2 for read-only steps: no file may change. */
-export function checkNoChanges(input: { attempt: number; step: string; diff: Diff }): GateResult {
-  const problems = input.diff.all.length ? [`The ${input.step} step is read-only but these files changed: ${input.diff.all.join(', ')}`] : [];
-  return { gate: 'G2', ok: problems.length === 0, attempt: input.attempt, detail: problems.length ? `${input.diff.all.length} file(s) changed in a read-only step` : 'no files changed', problems, data: { changed: input.diff.all } };
+export function checkNoChanges(input: { attempt: number; step: string; diff: Diff; language?: Language }): GateResult {
+  const problems = input.diff.all.length ? [pick(input.language, `The ${input.step} step is read-only but these files changed: ${input.diff.all.join(', ')}`, `${input.step} 단계는 읽기 전용인데 다음 파일이 바뀌었습니다: ${input.diff.all.join(', ')}`)] : [];
+  return { gate: 'G2', ok: problems.length === 0, attempt: input.attempt, detail: problems.length ? pick(input.language, `${input.diff.all.length} file(s) changed in a read-only step`, `읽기 전용 단계에서 파일 ${input.diff.all.length}개가 바뀌었습니다`) : pick(input.language, 'no files changed', '변경된 파일 없음'), problems, data: { changed: input.diff.all } };
 }
 
 export interface VerifyOutcome {
@@ -85,9 +88,9 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<Ve
 }
 
 /** G3: run the project's verify commands. All must exit 0. */
-export async function runVerify(input: { attempt: number; cwd: string; commands: readonly string[]; timeoutMs: number }): Promise<{ result: GateResult; outcomes: VerifyOutcome[] }> {
+export async function runVerify(input: { attempt: number; cwd: string; commands: readonly string[]; timeoutMs: number; language?: Language }): Promise<{ result: GateResult; outcomes: VerifyOutcome[] }> {
   if (!input.commands.length) {
-    return { result: { gate: 'G3', ok: true, skipped: true, attempt: input.attempt, detail: 'no verify commands configured', problems: [] }, outcomes: [] };
+    return { result: { gate: 'G3', ok: true, skipped: true, attempt: input.attempt, detail: pick(input.language, 'no verify commands configured', '검증 명령이 설정되어 있지 않음'), problems: [] }, outcomes: [] };
   }
   const outcomes: VerifyOutcome[] = [];
   const problems: string[] = [];
@@ -96,14 +99,14 @@ export async function runVerify(input: { attempt: number; cwd: string; commands:
     outcomes.push(outcome);
     if (outcome.exitCode === 0) continue;
     const tail = outcome.output.trim().slice(-TAIL_CHARS);
-    const what = outcome.timedOut ? `timed out after ${input.timeoutMs} ms` : outcome.unavailable ? 'could not be run' : `exited with code ${String(outcome.exitCode)}`;
-    problems.push(`Verify command \`${command}\` ${what}.${tail ? `\nOutput (last part):\n${tail}` : ''}`);
+    const what = outcome.timedOut ? pick(input.language, `timed out after ${input.timeoutMs} ms`, `${input.timeoutMs}ms 후 시간 초과`) : outcome.unavailable ? pick(input.language, 'could not be run', '실행할 수 없음') : pick(input.language, `exited with code ${String(outcome.exitCode)}`, `종료 코드 ${String(outcome.exitCode)}로 끝남`);
+    problems.push(pick(input.language, `Verify command \`${command}\` ${what}.${tail ? `\nOutput (last part):\n${tail}` : ''}`, `검증 명령 \`${command}\`: ${what}.${tail ? `\n출력(끝부분):\n${tail}` : ''}`));
   }
   const unavailable = outcomes.some(outcome => outcome.unavailable);
   return {
     result: {
       gate: 'G3', ok: problems.length === 0, attempt: input.attempt,
-      detail: problems.length ? `${problems.length} of ${input.commands.length} verify command(s) failed` : `${input.commands.length} verify command(s) passed`,
+      detail: problems.length ? pick(input.language, `${problems.length} of ${input.commands.length} verify command(s) failed`, `검증 명령 ${input.commands.length}개 중 ${problems.length}개 실패`) : pick(input.language, `${input.commands.length} verify command(s) passed`, `검증 명령 ${input.commands.length}개 통과`),
       problems, data: { commands: input.commands, exitCodes: outcomes.map(outcome => outcome.exitCode), unavailable },
     },
     outcomes,
@@ -117,14 +120,14 @@ export interface Budget {
 }
 
 /** G5: stays inside the token and time limits. */
-export function checkBudget(input: { attempt: number; budget: Budget | undefined; usage: TokenUsage; elapsedMs: number }): GateResult {
+export function checkBudget(input: { attempt: number; budget: Budget | undefined; usage: TokenUsage; elapsedMs: number; language?: Language }): GateResult {
   const { budget, usage, elapsedMs } = input;
   const problems: string[] = [];
-  if (budget?.maxTokens !== undefined && usage.totalTokens > budget.maxTokens) problems.push(`Token budget exceeded: ${usage.totalTokens} used, limit ${budget.maxTokens}.`);
-  if (budget?.maxMillis !== undefined && elapsedMs > budget.maxMillis) problems.push(`Time budget exceeded: ${Math.round(elapsedMs / 1000)} s used, limit ${Math.round(budget.maxMillis / 1000)} s.`);
+  if (budget?.maxTokens !== undefined && usage.totalTokens > budget.maxTokens) problems.push(pick(input.language, `Token budget exceeded: ${usage.totalTokens} used, limit ${budget.maxTokens}.`, `토큰 예산을 넘었습니다: ${usage.totalTokens} 사용, 한도 ${budget.maxTokens}.`));
+  if (budget?.maxMillis !== undefined && elapsedMs > budget.maxMillis) problems.push(pick(input.language, `Time budget exceeded: ${Math.round(elapsedMs / 1000)} s used, limit ${Math.round(budget.maxMillis / 1000)} s.`, `시간 예산을 넘었습니다: ${Math.round(elapsedMs / 1000)}초 사용, 한도 ${Math.round(budget.maxMillis / 1000)}초.`));
   return {
     gate: 'G5', ok: problems.length === 0, skipped: !budget, attempt: input.attempt,
-    detail: problems[0] ?? (budget ? 'within budget' : 'no budget configured'), problems,
+    detail: problems[0] ?? (budget ? pick(input.language, 'within budget', '예산 안') : pick(input.language, 'no budget configured', '예산이 설정되어 있지 않음')), problems,
     data: { totalTokens: usage.totalTokens, elapsedMs },
   };
 }
