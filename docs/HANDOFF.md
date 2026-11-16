@@ -210,3 +210,7 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 아직 없는 것: Codex `account/rateLimits/read` 실제 응답, Codex `fileChange` 이벤트(patch 도구 사용 시), 2-10 측정.
 - 다음 사람이 할 일: 사용자 PC에서 2-10(`npm run bench:run -- --adapter v2 --label v2-codex-auto --review auto`).
 
+
+## 22차 (2026-11-16)
+- 대시보드 1차 구현 커밋(`b7fb6cb`). 빌드 검증은 사용자 PC에서: `npm run web:install` → `npm run web:typecheck` → `npm run web:build` → `npm run agent-desk -- serve`.
+- 다음: 5-3 설정/스킬/사용량 패널, 5-4 벤치마크 비교 화면(`bench/results`), 서버 API 추가 필요.

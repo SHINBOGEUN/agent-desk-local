@@ -107,3 +107,9 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 0-5 `v1-13` 기준선 실행 (사용자 PC, Codex 사용량 필요)
 - 0-6 `v1-3`: v1 배정 규칙이 꺼진 필수 담당자의 대체를 금지해 측정이 왜곡됨. 실행 방법 결정 필요
 - GitHub push: 이 작업 환경에서는 GitHub 접속이 막혀 있어 사용자 PC에서 `git push --follow-tags` 필요
+
+## 2026-11-16 5-2 dashboard (first cut)
+- `web/` Vite + React 19: console form (project, request, runtime, review), run list, run detail with live timeline (SSE), gate chips, REDO reasons, pending-question card, stop, revert preview/apply.
+- State logic is pure TS in `web/src/model.ts` (tested); React files are thin. Server serves `web/dist` via `agent-desk serve`.
+- Not yet built in the sandbox (no npm): the user must run `npm run web:install`, `npm run web:typecheck`, `npm run web:build`.
+- Remaining: settings/skills/usage panel (5-3), benchmark comparison screen (5-4).
