@@ -117,3 +117,4 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 ## 2026-11-16 5-3 start: result report in the dashboard
 - Found: finished runs kept only a one-line brief, so the answer text was not visible in the UI. The store now saves the submitted reports per run (`runs.report`, schema v2; answer, builder summary, changed files, commands, requirements, plan, research, review, warnings, unverified). Older runs have no report (shown as such).
 - Dashboard: result card on finished runs; folder picker uses the OS dialog; English/Korean switch.
+- 5-3 rest: `/api/usage` (Codex limits via a short-lived app-server, cached 20 s), `/api/project` now lists skills and skill findings; UI: usage gauge, project settings panel (read-only), per-role time/tokens table. Real Codex rate-limit response shape still unverified on a real account (gauge shows "not available" if it differs).

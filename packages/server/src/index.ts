@@ -11,9 +11,10 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { loadMemory, loadProject, memoryFacts } from '#project';
+import { checkSkills, loadMemory, loadProject, memoryFacts } from '#project';
 import type { RuntimeKind } from '#project';
-import { dataDirectory, executeRun } from '#service';
+import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
+import type { Limits } from '#service';
 import { pickFolderNative } from './pick-folder.ts';
 import type { PickResult } from './pick-folder.ts';
 import { RunStore, redactSecrets } from '#store';
@@ -30,6 +31,8 @@ export interface ServerOptions {
   staticDir?: string;
   /** Opens the OS folder dialog (tests replace it). Default: the native dialog on Windows and macOS. */
   pickFolder?: (startPath: string, title: string) => Promise<PickResult>;
+  /** Reads the Codex account rate limits (tests replace it). Default: a short-lived Codex app-server. */
+  readRateLimits?: () => Promise<unknown>;
 }
 
 interface ActiveRun {
@@ -209,7 +212,8 @@ export function createServer(options: ServerOptions): LocalServer {
       const project = url.searchParams.get('path') ?? '';
       if (!path.isAbsolute(project) || !fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new HttpError(400, 'path must be an existing absolute folder');
       const loaded = loadProject(project);
-      return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets) });
+      const skills = checkSkills(project, loaded.config, loaded.roles);
+      return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets), skills: skills.skills.map(skill => ({ id: skill.id, description: skill.description })), skillFindings: skills.findings });
     }
     if (method === 'POST' && p === '/api/pick-folder') {
       const body = await readBody(req);
@@ -219,9 +223,31 @@ export function createServer(options: ServerOptions): LocalServer {
       if (result.supported && result.path && (!path.isAbsolute(result.path) || !fs.existsSync(result.path))) throw new HttpError(400, 'the chosen folder does not exist');
       return send(res, 200, result);
     }
+    if (method === 'GET' && p === '/api/usage') return send(res, 200, await codexLimits());
     if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);
     throw new HttpError(404, 'not found');
+  }
+
+  let limitsCache: { at: number; value: { limits: Limits | null; reason?: string } } | null = null;
+  /** Codex 5-hour account usage. Starts a short-lived Codex process, so the answer is cached for 20 seconds. */
+  async function codexLimits(): Promise<{ limits: Limits | null; reason?: string }> {
+    if (limitsCache && Date.now() - limitsCache.at < 20_000) return limitsCache.value;
+    let value: { limits: Limits | null; reason?: string };
+    try {
+      let read = options.readRateLimits;
+      if (!read) {
+        const found = locate('codex', options.env, options.platform, readMachineSettings(dir));
+        if (!found) throw new Error('Codex was not found');
+        const runtime = options.createRuntime('codex', found.path) as Runtime & { readRateLimits?: () => Promise<unknown> };
+        if (!runtime.readRateLimits) throw new Error('this runtime cannot report usage');
+        read = () => runtime.readRateLimits!();
+      }
+      const limits = normalizeRateLimits(await read());
+      value = limits.status === 'available' ? { limits } : { limits: null, reason: 'Codex did not report usage' };
+    } catch (error) { value = { limits: null, reason: error instanceof Error ? error.message : String(error) }; }
+    limitsCache = { at: Date.now(), value };
+    return value;
   }
 
   /** Folder picker for the dashboard: subfolders only, never file names or contents. An empty path lists the roots (drives on Windows). */

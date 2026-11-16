@@ -190,3 +190,19 @@ test('pick-folder needs the token and returns the chosen folder or a cancel', as
     assert.deepEqual(JSON.parse((await call(port, 'POST', '/api/pick-folder', { token, body: {} })).body), { supported: false });
   } finally { await server.close(); }
 });
+
+test('usage endpoint reports the Codex window, and says why when it cannot', async () => {
+  const ok = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, readRateLimits: async () => ({ rateLimits: { primary: { usedPercent: 40, windowDurationMins: 300, resetsAt: 2000000000 } } }) });
+  const { port } = await ok.listen();
+  try {
+    const answer = JSON.parse((await call(port, 'GET', '/api/usage')).body) as { limits: { windows: { usedPercent: number }[] } | null };
+    assert.equal(answer.limits?.windows[0]?.usedPercent, 40);
+  } finally { await ok.close(); }
+  const broken = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, readRateLimits: async () => { throw new Error('offline'); } });
+  const second = await broken.listen();
+  try {
+    const answer = JSON.parse((await call(second.port, 'GET', '/api/usage')).body) as { limits: unknown; reason: string };
+    assert.equal(answer.limits, null);
+    assert.match(answer.reason, /offline/);
+  } finally { await broken.close(); }
+});

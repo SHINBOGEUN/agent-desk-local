@@ -156,3 +156,30 @@ export function stepDurationMs(step: TimelineStep): number | null {
   const ms = Date.parse(step.finishedAt) - Date.parse(step.startedAt);
   return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
+
+export interface RoleStat { role: string; steps: number; durationMs: number; tokens: number }
+
+/** Time and tokens per role. Usage rows are matched to steps by step name; a suffix after ":" or "#" is ignored. */
+export function roleSummary(timeline: Timeline, usage: { stepId: string; usage: { totalTokens: number } }[]): RoleStat[] {
+  const stats = new Map<string, RoleStat>();
+  const roleOf = new Map<string, string>();
+  const stat = (role: string): RoleStat => { if (!stats.has(role)) stats.set(role, { role, steps: 0, durationMs: 0, tokens: 0 }); return stats.get(role)!; };
+  for (const step of timeline.steps) {
+    const entry = stat(step.role);
+    entry.steps++;
+    entry.durationMs += stepDurationMs(step) ?? 0;
+    if (!roleOf.has(step.step)) roleOf.set(step.step, step.role);
+  }
+  for (const row of usage) {
+    const role = roleOf.get(row.stepId) ?? roleOf.get(row.stepId.split(/[:#]/)[0] ?? '') ?? 'other';
+    stat(role).tokens += row.usage.totalTokens;
+  }
+  return [...stats.values()];
+}
+
+/** Minutes until a reset time given in epoch seconds; null when unknown or already past. */
+export function minutesUntil(resetsAtSeconds: number | null, nowMs: number): number | null {
+  if (resetsAtSeconds === null) return null;
+  const minutes = Math.round((resetsAtSeconds * 1000 - nowMs) / 60000);
+  return minutes > 0 ? minutes : null;
+}

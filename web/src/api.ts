@@ -39,7 +39,10 @@ export interface RunDetail {
   usageTotal: number;
   report: RunReport | null;
 }
-export interface ProjectInfo { config: Record<string, unknown>; errors: string[]; warnings: string[]; memory: string[] }
+export interface ProjectConfigView { runtimes?: { primary?: string; review?: string }; verify?: string[]; review?: string; skills?: string[]; limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number } }
+export interface ProjectInfo { config: ProjectConfigView; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
+export interface LimitWindowView { kind: string; windowDurationMins: number | null; usedPercent: number; remainingPercent: number; resetsAt: number | null }
+export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string }
 export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
@@ -71,6 +74,7 @@ export const api = {
   runs: (project?: string): Promise<{ runs: RunRow[] }> => request('GET', `/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
   run: (id: number): Promise<RunDetail> => request('GET', `/api/runs/${id}`),
   pickFolder: (start: string, title: string): Promise<{ supported: boolean; path?: string | null }> => request('POST', '/api/pick-folder', { start, title }),
+  usage: (): Promise<UsageInfo> => request('GET', '/api/usage'),
   folder: (path: string): Promise<FolderListing> => request('GET', `/api/fs?path=${encodeURIComponent(path)}`),
   project: (path: string): Promise<ProjectInfo> => request('GET', `/api/project?path=${encodeURIComponent(path)}`),
   start: (body: StartRequest): Promise<{ runId: number }> => request('POST', '/api/runs', body),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
+import { minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -61,4 +61,19 @@ test('formatting helpers and status tones', () => {
   assert.equal(statusTone('failed'), 'danger');
   assert.equal(statusTone('running'), 'accent');
   assert.equal(statusTone('whatever'), 'neutral');
+});
+
+test('role summary adds time and tokens per role and keeps unknown usage apart', () => {
+  const timeline = buildTimeline(events);
+  const summary = roleSummary(timeline, [
+    { stepId: timeline.steps[0]!.step, usage: { totalTokens: 100 } },
+    { stepId: `${timeline.steps[0]!.step}:2`, usage: { totalTokens: 20 } },
+    { stepId: 'mystery', usage: { totalTokens: 5 } },
+  ]);
+  const first = summary.find(entry => entry.role === timeline.steps[0]!.role)!;
+  assert.equal(first.tokens, 120);
+  assert.equal(summary.find(entry => entry.role === 'other')!.tokens, 5);
+  assert.equal(minutesUntil(1000 + 600, 1000 * 1000), 10);
+  assert.equal(minutesUntil(null, 0), null);
+  assert.equal(minutesUntil(10, 20_000), null);
 });

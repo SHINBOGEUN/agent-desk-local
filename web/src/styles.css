@@ -65,3 +65,16 @@ h2 { font-size: 16px; font-weight: 500; margin: 0; }
 .report ul { margin: 2px 0; padding-left: 18px; }
 .prose { white-space: pre-wrap; margin: 2px 0; }
 .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+.small { padding: 2px 8px; font-size: 12px; }
+.gauge { margin-top: 8px; }
+.bar { height: 8px; border-radius: 4px; background: var(--bg); overflow: hidden; margin-top: 4px; }
+.fill { height: 100%; }
+.project-info { font-size: 13px; }
+.project-info summary { cursor: pointer; color: var(--muted); }
+.project-info dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 6px 0; }
+.project-info dt { color: var(--muted); }
+.project-info dd { margin: 0; }
+.project-info ul { margin: 0; padding-left: 16px; }
+.roles { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.roles th, .roles td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 0.5px solid var(--line); }
+.roles th { color: var(--muted); font-weight: 400; font-size: 12px; }

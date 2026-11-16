@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
-import type { ActiveRun, FolderListing, Pending, RunDetail, RunReport, RunRow } from './api.ts';
-import { applyEvents, emptyTimeline, formatTokens, gateSummary, statusTone, stepDurationMs } from './model.ts';
+import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
+import { applyEvents, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
 import type { GateResult, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, translate, useI18n } from './i18n.ts';
 import type { I18n, Lang } from './i18n.ts';
@@ -110,6 +110,7 @@ function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted:
         <span className="row"><input value={project} onChange={event => setProject(event.target.value)} placeholder={t('chooseFolder')} /><button type="button" disabled={dialogOpen} onClick={() => { void browse(); }}>{t('browse')}</button></span>
       </label>
       {dialogOpen ? <p className="muted">{t('dialogOpen')}</p> : null}
+      <ProjectPanel project={project} />
       {browsing ? <FolderPicker start={project} onPick={path => { setProject(path); saveProject(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}
       <label>{t('whatToDo')}<textarea value={request} onChange={event => setRequest(event.target.value)} rows={4} placeholder={t('requestPlaceholder')} /></label>
       <div className="row">
@@ -221,6 +222,86 @@ function ReportCard({ report, workflow }: { report: RunReport | null; workflow: 
   );
 }
 
+function UsageGauge() {
+  const { t } = useI18n();
+  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    try { setUsage(await api.usage()); } catch (caught) { setUsage({ limits: null, reason: errorText(caught) }); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const windowName = (minutes: number | null): string => (minutes === 300 ? t('window5h') : minutes === 10080 ? t('windowWeek') : t('windowOther', { n: minutes ?? '?' }));
+  return (
+    <div className="card">
+      <div className="step-head"><strong>{t('usageTitle')}</strong><button className="push small" disabled={loading} onClick={() => { void load(); }}>{t('usageRefresh')}</button></div>
+      {loading && !usage ? <p className="muted">{t('usageLoading')}</p> : null}
+      {usage && !usage.limits ? <p className="muted">{t('usageUnavailable', { reason: usage.reason ?? '' })}</p> : null}
+      {usage?.limits?.windows.map(window => {
+        const left = minutesUntil(window.resetsAt, Date.now());
+        const tone = window.usedPercent >= 90 ? 'danger' : window.usedPercent >= 70 ? 'warning' : 'success';
+        return (
+          <div key={window.kind} className="gauge">
+            <div className="step-head"><span>{windowName(window.windowDurationMins)}</span><span className="muted push">{t('usageUsed', { pct: Math.round(window.usedPercent) })}{left !== null ? ` · ${t('usageResets', { n: left })}` : ''}</span></div>
+            <div className="bar"><div className={`fill tone-${tone}`} style={{ width: `${Math.min(100, Math.max(0, window.usedPercent))}%` }} /></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectPanel({ project }: { project: string }) {
+  const { t } = useI18n();
+  const [info, setInfo] = useState<ProjectInfo | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    setInfo(null); setError('');
+    if (!project.trim()) return;
+    const timer = setTimeout(() => { api.project(project.trim()).then(setInfo).catch((caught: unknown) => setError(errorText(caught))); }, 500);
+    return () => clearTimeout(timer);
+  }, [project]);
+  if (!project.trim()) return null;
+  if (error) return <p className="muted">{error}</p>;
+  if (!info) return <p className="muted">{t('projectLoading')}</p>;
+  const { config } = info;
+  const none = t('cfgNone');
+  const limits = config.limits;
+  return (
+    <details className="project-info">
+      <summary>{t('projectInfo')}</summary>
+      {info.errors.map((message, index) => <p key={`e${index}`} className="error">{message}</p>)}
+      {info.warnings.map((message, index) => <p key={`w${index}`} className="muted">{message}</p>)}
+      <dl>
+        <dt>{t('cfgRuntime')}</dt><dd>{t('cfgPrimaryReview', { primary: config.runtimes?.primary ?? t('cfgDefault'), review: config.runtimes?.review ?? config.runtimes?.primary ?? t('cfgDefault') })}</dd>
+        <dt>{t('cfgReview')}</dt><dd>{config.review ?? t('cfgDefault')}</dd>
+        <dt>{t('cfgVerify')}</dt><dd className="mono">{config.verify?.length ? config.verify.join(', ') : none}</dd>
+        <dt>{t('cfgLimits')}</dt><dd>{limits ? t('cfgLimitsText', { redo: limits.redo ?? t('cfgDefault'), tokens: limits.tokens ?? none, minutes: limits.minutes ?? none, pct: limits.codexUsagePercent ?? none }) : t('cfgDefault')}</dd>
+        <dt>{t('cfgSkills')}</dt>
+        <dd>{info.skills.length ? <ul>{info.skills.map(skill => <li key={skill.id}><strong>{skill.id}</strong><div className="muted">{skill.description}</div></li>)}</ul> : t('cfgNoSkills')}
+          {info.skillFindings.length ? <p className="muted">{t('cfgFindings', { n: info.skillFindings.length })}</p> : null}</dd>
+        <dt>{t('cfgMemory')}</dt><dd>{t('cfgMemoryCount', { n: info.memory.length })}</dd>
+      </dl>
+      <p className="muted">{t('cfgReadOnly')}</p>
+    </details>
+  );
+}
+
+function RoleTable({ timeline, detail }: { timeline: Timeline; detail: RunDetail | null }) {
+  const { t, lang } = useI18n();
+  const rows = roleSummary(timeline, detail?.usage ?? []);
+  if (!rows.length) return null;
+  return (
+    <div className="card">
+      <div className="label muted">{t('roleSummaryTitle')}</div>
+      <table className="roles">
+        <thead><tr><th>{t('colRole')}</th><th>{t('colSteps')}</th><th>{t('colTime')}</th><th>{t('colTokens')}</th></tr></thead>
+        <tbody>{rows.map(row => <tr key={row.role}><td>{row.role}</td><td>{row.steps}</td><td>{durationText(lang, row.durationMs)}</td><td>{formatTokens(row.tokens)}</td></tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
 function RunView({ runId, active, onFinished }: { runId: number; active: ActiveRun | null; onFinished: () => void }) {
   const { t } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -274,6 +355,7 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
       </div>
       {pending && isActive ? <PendingCard pending={pending} /> : null}
       {detail && status !== 'running' ? <ReportCard report={detail.report} workflow={detail.run.workflow} /> : null}
+      <RoleTable timeline={timeline} detail={detail} />
       <div className="card"><TimelineView timeline={timeline} /></div>
     </div>
   );
@@ -317,6 +399,7 @@ export function App() {
       {error ? <p className="error banner">{i18n.t('serverDown')}: {error}</p> : null}
       <main>
         <section className="column">
+          <UsageGauge />
           <StartForm active={active} onStarted={start} />
           <RunList runs={runs} selected={selected} onSelect={setSelected} />
         </section>
