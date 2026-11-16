@@ -155,3 +155,23 @@ test('serves the built dashboard: shell for app routes, assets by type, no path 
   const started = await bare.listen();
   try { assert.equal((await call(started.port, 'GET', '/')).status, 404); } finally { await bare.close(); }
 });
+
+test('folder picker lists only subfolders, hides dot folders, rejects relative paths', async () => {
+  const root = tmp();
+  fs.mkdirSync(path.join(root, 'app'));
+  fs.writeFileSync(path.join(root, 'app', 'package.json'), '{}');
+  fs.mkdirSync(path.join(root, 'plain'));
+  fs.mkdirSync(path.join(root, '.hidden'));
+  fs.mkdirSync(path.join(root, 'node_modules'));
+  fs.writeFileSync(path.join(root, 'file.txt'), 'x');
+  const { server, port } = await start(new FakeRuntime({ scripts: {} }));
+  try {
+    const listed = JSON.parse((await call(port, 'GET', `/api/fs?path=${encodeURIComponent(root)}`)).body) as { entries: { name: string; isProject: boolean }[]; parent: string };
+    assert.deepEqual(listed.entries.map(entry => [entry.name, entry.isProject]), [['app', true], ['plain', false]]);
+    assert.equal(listed.parent, path.dirname(root));
+    assert.equal((await call(port, 'GET', '/api/fs?path=relative')).status, 400);
+    assert.equal((await call(port, 'GET', `/api/fs?path=${encodeURIComponent(path.join(root, 'missing'))}`)).status, 400);
+    const roots = JSON.parse((await call(port, 'GET', '/api/fs')).body) as { entries: unknown[] };
+    assert.ok(roots.entries.length >= 1);
+  } finally { await server.close(); }
+});

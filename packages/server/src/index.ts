@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -206,8 +207,34 @@ export function createServer(options: ServerOptions): LocalServer {
       const loaded = loadProject(project);
       return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets) });
     }
+    if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);
     throw new HttpError(404, 'not found');
+  }
+
+  /** Folder picker for the dashboard: subfolders only, never file names or contents. An empty path lists the roots (drives on Windows). */
+  function listFolder(requested: string): { path: string; parent: string | null; home: string; entries: { name: string; path: string; isProject: boolean }[] } {
+    const home = os.homedir();
+    if (requested === '') {
+      const roots = options.platform === 'win32'
+        ? Array.from({ length: 26 }, (_, i) => `${String.fromCharCode(65 + i)}:\\`).filter(root => fs.existsSync(root))
+        : ['/'];
+      return { path: '', parent: null, home, entries: roots.map(root => ({ name: root, path: root, isProject: false })) };
+    }
+    if (!path.isAbsolute(requested)) throw new HttpError(400, 'path must be absolute');
+    let names: fs.Dirent[];
+    try { names = fs.readdirSync(requested, { withFileTypes: true }); } catch { throw new HttpError(400, 'cannot open this folder'); }
+    const entries = names
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules')
+      .map(entry => entry.name)
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 500)
+      .map(name => {
+        const full = path.join(requested, name);
+        return { name, path: full, isProject: fs.existsSync(path.join(full, '.agent-desk')) || fs.existsSync(path.join(full, '.git')) || fs.existsSync(path.join(full, 'package.json')) };
+      });
+    const parent = path.dirname(requested);
+    return { path: requested, parent: parent === requested ? '' : parent, home, entries };
   }
 
   function serveStatic(res: http.ServerResponse, urlPath: string): void {

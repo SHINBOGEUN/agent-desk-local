@@ -27,6 +27,9 @@ export interface ProjectInfo { config: Record<string, unknown>; errors: string[]
 export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
+export interface FolderEntry { name: string; path: string; isProject: boolean }
+export interface FolderListing { path: string; parent: string | null; home: string; entries: FolderEntry[] }
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
@@ -51,6 +54,7 @@ export const api = {
   state: async (): Promise<ServerState> => { const state = await request<ServerState>('GET', '/api/state'); setToken(state.csrf); return state; },
   runs: (project?: string): Promise<{ runs: RunRow[] }> => request('GET', `/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
   run: (id: number): Promise<RunDetail> => request('GET', `/api/runs/${id}`),
+  folder: (path: string): Promise<FolderListing> => request('GET', `/api/fs?path=${encodeURIComponent(path)}`),
   project: (path: string): Promise<ProjectInfo> => request('GET', `/api/project?path=${encodeURIComponent(path)}`),
   start: (body: StartRequest): Promise<{ runId: number }> => request('POST', '/api/runs', body),
   cancel: (): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/cancel', {}),

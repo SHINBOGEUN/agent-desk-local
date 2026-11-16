@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
-import type { ActiveRun, Pending, RunDetail, RunRow } from './api.ts';
+import type { ActiveRun, FolderListing, Pending, RunDetail, RunRow } from './api.ts';
 import { applyEvents, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, STATUS_LABEL, statusTone, stepDurationMs } from './model.ts';
 import type { Timeline } from './model.ts';
 
@@ -14,6 +14,50 @@ function Badge({ status }: { status: string }) {
   return <span className={`badge tone-${statusTone(status)}`}>{STATUS_LABEL[status] ?? status}</span>;
 }
 
+function FolderPicker({ start, onPick, onClose }: { start: string; onPick: (path: string) => void; onClose: () => void }) {
+  const [listing, setListing] = useState<FolderListing | null>(null);
+  const [error, setError] = useState('');
+
+  const open = useCallback(async (path: string): Promise<void> => {
+    try { setListing(await api.folder(path)); setError(''); } catch (caught) { setError(errorText(caught)); }
+  }, []);
+  useEffect(() => { void open(start); }, [open, start]);
+
+  const segments = listing?.path ? listing.path.split(/[\\/]/).filter(Boolean) : [];
+  const joiner = listing?.path.includes('\\') ? '\\' : '/';
+  const crumbPath = (index: number): string => {
+    const joined = segments.slice(0, index + 1).join(joiner);
+    return joiner === '\\' ? (index === 0 ? `${joined}\\` : joined) : `/${joined}`;
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="dialog card" role="dialog" aria-label="Choose a project folder" onClick={event => event.stopPropagation()}>
+        <div className="step-head"><h2>Choose a project folder</h2><button className="push" onClick={onClose}>Close</button></div>
+        <div className="crumbs">
+          <button onClick={() => { void open(''); }}>Computer</button>
+          {listing?.home ? <button onClick={() => { void open(listing.home); }}>Home</button> : null}
+          {segments.map((segment, index) => <button key={index} onClick={() => { void open(crumbPath(index)); }}>{segment}</button>)}
+        </div>
+        {error ? <p className="error">{error}</p> : null}
+        <div className="folders">
+          {listing && listing.parent !== null && listing.path ? <button className="folder" onClick={() => { void open(listing.parent!); }}>.. (up)</button> : null}
+          {listing?.entries.map(entry => (
+            <button key={entry.path} className="folder" onClick={() => { void open(entry.path); }}>
+              <span>{entry.name}</span>{entry.isProject ? <span className="badge tone-accent">project</span> : null}
+            </button>
+          ))}
+          {listing && !listing.entries.length ? <p className="muted">No subfolders.</p> : null}
+        </div>
+        <div className="row">
+          <span className="muted current">{listing?.path || 'Select a drive'}</span>
+          <button className="push" disabled={!listing?.path} onClick={() => { if (listing?.path) onPick(listing.path); }}>Select this folder</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted: (runId: number) => void }) {
   const [project, setProject] = useState(readProject);
   const [request, setRequest] = useState('');
@@ -21,6 +65,7 @@ function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted:
   const [review, setReview] = useState<'always' | 'auto' | 'never' | ''>('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
@@ -38,7 +83,10 @@ function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted:
 
   return (
     <form className="card form" onSubmit={event => { void submit(event); }}>
-      <label>Project folder<input value={project} onChange={event => setProject(event.target.value)} placeholder="D:\work\my-project" /></label>
+      <label>Project folder
+        <span className="row"><input value={project} onChange={event => setProject(event.target.value)} placeholder="Choose a folder" /><button type="button" onClick={() => setBrowsing(true)}>Browse…</button></span>
+      </label>
+      {browsing ? <FolderPicker start={project} onPick={path => { setProject(path); saveProject(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}
       <label>What should be done?<textarea value={request} onChange={event => setRequest(event.target.value)} rows={4} placeholder="Add a due date field to todos" /></label>
       <div className="row">
         <label>Runtime<select value={runtime} onChange={event => setRuntime(event.target.value as typeof runtime)}><option value="">From config</option><option value="codex">Codex</option><option value="claude">Claude</option></select></label>
