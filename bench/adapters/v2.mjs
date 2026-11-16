@@ -45,6 +45,7 @@ export function runMetrics(result, durationSec) {
   const workRoles = Object.keys(perAgent).filter(role => role !== 'lead');
   return {
     status: result.status,
+    workflow: result.workflow ?? null,
     endReason: result.status === 'completed' ? null : result.failureType || result.status,
     qualityGate: result.gates?.some(gate => gate.gate === 'G3' && !gate.skipped) ? (result.gates.filter(gate => gate.gate === 'G3').at(-1).ok ? 'passed' : 'failed') : 'not_required',
     usage: { totalTokens: total('totalTokens'), inputTokens: total('inputTokens'), cachedInputTokens: total('cachedInputTokens'), uncachedInputTokens: Math.max(0, total('inputTokens') - total('cachedInputTokens')), outputTokens: total('outputTokens') },
@@ -66,7 +67,7 @@ export function runMetrics(result, durationSec) {
   };
 }
 
-export function createAdapter({ cli, review, verify: verifyOption, maxTokens, maxMinutes, runtime, mode } = {}) {
+export function createAdapter({ cli, review, verify: verifyOption, maxTokens, maxMinutes, runtime, mode, noSkills } = {}) {
   const explicitVerify = Array.isArray(verifyOption) && verifyOption.length > 0;
   const verify = explicitVerify ? verifyOption : ['npm test'];
   const command = cli || [process.execPath, path.join(repoRoot, 'packages', 'cli', 'src', 'bin.ts')];
@@ -84,7 +85,7 @@ export function createAdapter({ cli, review, verify: verifyOption, maxTokens, ma
     snapshotConfig() {
       return {
         adapter: 'v2',
-        settings: { review: review || 'default', verify, maxTokens: maxTokens ?? null, maxMinutes: maxMinutes ?? null, runtime: runtime || 'config', mode: mode || (runtime ? null : 'config') },
+        settings: { review: review || 'default', verify, maxTokens: maxTokens ?? null, maxMinutes: maxMinutes ?? null, runtime: runtime || 'config', mode: mode || (runtime ? null : 'config'), skills: noSkills ? 'off' : 'project' },
         agents: ['lead', 'builder', 'verifier'].map(id => ({ id, name: id, enabled: true })),
         skills: [],
       };
@@ -97,6 +98,7 @@ export function createAdapter({ cli, review, verify: verifyOption, maxTokens, ma
       if (maxMinutes) args.push('--max-minutes', String(maxMinutes));
       if (runtime) args.push('--runtime', runtime);
       if (mode) args.push('--mode', mode);
+      if (noSkills) args.push('--no-skills');
       const startedAt = new Date();
       log(`  agent-desk run in ${workspacePath}`);
       const { code, stdout, stderr, timedOut } = await runProcess(command[0], args, { timeoutMs: timeoutMin * 60_000, cwd: repoRoot });

@@ -1,0 +1,22 @@
+{
+  "should": [
+    "메모 제목에 HTML 태그를 넣으면 그대로 실행돼. 고쳐줘",
+    "Show the creation date next to each note in the list",
+    "고정된 메모에 별 아이콘을 붙여서 렌더링해줘",
+    "Render an empty-state message when there are no notes",
+    "메모 목록 HTML에 삭제 버튼을 추가해줘",
+    "Highlight notes whose title contains a search term in the list",
+    "메모 제목이 길면 말줄임표로 잘라서 보여줘",
+    "Add a class to notes created today so they can be styled"
+  ],
+  "shouldNot": [
+    "createNote가 중복 제목을 거부하도록 해줘",
+    "Sort notes by title instead of date",
+    "STORAGE_KEY 값이 뭐야?",
+    "removeNote가 없는 id를 받으면 에러를 던지게 해줘",
+    "Increase the maximum title length to 500",
+    "notes.mjs의 id 생성 방식을 설명해줘",
+    "Add a function that counts pinned notes",
+    "package.json의 테스트 스크립트를 알려줘"
+  ]
+}

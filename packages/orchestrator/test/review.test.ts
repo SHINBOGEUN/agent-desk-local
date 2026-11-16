@@ -148,3 +148,25 @@ test('the verifier can run on a different runtime than the builder', async () =>
   assert.equal(result.status, 'completed');
   assert.equal(verifier.turns.length, 1);
 });
+
+test('self: the builder checks its own work in the same session, no verifier session opens', async () => {
+  const runtime = setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }], [{ report: pass }])], []);
+  const result = await run(runtime, { review: 'self' });
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.review?.verdict, 'PASS');
+  const builderTurns = runtime.turns.filter(item => item.role === 'builder');
+  assert.equal(builderTurns.length, 2);
+  assert.equal(builderTurns[0]!.sessionId, builderTurns[1]!.sessionId);
+  assert.match(builderTurns[1]!.input.text, /check your OWN work/);
+  assert.equal(runtime.turns.some(item => item.role === 'verifier'), false);
+  assert.ok(result.events.some(event => event.type === 'step_started' && event.step === 'review' && event.role === 'builder'));
+});
+
+test('attached images go with the first prompt of each step that reads the request, not the review', async () => {
+  const runtime = setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: pass }])]);
+  const result = await run(runtime, { images: ['/tmp/shot.png'] });
+  assert.equal(result.status, 'completed', result.reason);
+  assert.deepEqual(runtime.turns.find(item => item.role === 'lead')!.input.images, ['/tmp/shot.png']);
+  assert.deepEqual(runtime.turns.find(item => item.role === 'builder')!.input.images, ['/tmp/shot.png']);
+  assert.equal(runtime.turns.find(item => item.role === 'verifier')!.input.images, undefined);
+});

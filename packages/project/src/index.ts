@@ -79,3 +79,4 @@ export function skillsByRole(project: string, loaded: LoadedProject, onSkip?: (i
 export * from './init.ts';
 export * from './skills.ts';
 export * from './memory.ts';
+export * from './edit.ts';

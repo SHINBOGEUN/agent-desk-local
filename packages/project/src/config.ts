@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { RoleId } from '#core';
 
 export type RuntimeKind = 'codex' | 'claude' | 'fake';
-export type ReviewPolicy = 'always' | 'auto' | 'never';
+export type ReviewPolicy = 'always' | 'auto' | 'never' | 'self';
 export type RuntimeSlot = 'primary' | 'review';
 /**
  * Shorthand for runtimes.primary/review used by the dashboard and `--mode`:
@@ -51,7 +51,8 @@ export interface ProjectConfig {
   ignore?: string[];
   /** Extra shell command prefixes Claude sessions may run without asking. */
   allowCommands?: string[];
-  limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number };
+  /** switchAtCodexPercent: Claude takes Codex's roles when Codex's 5-hour window is at least this full (default 95, 0 = off). */
+  limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number; switchAtCodexPercent?: number };
 }
 
 export type ConfigResult = { ok: true; config: ProjectConfig; exists: boolean } | { ok: false; errors: string[] };
@@ -92,13 +93,13 @@ export function validateConfig(raw: unknown): ConfigResult {
   if (raw.verify !== undefined && !stringList(raw.verify)) errors.push('config.verify: expected a list of non-empty command strings');
   if (raw.ignore !== undefined && !stringList(raw.ignore)) errors.push('config.ignore: expected a list of path patterns');
   if (raw.allowCommands !== undefined && !stringList(raw.allowCommands)) errors.push('config.allowCommands: expected a list of command prefixes');
-  if (raw.review !== undefined && !['always', 'auto', 'never'].includes(raw.review as string)) errors.push('config.review: expected "always", "auto" or "never"');
+  if (raw.review !== undefined && !['always', 'auto', 'never', 'self'].includes(raw.review as string)) errors.push('config.review: expected "always", "auto", "never" or "self"');
   if (raw.language !== undefined && !['en', 'ko'].includes(raw.language as string)) errors.push('config.language: expected "en" or "ko"');
   if (raw.limits !== undefined) {
     if (!isRecord(raw.limits)) errors.push('config.limits: expected an object');
     else for (const [key, value] of Object.entries(raw.limits)) {
-      if (!['redo', 'tokens', 'minutes', 'codexUsagePercent'].includes(key)) errors.push(`config.limits.${key}: unknown key`);
-      else if (!Number.isFinite(value) || (value as number) < (key === 'redo' ? 0 : 1)) errors.push(`config.limits.${key}: expected a ${key === 'redo' ? 'non-negative' : 'positive'} number`);
+      if (!['redo', 'tokens', 'minutes', 'codexUsagePercent', 'switchAtCodexPercent'].includes(key)) errors.push(`config.limits.${key}: unknown key`);
+      else if (!Number.isFinite(value) || (value as number) < (key === 'redo' || key === 'switchAtCodexPercent' ? 0 : 1) || (key === 'switchAtCodexPercent' && (value as number) > 100)) errors.push(`config.limits.${key}: expected a ${key === 'redo' ? 'non-negative' : key === 'switchAtCodexPercent' ? '0-100' : 'positive'} number`);
     }
   }
   return errors.length ? { ok: false, errors } : { ok: true, config: raw as ProjectConfig, exists: true };

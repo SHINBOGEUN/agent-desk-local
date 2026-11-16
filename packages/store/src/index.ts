@@ -12,7 +12,7 @@ import { sanitize } from './redact.ts';
 
 export { redactSecrets, sanitize } from './redact.ts';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_STRING = 4000;
 
 export interface RunRow {
@@ -83,12 +83,14 @@ const MIGRATIONS: string[] = [`
   CREATE INDEX usage_run ON usage(run_id);
 `, `
   ALTER TABLE runs ADD COLUMN report TEXT;
+`, `
+  ALTER TABLE runs ADD COLUMN settings TEXT;
 `];
 
 /** What the dashboard shows as the run's report: the reports the agents submitted, not the raw event log. */
 export function reportOf(result: RunResult): Record<string, unknown> {
-  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint } = result;
-  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined };
+  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint, memorySuggestions, resume } = result;
+  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined, memorySuggestions, resume };
 }
 
 export class RunStore {
@@ -170,6 +172,22 @@ export class RunStore {
 
   #toRun(row: Record<string, unknown>): RunRow {
     return { id: Number(row.id), project: String(row.project), request: String(row.request), workflow: (row.workflow as string | null) ?? null, status: row.status as RunRow['status'], reason: (row.reason as string | null) ?? null, brief: (row.brief as string | null) ?? null, startedAt: String(row.started_at), finishedAt: (row.finished_at as string | null) ?? null };
+  }
+
+  /** Tokens per step for runs started since `sinceIso`, with each run's settings (for per-runtime usage). */
+  usageSince(sinceIso: string): { runId: number; stepId: string; tokens: number; settings: string | null }[] {
+    const rows = this.#db.prepare('SELECT u.run_id AS runId, u.step_id AS stepId, u.total_tokens AS tokens, r.settings AS settings FROM usage u JOIN runs r ON r.id = u.run_id WHERE r.started_at >= ?').all(sinceIso) as { runId: number; stepId: string; tokens: number; settings: string | null }[];
+    return rows.map(row => ({ runId: Number(row.runId), stepId: String(row.stepId), tokens: Number(row.tokens), settings: row.settings ?? null }));
+  }
+
+  /** The settings a run started with (mode, runtimes per role, review policy, skills, verify, limits ...). */
+  setSettings(runId: number, settings: Record<string, unknown>): void {
+    this.#db.prepare('UPDATE runs SET settings = ? WHERE id = ?').run(JSON.stringify(sanitize(settings, MAX_STRING)), runId);
+  }
+
+  getSettings(runId: number): Record<string, unknown> | null {
+    const row = this.#db.prepare('SELECT settings FROM runs WHERE id = ?').get(runId) as { settings: string | null } | undefined;
+    return row?.settings ? JSON.parse(row.settings) as Record<string, unknown> : null;
   }
 
   /** The report saved when the run finished; null for runs that are still running or were recorded before reports were kept. */

@@ -60,6 +60,8 @@ export function summarize({ label, config, results }) {
     meanAgents: mean(valid.map(result => result.metrics.agentCount)),
     meanWorkTasks: mean(valid.map(result => result.metrics.workTasks)),
     meanConsultations: mean(valid.map(result => result.metrics.consultations)),
+    // Classification accuracy (3-6): runs whose workflow is known and matches the task's expected workflows.
+    classifyAccuracy: (() => { const known = valid.filter(result => result.metrics.workflow && result.expectedWorkflows); return rate(known.filter(result => result.expectedWorkflows.includes(result.metrics.workflow)).length, known.length); })(),
     meanDurationMin: mean(valid.filter(result => result.metrics.durationSec != null).map(result => result.metrics.durationSec / 60)),
     perTask: Object.fromEntries([...new Set(valid.map(result => result.taskId))].sort().map(taskId => {
       const group = valid.filter(result => result.taskId === taskId);
@@ -89,6 +91,7 @@ export function toMarkdown(summaries) {
     ['평균 팀원 작업 수', s => fmtNum(s.meanWorkTasks)],
     ['평균 협의 턴', s => fmtNum(s.meanConsultations)],
     ['평균 소요 시간(분)', s => fmtNum(s.meanDurationMin)],
+    ['워크플로 분류 정확도 (lead)', s => fmtPct(s.classifyAccuracy)],
   ];
   lines.push(`| 지표 | ${summaries.map(s => s.label).join(' | ')} |`, `|---|${summaries.map(() => '---').join('|')}|`);
   for (const [name, format] of rows) lines.push(`| ${name} | ${summaries.map(format).join(' | ')} |`);

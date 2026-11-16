@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { checkSkills, loadMemory, loadProject, memoryFacts, modeOf, RUNTIME_MODES } from '#project';
+import { addMemory, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
 import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
@@ -47,12 +47,17 @@ interface ActiveRun {
 }
 
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
-const REVIEWS = new Set(['always', 'auto', 'never']);
+const REVIEWS = new Set(['always', 'auto', 'never', 'self']);
 const RUNTIMES = new Set(['codex', 'claude', 'fake']);
 const MODES = new Set<string>(RUNTIME_MODES);
 /** Workspaces made by bench/run.mjs live under <tmp>/agent-desk-bench/<label>/<task>-r<n>-<stamp>. */
 export const isBenchWorkspace = (project: string): boolean => /[\\/]agent-desk-bench(?:-validate-[^\\/]*)?[\\/]/.test(project);
 const MAX_BODY = 256 * 1024;
+/** Run requests may carry images (data URLs): up to 4, 5 MB each. */
+const MAX_RUN_BODY = 28 * 1024 * 1024;
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_EXT: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif' };
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json; charset=utf-8' };
 
 class HttpError extends Error {
@@ -89,13 +94,13 @@ export function createServer(options: ServerOptions): LocalServer {
     if (typeof given !== 'string' || given.length !== token.length) return false;
     return timingSafeEqual(Buffer.from(given), Buffer.from(token));
   };
-  const readBody = async (req: http.IncomingMessage): Promise<Record<string, unknown>> => {
+  const readBody = async (req: http.IncomingMessage, limit = MAX_BODY): Promise<Record<string, unknown>> => {
     if (!req.headers['content-type']?.startsWith('application/json')) throw new HttpError(415, 'JSON body required');
     let size = 0;
     const chunks: Buffer[] = [];
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
-      if (size > MAX_BODY) throw new HttpError(413, 'request too large');
+      if (size > limit) throw new HttpError(413, 'request too large');
       chunks.push(chunk as Buffer);
     }
     try {
@@ -118,10 +123,13 @@ export function createServer(options: ServerOptions): LocalServer {
     const mode = body.mode;
     if (mode !== undefined && !(typeof mode === 'string' && MODES.has(mode))) throw new HttpError(400, 'unknown mode');
     const review = body.review;
-    if (review !== undefined && !(typeof review === 'string' && REVIEWS.has(review))) throw new HttpError(400, 'review must be always, auto or never');
+    if (review !== undefined && !(typeof review === 'string' && REVIEWS.has(review))) throw new HttpError(400, 'review must be always, auto, never or self');
     const language = body.language;
     if (language !== undefined && language !== 'en' && language !== 'ko') throw new HttpError(400, 'language must be en or ko');
     const verify = Array.isArray(body.verify) ? body.verify.filter((item): item is string => typeof item === 'string') : [];
+    const resumeOf = body.resumeOf;
+    if (resumeOf !== undefined && !(Number.isInteger(resumeOf) && (resumeOf as number) > 0)) throw new HttpError(400, 'resumeOf must be a run id');
+    const images = saveImages(body.images);
     const controller = new AbortController();
     const ask = (question: UserQuestion): Promise<string> => new Promise(resolve => {
       const done = (answer: string): void => { if (active) active.pending = null; resolve(answer); };
@@ -137,6 +145,8 @@ export function createServer(options: ServerOptions): LocalServer {
         ...(mode ? { mode: mode as RuntimeMode } : {}),
         ...(review ? { review: review as ReviewPolicy } : {}),
         ...(language ? { language } : {}),
+        ...(images.length ? { images } : {}),
+        ...(resumeOf ? { resumeOf: resumeOf as number } : {}),
         verify, ask, signal: controller.signal,
         onStarted: ({ runId }) => { started = true; active = { runId, project, request, controller, pending: null }; resolveId(runId); },
       }).then(outcome => {
@@ -146,6 +156,55 @@ export function createServer(options: ServerOptions): LocalServer {
       }).finally(() => { active = null; });
     });
   }
+
+  /** Writes attached images (data URLs) to the data folder and returns their paths. */
+  function saveImages(raw: unknown): string[] {
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw)) throw new HttpError(400, 'images must be a list');
+    if (raw.length > MAX_IMAGES) throw new HttpError(400, `at most ${MAX_IMAGES} images`);
+    const folder = path.join(dir, 'attachments', `${Date.now()}-${randomBytes(4).toString('hex')}`);
+    return raw.map((item, index) => {
+      const match = typeof item === 'string' ? /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(item) : null;
+      if (!match) throw new HttpError(400, 'images must be PNG, JPEG, WebP or GIF data URLs');
+      const bytes = Buffer.from(match[2]!, 'base64');
+      if (bytes.length > MAX_IMAGE_BYTES) throw new HttpError(400, 'an image is larger than 5 MB');
+      fs.mkdirSync(folder, { recursive: true });
+      const file = path.join(folder, `image-${index + 1}${IMAGE_EXT[match[1]!]}`);
+      fs.writeFileSync(file, bytes);
+      return file;
+    });
+  }
+
+  /** Tokens Agent Desk spent on Claude from this PC (Claude Code does not report the account's limit share). */
+  function claudeUsage(): { last5h: number; last7d: number; runs5h: number } {
+    const roleOf = (stepId: string, settings: Record<string, unknown>): string => {
+      const step = stepId.split(/[#:]/)[0];
+      if (step === 'build') return 'builder';
+      if (step === 'review') return settings.review === 'self' ? 'builder' : 'verifier';
+      if (step === 'research') return 'researcher';
+      return 'lead';
+    };
+    const total = (sinceMs: number): { tokens: number; runs: number } => {
+      const runs = new Set<number>();
+      let tokens = 0;
+      for (const row of withStore(store => store.usageSince(new Date(Date.now() - sinceMs).toISOString()))) {
+        let settings: Record<string, unknown> = {};
+        try { settings = row.settings ? JSON.parse(row.settings) as Record<string, unknown> : {}; } catch { /* old run */ }
+        const runtimes = (settings.runtimes ?? {}) as Record<string, string>;
+        if (runtimes[roleOf(row.stepId, settings)] === 'claude') { tokens += row.tokens; runs.add(row.runId); }
+      }
+      return { tokens, runs: runs.size };
+    };
+    const recent = total(5 * 3600_000);
+    return { last5h: recent.tokens, runs5h: recent.runs, last7d: total(7 * 24 * 3600_000).tokens };
+  }
+
+  const projectDir = (value: unknown): string => {
+    const project = typeof value === 'string' ? value : '';
+    if (!path.isAbsolute(project) || !fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new HttpError(400, 'path must be an existing absolute folder');
+    return project;
+  };
+  const notWhileRunning = (project: string): void => { if (active && active.project === project) throw new HttpError(409, 'another run is active; wait for it to finish'); };
 
   function streamEvents(req: http.IncomingMessage, res: http.ServerResponse, runId: number, url: URL): void {
     const header = req.headers['last-event-id'];
@@ -187,7 +246,7 @@ export function createServer(options: ServerOptions): LocalServer {
       const runId = Number(runMatch[1]);
       const sub = runMatch[2];
       if (method === 'GET' && !sub) {
-        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId), report: store.getReport(runId) } : null; });
+        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId), report: store.getReport(runId), settings: store.getSettings(runId) } : null; });
         if (!detail) throw new HttpError(404, 'run not found');
         return send(res, 200, { ...detail, run: { ...detail.run, request: redactSecrets(detail.run.request), brief: detail.run.brief ? redactSecrets(detail.run.brief) : null } });
       }
@@ -223,7 +282,7 @@ export function createServer(options: ServerOptions): LocalServer {
       return send(res, 200, { deleted: deleted.length });
     }
     if (method === 'POST' && p === '/api/runs') {
-      const runId = await startRun(await readBody(req));
+      const runId = await startRun(await readBody(req, MAX_RUN_BODY));
       return send(res, 202, { runId });
     }
     if (method === 'POST' && p === '/api/runs/active/cancel') {
@@ -245,6 +304,31 @@ export function createServer(options: ServerOptions): LocalServer {
       const skills = checkSkills(project, loaded.config, loaded.roles);
       return send(res, 200, { config: loaded.config, mode: modeOf(loaded.config), errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets), skills: skills.skills.map(skill => ({ id: skill.id, description: skill.description })), skillFindings: skills.findings });
     }
+    if (method === 'GET' && p === '/api/project/files') return send(res, 200, projectFiles(projectDir(url.searchParams.get('path'))));
+    if (method === 'POST' && p === '/api/project/files') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      if (body.kind !== 'config' && body.kind !== 'role' && body.kind !== 'skill') throw new HttpError(400, 'kind must be config, role or skill');
+      const result = saveProjectFile(project, { kind: body.kind, ...(typeof body.id === 'string' ? { id: body.id } : {}), ...(typeof body.text === 'string' ? { text: body.text } : {}), ...(body.remove === true ? { remove: true } : {}) });
+      return send(res, result.ok ? 200 : 422, result.ok ? { ok: true, warnings: result.warnings } : { ok: false, errors: result.errors, error: result.errors[0] });
+    }
+    if (method === 'POST' && p === '/api/project/init') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const saved = readMachineSettings(dir);
+      const available = (['codex', 'claude'] as const).filter(kind => locate(kind, options.env, options.platform, saved));
+      const draft = draftFromInspection(inspectProject(project), available);
+      return send(res, 200, { written: writeDraft(project, draft), rationale: draft.rationale });
+    }
+    if (method === 'POST' && p === '/api/project/memory') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      const result = addMemory(project, typeof body.fact === 'string' ? body.fact : '');
+      if (!result.ok) throw new HttpError(400, result.error);
+      return send(res, 200, { ok: true });
+    }
     if (method === 'POST' && p === '/api/pick-folder') {
       const body = await readBody(req);
       const start = typeof body.start === 'string' && path.isAbsolute(body.start) && fs.existsSync(body.start) ? body.start : '';
@@ -254,7 +338,7 @@ export function createServer(options: ServerOptions): LocalServer {
       return send(res, 200, result);
     }
     if (method === 'GET' && p === '/api/bench') return send(res, 200, { summaries: options.benchDir ? summarizeBench(options.benchDir) : [] });
-    if (method === 'GET' && p === '/api/usage') return send(res, 200, await codexLimits());
+    if (method === 'GET' && p === '/api/usage') return send(res, 200, { ...await codexLimits(), claude: claudeUsage() });
     if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);
     throw new HttpError(404, 'not found');

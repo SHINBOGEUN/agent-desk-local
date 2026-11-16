@@ -92,13 +92,16 @@ test('init: inspects a Node project and drafts config and role files without ove
   assert.deepEqual(inspection.existingAgentFiles, ['AGENTS.md', 'CLAUDE.md']);
 
   const draft = draftFromInspection(inspection, ['codex', 'claude']);
-  assert.deepEqual(draft.config, { runtimes: { primary: 'codex' }, verify: ['npm test', 'npm run typecheck'], review: 'auto' });
+  assert.deepEqual(draft.config, { mode: 'codex+claude', verify: ['npm test', 'npm run typecheck'], review: 'auto' });
+  assert.deepEqual(draft.files.filter(file => file.path.includes('/skills/')).map(file => file.path), ['.agent-desk/skills/verify-before-report/SKILL.md', '.agent-desk/skills/review-checklist/SKILL.md']);
+  assert.match(draft.files.find(file => file.path.endsWith('builder.md'))!.content, /skills: \[verify-before-report\]/);
   assert.ok(draft.rationale.some(line => /differ/.test(line)));
   put(project, '.agent-desk/agents/lead.md', '---\neffort: medium\n---\nmine\n');
   const again = draftFromInspection(inspectProject(project), ['codex']);
   assert.equal(again.files.find(file => file.path.endsWith('lead.md'))?.willWrite, false);
   const written = writeDraft(project, again);
-  assert.deepEqual(written.sort(), ['.agent-desk/agents/builder.md', '.agent-desk/agents/researcher.md', '.agent-desk/agents/verifier.md', '.agent-desk/config.json']);
+  assert.deepEqual(written.sort(), ['.agent-desk/agents/builder.md', '.agent-desk/agents/researcher.md', '.agent-desk/agents/verifier.md', '.agent-desk/config.json', '.agent-desk/skills/review-checklist/SKILL.md', '.agent-desk/skills/verify-before-report/SKILL.md']);
+  assert.deepEqual(checkSkills(project, loadProject(project).config, loadProject(project).roles).findings.filter(finding => finding.level !== 'info'), []);
   assert.equal(fs.readFileSync(path.join(project, '.agent-desk/agents/lead.md'), 'utf8'), '---\neffort: medium\n---\nmine\n');
   assert.deepEqual(loadProject(project).errors, []);
   assert.deepEqual(writeDraft(project, draftFromInspection(inspectProject(project), ['codex'])), []);
@@ -242,4 +245,39 @@ test('role files: model-codex / model-claude follow the runtime the role runs on
   assert.equal(roleSettings(loaded, { verifier: 'claude' }).models.verifier, 'sonnet');
   assert.equal(roleSettings(loaded, { verifier: 'codex' }).models.verifier, 'gpt-5');
   assert.equal(roleSettings(loaded).models.verifier, 'base');
+});
+
+test('init: a stdlib Python project with tests/test_*.py is detected and gets a unittest verify command', () => {
+  const project = tmp();
+  put(project, 'tests/test_store.py', 'import unittest');
+  put(project, 'inv/__init__.py', '');
+  const inspection = inspectProject(project);
+  assert.ok(inspection.stack.includes('Python'));
+  assert.deepEqual(draftFromInspection(inspection, ['codex']).config.verify, ['python -m unittest discover -s tests']);
+  assert.equal(draftFromInspection(inspection, ['codex']).config.mode, 'codex');
+});
+
+import { projectFiles, saveProjectFile } from '#project';
+
+test('editing: saves only what passes the same checks the harness uses', () => {
+  const project = tmp();
+  const files = projectFiles(project);
+  assert.equal(files.config.exists, false);
+  assert.match(files.roles.builder.text, /access: workspace-write/);
+  assert.deepEqual(saveProjectFile(project, { kind: 'config', text: '{ "mode": "gpt" }' }).ok, false);
+  assert.equal(saveProjectFile(project, { kind: 'config', text: '{ "mode": "claude", "verify": ["npm test"] }' }).ok, true);
+  assert.equal(loadProject(project).config.mode, 'claude');
+  const badRole = saveProjectFile(project, { kind: 'role', id: 'verifier', text: '---\naccess: workspace-write\n---\n' });
+  assert.equal(badRole.ok, false);
+  assert.equal(saveProjectFile(project, { kind: 'role', id: 'builder', text: '---\nskills: [missing]\n---\n' }).ok, false);
+  const badSkill = saveProjectFile(project, { kind: 'skill', id: 'x', text: '---\nname: y\ndescription: short\n---\nbody' });
+  assert.equal(badSkill.ok, false);
+  const skill = saveProjectFile(project, { kind: 'skill', id: 'api-rules', text: '---\nname: api-rules\ndescription: Checks HTTP endpoints against the API rules when the user asks to add an endpoint. Do not use for UI work.\n---\nWhy: clients depend on the error shape.\n' });
+  assert.ok(skill.ok);
+  assert.equal(saveProjectFile(project, { kind: 'role', id: 'builder', text: '---\nskills: [api-rules]\n---\nUse tabs.\n' }).ok, true);
+  assert.equal(saveProjectFile(project, { kind: 'skill', id: 'api-rules', remove: true }).ok, false);
+  assert.equal(saveProjectFile(project, { kind: 'role', id: 'builder', text: '---\nskills: []\n---\n' }).ok, true);
+  assert.equal(saveProjectFile(project, { kind: 'skill', id: 'api-rules', remove: true }).ok, true);
+  assert.deepEqual(projectFiles(project).skills, []);
+  assert.equal(saveProjectFile(project, { kind: 'role', id: 'chief', text: '' }).ok, false);
 });

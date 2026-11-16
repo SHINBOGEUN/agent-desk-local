@@ -12,7 +12,7 @@ import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
-import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt } from './review.ts';
+import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt, selfReviewPrompt } from './review.ts';
 import { decideApproval } from './approval.ts';
 import { createRestorePoint } from './restore-point.ts';
 import type { RestorePointInfo } from './restore-point.ts';
@@ -145,10 +145,10 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
   };
 }
 
-async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: Session, text: string): Promise<TurnOutcome> {
+async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: Session, text: string, images?: string[]): Promise<TurnOutcome> {
   const turn = ctx.nextTurn(step);
   let outcome: TurnOutcome = { status: 'failed', error: 'runtime ended the turn without a result' };
-  for await (const event of session.runTurn({ text }, ctx.signal)) {
+  for await (const event of session.runTurn({ text, ...(images?.length ? { images } : {}) }, ctx.signal)) {
     ctx.emit({ type: 'runtime', step, role, event });
     if (event.type === 'usage') { ctx.ledger.record(step, turn, event.delta); ctx.enforceBudget(ctx.redo, true); }
     if (event.type === 'turn_end') outcome = { status: event.status, ...(event.error ? { error: event.error } : {}) };
@@ -177,7 +177,8 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
  */
 async function playUntilReport(ctx: RunContext, step: StepKind, role: RoleId, session: Session, holder: Holder, prompt: string, reminder: string): Promise<StepFailure | null> {
   for (const text of [prompt, reminder]) {
-    const outcome = await playTurn(ctx, step, role, session, text);
+    // Images the user attached go with the first prompt of every step that reads the request.
+    const outcome = await playTurn(ctx, step, role, session, text, text === prompt && step !== 'review' ? ctx.config.images : undefined);
     if (ctx.budgetHit) return { kind: 'budget', reason: ctx.budgetHit, step };
     if (outcome.status === 'interrupted' || ctx.config.signal?.aborted) return { kind: 'interrupted' };
     if (outcome.status === 'failed') return failedStep(outcome.error ?? 'turn failed');
@@ -384,7 +385,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       let reasons = [...g2.problems, ...g3.problems, ...notDone];
       let review: ReviewOutcome = { kind: 'skipped', reason: 'earlier gates failed' };
       if (!reasons.length) {
-        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3 });
+        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3, ...(session ? { self: { session, holder } } : {}) });
         if (review.kind === 'stop') {
           return review.failure ? failureResult(ctx, review.failure, { ...base, builder: report }) : finish(ctx, review.status, review.reason, { ...base, builder: report });
         }
@@ -417,7 +418,7 @@ type ReviewOutcome =
   | { kind: 'stop'; status: RunStatus; reason: string; failure?: StepFailure };
 
 /** Gate G4: decides by policy whether to review, then runs an independent read-only verifier in a new session. */
-async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult }): Promise<ReviewOutcome> {
+async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult; self?: { session: Session; holder: Holder } }): Promise<ReviewOutcome> {
   const { config } = ctx;
   const rendered = renderDiff({ cwd: config.cwd, before: input.before, diff: input.diff });
   const decision = decideReview({
@@ -430,12 +431,22 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
   }
   const testFiles = (input.g2.data?.testFilesChanged as string[] | undefined) ?? [];
   const verifyLines = ((input.g3.data?.commands as string[] | undefined) ?? []).map(command => `\`${command}\` passed`);
-  const prompt = reviewPrompt({ request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles });
+  const facts = { request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles };
+  const selfCheck = config.review === 'self' && input.self !== undefined;
+  const prompt = selfCheck ? selfReviewPrompt(facts) : reviewPrompt(facts);
   const collector = new ReportCollector('verifier', report => (report.verdict === 'BLOCKED' && !report.blocking.length ? ['verifier.blocking: BLOCKED needs at least one entry that says what could not be decided and why'] : []));
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
-  ctx.emit({ type: 'step_started', step: 'review', role: 'verifier' });
+  ctx.emit({ type: 'step_started', step: 'review', role: selfCheck ? 'builder' : 'verifier' });
   const guardBefore = takeSnapshot(config.cwd, { mode: 'stat', ignore: ctx.ignore });
-  const failure = await withTransientRetry(ctx, 'review', async () => {
+  const failure = selfCheck ? await (async () => {
+    // Same session as the build: the report tool is pointed at the verifier collector for this turn only.
+    const self = input.self!;
+    const builderTarget = self.holder.current;
+    self.holder.current = holder.current;
+    try { return await playUntilReport(ctx, 'review', 'builder', self.session, self.holder, prompt, reportReminder('a verifier report about your own work')); }
+    catch (error) { return failedStep(error instanceof Error ? error.message : String(error)); }
+    finally { self.holder.current = builderTarget; }
+  })() : await withTransientRetry(ctx, 'review', async () => {
     let session: Session | null = null;
     try {
       session = await openSession(ctx, 'review', 'verifier', holder);

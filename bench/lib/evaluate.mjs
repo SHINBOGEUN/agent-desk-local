@@ -44,7 +44,9 @@ export function loadTasks(filter = null, set = 'standard') {
     .map(entry => {
       const directory = path.join(tasksDirectory, entry.name);
       const task = JSON.parse(fs.readFileSync(path.join(directory, 'task.json'), 'utf8'));
-      return { ...task, directory };
+      // Workflows lead may correctly choose (roadmap 3-6, classification accuracy).
+      const expectedWorkflows = task.expect?.workflows ?? (task.kind === 'answer' ? ['answer'] : ['build', 'plan-build']);
+      return { ...task, expectedWorkflows, directory };
     })
     .filter(task => !wanted || wanted.has(task.id.toUpperCase()))
     .sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));

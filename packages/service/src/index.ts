@@ -1,5 +1,7 @@
-export { executeRun, pruneRestorePoints } from './run.ts';
-export type { ExecuteOptions, ExecuteOutcome } from './run.ts';
+export { DEFAULT_SWITCH_AT_PERCENT, dryRun, executeRun, pruneRestorePoints, resumeBrief } from './run.ts';
+export type { DryRunReport, ExecuteOptions, ExecuteOutcome } from './run.ts';
+export { chosenSkills, readTriggerCases, runTriggerTest } from './trigger-test.ts';
+export type { CaseResult, SkillTriggerResult, TriggerCases } from './trigger-test.ts';
 export { locate, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, VERIFIED_CODEX_MINOR } from './discover.ts';
 export type { Found } from './discover.ts';
 export { dataDirectory, readMachineSettings, writeMachineSettings } from './paths.ts';

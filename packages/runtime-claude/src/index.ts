@@ -71,6 +71,19 @@ const isZero = (usage: TokenUsage): boolean => FIELDS.every(field => usage[field
 const maxOf = (a: TokenUsage, b: TokenUsage): TokenUsage => ({ inputTokens: Math.max(a.inputTokens, b.inputTokens), cachedInputTokens: Math.max(a.cachedInputTokens, b.cachedInputTokens), outputTokens: Math.max(a.outputTokens, b.outputTokens), reasoningTokens: Math.max(a.reasoningTokens, b.reasoningTokens), totalTokens: Math.max(a.totalTokens, b.totalTokens) });
 const ZERO: TokenUsage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, totalTokens: 0 };
 
+const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+
+/** Attached images as stream-json image blocks (base64). Unreadable or unknown files are skipped. */
+export function imageBlocks(paths: string[]): unknown[] {
+  const blocks: unknown[] = [];
+  for (const file of paths) {
+    const mediaType = IMAGE_TYPES[path.extname(file).toLowerCase()];
+    if (!mediaType) continue;
+    try { blocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: fs.readFileSync(file).toString('base64') } }); } catch { /* skipped */ }
+  }
+  return blocks;
+}
+
 function resultText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter(isRecord).map(block => str(block.text)).join('\n');
@@ -203,7 +216,7 @@ class ClaudeSession implements Session {
     this.#busy = true;
     try {
       if (this.#exitReason) { yield { type: 'turn_end', status: 'failed', error: this.#exitReason }; return; }
-      const content: unknown[] = [{ type: 'text', text: input.text }];
+      const content: unknown[] = [{ type: 'text', text: input.text }, ...imageBlocks(input.images ?? [])];
       this.#write({ type: 'user', message: { role: 'user', content } });
       const translator = new TurnTranslator();
       let interrupted = false;

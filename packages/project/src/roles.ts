@@ -91,7 +91,7 @@ export function loadRoles(project: string): RolesResult {
 }
 
 /** Template written by `init` and used when a role file is created from the dashboard. */
-export function roleTemplate(role: RoleId): string {
+export function roleTemplate(role: RoleId, skills: string[] = []): string {
   const defaults: Record<RoleId, { access: Access; effort: Effort; description: string }> = {
     lead: { access: 'read-only', effort: 'low', description: 'Reads the request, chooses the workflow, writes plans.' },
     builder: { access: 'workspace-write', effort: 'high', description: 'Changes files to fulfil the requirements.' },
@@ -99,5 +99,5 @@ export function roleTemplate(role: RoleId): string {
     researcher: { access: 'read-only', effort: 'medium', description: 'Investigates one angle of a question.' },
   };
   const d = defaults[role];
-  return `---\ndescription: ${d.description}\naccess: ${d.access}\neffort: ${d.effort}\nskills: []\n---\n\nProject-specific rules for the ${role} go here, one per line. The harness already gives this role its built-in instructions; add only what is specific to this project.\n`;
+  return `---\ndescription: ${d.description}\naccess: ${d.access}\neffort: ${d.effort}\nskills: [${skills.join(', ')}]\n---\n\nProject-specific rules for the ${role} go here, one per line. The harness already gives this role its built-in instructions; add only what is specific to this project.\n`;
 }

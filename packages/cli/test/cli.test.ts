@@ -259,13 +259,13 @@ test('init previews by default, writes with --yes, never overwrites, and doctor 
   deps.env = { AGENT_DESK_HOME: tmp(), PATH: bin };
   assert.equal(await main(['init'], deps), 0);
   assert.match(out.join(''), /Stack: Node\.js/);
-  assert.match(out.join(''), /runtimes\.primary = codex/);
+  assert.match(out.join(''), /mode = codex/);
   assert.match(out.join(''), /Not written/);
   assert.ok(!fs.existsSync(path.join(project, '.agent-desk')));
 
   out.length = 0;
   assert.equal(await main(['init', '--yes'], deps), 0);
-  assert.match(out.join(''), /Created 5 file\(s\)/);
+  assert.match(out.join(''), /Created 7 file\(s\)/);
   assert.ok(fs.existsSync(path.join(project, '.agent-desk', 'agents', 'builder.md')));
   const config = JSON.parse(fs.readFileSync(path.join(project, '.agent-desk', 'config.json'), 'utf8'));
   assert.deepEqual(config.verify, ['npm test']);
@@ -349,4 +349,18 @@ test('show lists runs and prints one run with its gates and report details', asy
   assert.match(out.join(''), /Run \d+: completed/);
   assert.match(out.join(''), /> classify \(lead\)/);
   assert.equal(await main(['show', '999'], deps), 64);
+});
+
+test('run --dry-run shows the team without starting a model; resume continues a stopped run', async () => {
+  const project = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [{ turns: [[{ report: { workflow: 'answer', requirements: [], reason: 'q', answer: 'Port 3000.', sources: [] } }]] }] } });
+  const { deps, out } = harness(project, runtime);
+  assert.equal(await main(['run', '--dry-run', '--runtime', 'fake', '--json'], deps), 0);
+  const report = JSON.parse(out.join('')) as { runtimes: Record<string, string> };
+  assert.equal(report.runtimes.verifier, 'fake');
+  assert.equal(runtime.turns.length, 0);
+  out.length = 0;
+  assert.equal(await main(['run', 'Which port?', '--runtime', 'fake', '--image', 'missing.png'], deps), 64);
+  assert.equal(await main(['run', 'Which port?', '--runtime', 'fake', '--unattended'], deps), 0);
+  assert.equal(await main(['resume', '999', '--runtime', 'fake'], deps), 64);
 });

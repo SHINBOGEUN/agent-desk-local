@@ -29,6 +29,8 @@ export interface RunConfig {
   budget?: Budget;
   /** Gate G4. Default "always". */
   review?: ReviewPolicy;
+  /** Image files (absolute paths) the user attached; sent with the first prompt of each step that reads the request. */
+  images?: string[];
   /** Limits for the "auto" policy. Defaults: 3 files, 60 changed lines. */
   autoReview?: { maxFiles?: number; maxLines?: number };
   /** Folder where a restore point is written before the build step. Omitted means none is made. */

@@ -262,3 +262,36 @@ test('history delete forgets one project or every benchmark workspace, never the
     assert.equal(isBenchWorkspace('D:\\work\\agent-desk-local'), false);
   } finally { await server.close(); }
 });
+
+test('runs carry images, record their settings, can be resumed; project files and memory are edited through the API', async () => {
+  const project = tmp();
+  const { server, port, token, home } = await start(new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }]), script([{ report: answerReport }])], builder: [] } }));
+  try {
+    const png = `data:image/png;base64,${Buffer.from('fake-png').toString('base64')}`;
+    assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', runtime: 'fake', images: ['data:text/plain;base64,AAAA'] } })).status, 400);
+    const first = JSON.parse((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Which port?', runtime: 'fake', images: [png] } })).body) as { runId: number };
+    await call(port, 'GET', `/api/runs/${first.runId}/events`);
+    const detail = JSON.parse((await call(port, 'GET', `/api/runs/${first.runId}`)).body) as { settings: { images: number; runtimes: Record<string, string> } };
+    assert.equal(detail.settings.images, 1);
+    assert.equal(detail.settings.runtimes.builder, 'fake');
+    assert.ok(fs.readdirSync(path.join(home, 'attachments')).length === 1);
+    const second = JSON.parse((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Which port?', runtime: 'fake', resumeOf: first.runId } })).body) as { runId: number };
+    await call(port, 'GET', `/api/runs/${second.runId}/events`);
+    const resumed = JSON.parse((await call(port, 'GET', `/api/runs/${second.runId}`)).body) as { settings: { resumeOf: number } };
+    assert.equal(resumed.settings.resumeOf, first.runId);
+
+    const files = JSON.parse((await call(port, 'GET', `/api/project/files?path=${encodeURIComponent(project)}`)).body) as { config: { exists: boolean }; roles: Record<string, { text: string }> };
+    assert.equal(files.config.exists, false);
+    const bad = await call(port, 'POST', '/api/project/files', { token, body: { project, kind: 'config', text: '{ "mode": 1 }' } });
+    assert.equal(bad.status, 422);
+    assert.match(JSON.parse(bad.body).error, /config\.mode/);
+    assert.equal((await call(port, 'POST', '/api/project/files', { token, body: { project, kind: 'config', text: '{ "mode": "codex" }' } })).status, 200);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(project, '.agent-desk', 'config.json'), 'utf8')).mode, 'codex');
+    assert.equal((await call(port, 'POST', '/api/project/memory', { token, body: { project, fact: 'Port is 3000' } })).status, 200);
+    assert.match(fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8'), /Port is 3000/);
+    const init = JSON.parse((await call(port, 'POST', '/api/project/init', { token, body: { project } })).body) as { written: string[] };
+    assert.ok(init.written.includes('.agent-desk/agents/builder.md'));
+    const usage = JSON.parse((await call(port, 'GET', '/api/usage')).body) as { claude: { last5h: number } };
+    assert.equal(usage.claude.last5h, 0);
+  } finally { await server.close(); }
+});

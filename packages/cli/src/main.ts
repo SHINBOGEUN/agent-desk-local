@@ -13,7 +13,7 @@ import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
 import { addMemory, planRuntimes, RUNTIME_MODES, checkSkills, loadMemory, memoryFacts, memoryPath, newSuggestions, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
 import type { LoadedProject, RuntimeKind, RuntimeMode } from '#project';
-import { dataDirectory, executeRun, locate as locateExecutable, readMachineSettings, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, writeMachineSettings } from '#service';
+import { dataDirectory, dryRun, executeRun, locate as locateExecutable, runTriggerTest, readMachineSettings, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, writeMachineSettings } from '#service';
 import type { Found } from '#service';
 import { createServer } from '#server';
 import { EXIT_CODES, describeEvent, summarize } from './format.ts';
@@ -48,6 +48,10 @@ interface Parsed {
   maxMinutes?: number | undefined;
   port?: number | undefined;
   maxUsagePercent?: number | undefined;
+  images: string[];
+  noSkills: boolean;
+  dryRun: boolean;
+  skill?: string | undefined;
   help: boolean;
   errors: string[];
 }
@@ -55,7 +59,9 @@ interface Parsed {
 export const USAGE = `Usage:
   agent-desk run "<request>" [options]   run one request in a project
   agent-desk init [--project <dir>] [--yes]  look at a project and draft .agent-desk/ settings (writes only with --yes, never overwrites)
+  agent-desk resume <run id> [options]   continue a stopped run (its summary and unfinished requirements go to the new run)
   agent-desk skills check [--project <dir>]  check .agent-desk/skills/*/SKILL.md structure and descriptions
+  agent-desk skills trigger-test [--skill <id>] [--runtime codex|claude]  ask the model which skills it would pick for each case in .agent-desk/skills/<id>/triggers.json
   agent-desk memory [add "<fact>"]          show project memory, or add a fact to .agent-desk/memory.md
   agent-desk show [<run id>]             list recent runs, or show one run's gates, redo reasons and reports
   agent-desk revert <run id> [--yes]     undo a run's file changes (shows the plan first; --yes applies it)
@@ -66,18 +72,21 @@ Options for run:
   --project <dir>       project folder (default: current folder)
   --unattended          never ask questions; a needed answer ends the run as needs_user
   --verify "<command>"  command the harness runs itself (repeatable; overrides config)
-  --review <policy>     always | auto | never
+  --review <policy>     always | auto | never | self (self: the builder checks its own work, for comparison)
   --mode <mode>         codex | claude | codex+claude | claude+codex (builder+reviewer; default from config, else codex+claude)
   --runtime <kind>      one runtime for every role (codex | claude | fake); wins over --mode
   --max-tokens <n>      stop when total tokens exceed n (resumable)
   --max-minutes <n>     stop after n minutes (resumable)
   --max-usage-percent <n>  stop when the 5-hour Codex limit grows by n percentage points during the run
+  --image <file>        attach an image (png, jpg, webp, gif; repeatable, up to 4)
+  --no-skills           run without the project's skills (for the skill on/off comparison)
+  --dry-run             show the team, checks and skills this run would use, without starting a model
   --json                print the full result as JSON
 
 Exit codes: 0 completed, 1 failed, 2 needs_review, 3 needs_user, 4 interrupted, 64 usage error`;
 
 export function parseArgs(argv: string[]): Parsed {
-  const parsed: Parsed = { command: '', request: '', unattended: false, json: false, yes: false, verify: [], help: false, errors: [] };
+  const parsed: Parsed = { command: '', request: '', unattended: false, json: false, yes: false, verify: [], images: [], noSkills: false, dryRun: false, help: false, errors: [] };
   const rest: string[] = [];
   const value = (index: number, flag: string): string | undefined => {
     const next = argv[index + 1];
@@ -97,6 +106,10 @@ export function parseArgs(argv: string[]): Parsed {
       case '--unattended': parsed.unattended = true; break;
       case '--json': parsed.json = true; break;
       case '--yes': parsed.yes = true; break;
+      case '--no-skills': parsed.noSkills = true; break;
+      case '--dry-run': parsed.dryRun = true; break;
+      case '--image': { const v = value(i, arg); if (v) parsed.images.push(v); i++; break; }
+      case '--skill': parsed.skill = value(i, arg); i++; break;
       case '--project': parsed.project = value(i, arg); i++; break;
       case '--verify': { const v = value(i, arg); if (v) parsed.verify.push(v); i++; break; }
       case '--max-tokens': parsed.maxTokens = number(value(i, arg), arg); i++; break;
@@ -106,7 +119,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--mode': { const v = value(i, arg); if (v && (RUNTIME_MODES as readonly string[]).includes(v)) parsed.mode = v as RuntimeMode; else if (v) parsed.errors.push(`--mode expects ${RUNTIME_MODES.join(', ')}`); i++; break; }
       case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
       case '--language': { const v = value(i, arg); if (v === 'en' || v === 'ko') parsed.language = v; else if (v) parsed.errors.push('--language expects en or ko'); i++; break; }
-      case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto or never'); i++; break; }
+      case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never' || v === 'self') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto, never or self'); i++; break; }
       default:
         if (arg.startsWith('--')) parsed.errors.push(`unknown option ${arg}`);
         else rest.push(arg);
@@ -129,6 +142,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   const project = path.resolve(deps.cwd, parsed.project ?? '.');
   if (parsed.command === 'doctor') return doctor(parsed, project, deps);
   if (parsed.command === 'run') return run(parsed, project, deps);
+  if (parsed.command === 'resume') return resume(parsed, deps);
   if (parsed.command === 'show') return show(parsed, deps);
   if (parsed.command === 'serve') return serve(parsed, deps);
   if (parsed.command === 'revert') return revert(parsed, deps);
@@ -223,8 +237,34 @@ function suggestVerify(project: string): string {
   return '';
 }
 
-async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
-  if (!parsed.request) { deps.err(`run needs a request\n\n${USAGE}\n`); return 64; }
+async function resume(parsed: Parsed, deps: CliDeps): Promise<number> {
+  const runId = Number(parsed.request);
+  const dbFile = path.join(dataDirectory(deps.env, deps.platform), 'agent-desk.db');
+  if (!Number.isInteger(runId) || !fs.existsSync(dbFile)) { deps.err('usage: agent-desk resume <run id>\n'); return 64; }
+  const store = new RunStore(dbFile);
+  let row;
+  try { row = store.getRun(runId); } finally { store.close(); }
+  if (!row) { deps.err(`run ${runId} not found\n`); return 64; }
+  if (row.status === 'running') { deps.err(`run ${runId} is still running\n`); return 64; }
+  return run({ ...parsed, request: row.request }, row.project, deps, runId);
+}
+
+async function run(parsed: Parsed, project: string, deps: CliDeps, resumeOf?: number): Promise<number> {
+  if (!parsed.request && !parsed.dryRun) { deps.err(`run needs a request\n\n${USAGE}\n`); return 64; }
+  if (parsed.dryRun) {
+    const report = dryRun({ project, env: deps.env, platform: deps.platform, runtime: parsed.runtime, mode: parsed.mode, review: parsed.review, language: parsed.language, verify: parsed.verify, noSkills: parsed.noSkills });
+    if (parsed.json) { deps.out(`${JSON.stringify(report, null, 2)}\n`); return report.problems.length ? 1 : 0; }
+    deps.out(`Dry run (no model is started)\nProject: ${report.project}\nTeam: ${report.mode}\n`);
+    for (const [role, kind] of Object.entries(report.runtimes)) deps.out(`  ${role.padEnd(10)} ${kind}${report.models[role] ? ` (${report.models[role]})` : ''}${report.skills[role]?.length ? `  skills: ${report.skills[role]!.map(skill => skill.id).join(', ')}` : ''}\n`);
+    deps.out(`Review: ${report.review}\nVerify: ${report.verify.join(', ') || '(none)'}\nRole files: ${report.roleFiles}\nProject memory: ${report.memoryChars} characters\n`);
+    for (const note of report.notes) deps.out(`note: ${note}\n`);
+    for (const problem of report.problems) deps.out(`PROBLEM: ${problem}\n`);
+    return report.problems.length ? 1 : 0;
+  }
+  const images = parsed.images.map(file => path.resolve(deps.cwd, file));
+  const badImage = images.find(file => !/\.(png|jpe?g|webp|gif)$/i.test(file) || !fs.existsSync(file));
+  if (badImage) { deps.err(`not an image file: ${badImage}\n`); return 64; }
+  if (images.length > 4) { deps.err('at most 4 images\n'); return 64; }
   const interactive = !parsed.unattended ? deps.ask : undefined;
   const outcome = await executeRun({
     project,
@@ -234,6 +274,9 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     createRuntime: deps.createRuntime,
     runtime: parsed.runtime,
     mode: parsed.mode,
+    images,
+    noSkills: parsed.noSkills,
+    resumeOf,
     verify: parsed.verify,
     review: parsed.review,
     language: parsed.language,
@@ -259,7 +302,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     } else deps.out('Add one with: agent-desk memory add "<fact>"\n');
   }
   if (result.restorePoint && (result.status === 'needs_review' || result.status === 'failed')) deps.err(`To undo this run's file changes: agent-desk revert ${runId}\n`);
-  if (result.resume) deps.err(`resumable: ${JSON.stringify(result.resume)}\n`);
+  if (result.resume || result.status === 'interrupted') deps.err(`To continue this run: agent-desk resume ${runId}\n`);
   return EXIT_CODES[result.status] ?? 1;
 }
 
@@ -326,9 +369,26 @@ async function memory(parsed: Parsed, project: string, deps: CliDeps): Promise<n
 }
 
 async function skills(parsed: Parsed, project: string, deps: CliDeps): Promise<number> {
-  if (parsed.request !== 'check') { deps.err(`usage: agent-desk skills check [--project <dir>]\n`); return 64; }
+  if (parsed.request !== 'check' && parsed.request !== 'trigger-test') { deps.err(`usage: agent-desk skills check|trigger-test [--project <dir>]\n`); return 64; }
   const loaded = loadProject(project);
   if (loaded.errors.length) { deps.err(`${loaded.errors.join('\n')}\n`); return 64; }
+  if (parsed.request === 'trigger-test') {
+    const report = checkSkills(project, loaded.config, loaded.roles);
+    if (!report.skills.length) { deps.err('no skills in this project\n'); return 64; }
+    const kind: RuntimeKind = parsed.runtime ?? planRuntimes(loaded.config, { mode: parsed.mode }).primary;
+    let command: string | undefined;
+    if (kind !== 'fake') {
+      const found = locate(kind, deps, readMachineSettings(dataDirectory(deps.env, deps.platform)));
+      if (!found) { deps.err(`${kind} was not found; run "agent-desk doctor"\n`); return 1; }
+      command = found.path;
+    }
+    const results = await runTriggerTest({ project, runtime: deps.createRuntime(kind, command), skills: report.skills, ...(parsed.skill ? { only: [parsed.skill] } : {}), ...(deps.signal ? { signal: deps.signal } : {}),
+      onCase: (id, result) => deps.err(`${result.picked === result.expected ? 'ok  ' : 'MISS'} ${id} ${result.expected ? 'should' : 'should not'}: ${result.request.slice(0, 70)}${result.chosen.length ? `  -> ${result.chosen.join(', ')}` : ''}\n`) });
+    if (parsed.json) { deps.out(`${JSON.stringify(results, null, 2)}\n`); return 0; }
+    const pct = (value: number | null): string => (value === null ? '-' : `${Math.round(value * 100)}%`);
+    for (const result of results) deps.out(result.missing ? `${result.id}: skipped (${result.missing})\n` : `${result.id}: picked when it should ${pct(result.hitRate)}, picked when it should not ${pct(result.falseRate)} (${result.cases.length} cases)\n`);
+    return 0;
+  }
   const report = checkSkills(project, loaded.config, loaded.roles);
   deps.out(`${report.skills.length} skill(s) in ${path.join(project, '.agent-desk', 'skills')}\n`);
   for (const finding of report.findings) deps.out(`${finding.level.toUpperCase().padEnd(5)} ${finding.skill}: ${finding.message}\n`);

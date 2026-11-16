@@ -7,7 +7,7 @@
 //
 //   node bench/run.mjs --label v1-13 [--adapter v1] [--set standard|hard|python|web|general|all] [--tasks T01,T05] [--repeat 1]
 //                      [--url http://127.0.0.1:4317] [--timeout-min 40]
-//                      [v2 only: --review always|auto|never] [--runtime codex] [--mode codex+claude] [--verify "npm test"] [--max-tokens N] [--max-minutes N]
+//                      [v2 only: --review always|auto|never] [--runtime codex] [--mode codex+claude] [--no-skills] [--verify "npm test"] [--max-tokens N] [--max-minutes N]
 //                      [--usage-limit 20] [--work-dir <dir>] [--results-dir <dir>]
 //
 // Results are written to bench/results/runs/<label>/<task>-r<n>.json. Existing
@@ -39,6 +39,7 @@ export function parseArgs(argv) {
     else if (key === 'review') options.review = value;
     else if (key === 'runtime') options.runtime = value;
     else if (key === 'mode') options.mode = value;
+    else if (key === 'no-skills') { options.noSkills = true; index--; }
     else if (key === 'verify') (options.verify ||= []).push(value);
     else if (key === 'max-tokens') options.maxTokens = Number(value);
     else if (key === 'max-minutes') options.maxMinutes = Number(value);
@@ -48,7 +49,7 @@ export function parseArgs(argv) {
   if (!Object.keys(SET_PATTERNS).includes(options.set)) throw new Error(`--set must be one of: ${Object.keys(SET_PATTERNS).join(', ')}`);
   if (!options.label || !/^[\w.-]{1,60}$/.test(options.label)) throw new Error('--label is required (letters, digits, . _ -)');
   if (!ADAPTERS.includes(options.adapter)) throw new Error(`--adapter must be one of: ${ADAPTERS.join(', ')}`);
-  if (options.review && !['always', 'auto', 'never'].includes(options.review)) throw new Error('--review must be always, auto or never');
+  if (options.review && !['always', 'auto', 'never', 'self'].includes(options.review)) throw new Error('--review must be always, auto, never or self');
   if (!Number.isInteger(options.repeat) || options.repeat < 1) throw new Error('--repeat must be a positive integer');
   return options;
 }
@@ -56,7 +57,7 @@ export function parseArgs(argv) {
 async function loadAdapter(options) {
   const file = path.join(benchDirectory, 'adapters', `${options.adapter}.mjs`);
   const { createAdapter } = await import(pathToFileURL(file).href);
-  return createAdapter({ url: options.url, pollMs: options.pollMs, ...(options.adapter === 'v2' ? { cli: options.cli, review: options.review, runtime: options.runtime, mode: options.mode, verify: options.verify, maxTokens: options.maxTokens, maxMinutes: options.maxMinutes } : {}) });
+  return createAdapter({ url: options.url, pollMs: options.pollMs, ...(options.adapter === 'v2' ? { cli: options.cli, review: options.review, runtime: options.runtime, mode: options.mode, noSkills: options.noSkills, verify: options.verify, maxTokens: options.maxTokens, maxMinutes: options.maxMinutes } : {}) });
 }
 
 async function executeTask(adapter, task, attempt, options, log) {
@@ -71,6 +72,7 @@ async function executeTask(adapter, task, attempt, options, log) {
     adapter: adapter.name,
     taskId: task.id,
     category: task.category,
+    expectedWorkflows: task.expectedWorkflows,
     attempt,
     runId: run.runId,
     projectId: run.projectId,

@@ -136,7 +136,7 @@ test('an empty database is created with the schema and a newer schema is refused
   const file = path.join(tmp(), 'a.sqlite');
   new RunStore(file).close();
   const raw = new DatabaseSync(file);
-  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 2);
+  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 3);
   raw.exec('PRAGMA user_version = 99');
   raw.close();
   assert.throws(() => new RunStore(file), /newer than this program supports/);

@@ -92,7 +92,8 @@ export function checkSkills(project: string, config: ProjectConfig, roles?: Part
     }
     const referenced = referencedFiles(parsed.body);
     for (const ref of referenced) if (!fs.existsSync(path.join(directory, ...ref.split('/')))) add('error', id, `body refers to "${ref}" which does not exist`);
-    const others = listFiles(directory).filter(rel => rel !== 'SKILL.md');
+    // triggers.json holds trigger-test cases for the harness (skills trigger-test), not material for the model.
+    const others = listFiles(directory).filter(rel => rel !== 'SKILL.md' && rel !== 'triggers.json');
     for (const rel of others) if (!referenced.includes(rel)) add('warn', id, `"${rel}" is never mentioned in SKILL.md, so it would never be read`);
     skills.push({ id, description, path: path.relative(project, file).split(path.sep).join('/') });
   }
