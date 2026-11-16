@@ -183,3 +183,29 @@ export function minutesUntil(resetsAtSeconds: number | null, nowMs: number): num
   const minutes = Math.round((resetsAtSeconds * 1000 - nowMs) / 60000);
   return minutes > 0 ? minutes : null;
 }
+
+export interface BenchTask { runs: number; success: number; meanTokens: number | null; meanAgents: number | null; meanMinutes: number | null }
+export interface BenchSummary {
+  label: string; enabledAgents: number | null; runs: number; excluded: number;
+  successRate: number | null; claimedRate: number | null; falseCompletionRate: number | null;
+  meanTokens: number | null; medianTokens: number | null; meanAgents: number | null; meanMinutes: number | null; meanAccountPercent: number | null;
+  perTask: Record<string, BenchTask>;
+}
+export interface BenchSet { id: 'standard' | 'hard'; baseline: BenchSummary | null; challengers: BenchSummary[] }
+
+/** Groups results by task set ("-hard" labels are the hard set) and picks the v1 label as the baseline. Only sets with something to show are returned. */
+export function benchSets(summaries: BenchSummary[]): BenchSet[] {
+  const sets: BenchSet[] = [];
+  for (const id of ['standard', 'hard'] as const) {
+    const members = summaries.filter(summary => summary.label.endsWith('-hard') === (id === 'hard'));
+    if (!members.length) continue;
+    sets.push({ id, baseline: members.find(summary => summary.label.startsWith('v1')) ?? null, challengers: members.filter(summary => !summary.label.startsWith('v1')) });
+  }
+  return sets;
+}
+
+/** Change from before to after in percent, rounded; null when either side is missing or the baseline is zero. */
+export function changePercent(before: number | null, after: number | null): number | null {
+  if (before === null || after === null || before === 0) return null;
+  return Math.round(((after - before) / before) * 100);
+}

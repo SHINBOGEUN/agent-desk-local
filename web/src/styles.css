@@ -78,3 +78,18 @@ h2 { font-size: 16px; font-weight: 500; margin: 0; }
 .roles { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .roles th, .roles td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 0.5px solid var(--line); }
 .roles th { color: var(--muted); font-weight: 400; font-size: 12px; }
+.tabs { display: flex; gap: 4px; margin-left: 16px; }
+.tabs button { padding: 2px 12px; font-size: 13px; border-color: transparent; }
+.tabs button.on { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+main.single { grid-template-columns: minmax(0, 1fr); }
+.bars { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; }
+.bar-row { display: grid; grid-template-columns: 150px 1fr 70px; gap: 8px; align-items: center; }
+.bar-row .bar { margin-top: 0; height: 10px; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-value { text-align: right; color: var(--muted); }
+.bench td, .bench th { padding-right: 16px; }
+.fill.tone-neutral { background: var(--muted); }
+.fill.tone-accent { background: var(--accent); }
+.fill.tone-success { background: var(--ok); }
+.fill.tone-warning { background: var(--warn); }
+.fill.tone-danger { background: var(--bad); }

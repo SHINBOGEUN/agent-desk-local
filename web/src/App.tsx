@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { applyEvents, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
-import type { GateResult, Timeline } from './model.ts';
+import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
+import type { BenchSet, BenchSummary, GateResult, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, remainingText, translate, useI18n } from './i18n.ts';
 import type { I18n, Lang } from './i18n.ts';
 
@@ -361,6 +361,84 @@ function RunView({ runId, active, onFinished }: { runId: number; active: ActiveR
   );
 }
 
+const percentText = (value: number | null): string => (value === null ? '-' : `${Math.round(value * 100)}%`);
+const changeText = (change: number | null): string => (change === null ? '-' : `${change > 0 ? '+' : ''}${change}%`);
+
+function BenchBars({ rows, format }: { rows: { label: string; value: number | null }[]; format: (value: number) => string }) {
+  const top = Math.max(...rows.map(row => row.value ?? 0), 1);
+  return (
+    <div className="bars">
+      {rows.map(row => (
+        <div key={row.label} className="bar-row">
+          <span className="bar-label">{row.label}</span>
+          <div className="bar"><div className={`fill tone-${row.label.startsWith('v1') ? 'neutral' : 'accent'}`} style={{ width: `${((row.value ?? 0) / top) * 100}%` }} /></div>
+          <span className="bar-value">{row.value === null ? '-' : format(row.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BenchSetCard({ set }: { set: BenchSet }) {
+  const { t } = useI18n();
+  const { baseline, challengers } = set;
+  const all: BenchSummary[] = baseline ? [baseline, ...challengers] : challengers;
+  const first = challengers[0];
+  const metrics: { label: string; read: (summary: BenchSummary) => number | null; show: (value: number | null) => string; compare: boolean }[] = [
+    { label: t('mRuns'), read: s => s.runs, show: v => (v === null ? '-' : String(v)), compare: false },
+    { label: t('mSuccess'), read: s => s.successRate, show: percentText, compare: false },
+    { label: t('mFalse'), read: s => s.falseCompletionRate, show: percentText, compare: false },
+    { label: t('mTokens'), read: s => s.meanTokens, show: v => (v === null ? '-' : formatTokens(Math.round(v))), compare: true },
+    { label: t('mMinutes'), read: s => s.meanMinutes, show: v => (v === null ? '-' : v.toFixed(1)), compare: true },
+    { label: t('mAgents'), read: s => s.meanAgents, show: v => (v === null ? '-' : v.toFixed(1)), compare: true },
+  ];
+  const taskIds = [...new Set(all.flatMap(summary => Object.keys(summary.perTask)))].sort();
+  return (
+    <div className="card">
+      <h2>{set.id === 'hard' ? t('benchHard') : t('benchStandard')}</h2>
+      {!baseline ? <p className="muted">{t('benchNoBaseline')}</p> : null}
+      <table className="roles bench">
+        <thead><tr><th />{all.map(summary => <th key={summary.label}>{summary.label}</th>)}{baseline && first ? <th>{t('changeLabel')}</th> : null}</tr></thead>
+        <tbody>{metrics.map(metric => (
+          <tr key={metric.label}>
+            <td>{metric.label}</td>
+            {all.map(summary => <td key={summary.label}>{metric.show(metric.read(summary))}</td>)}
+            {baseline && first ? <td>{metric.compare ? changeText(changePercent(metric.read(baseline), metric.read(first))) : ''}</td> : null}
+          </tr>
+        ))}</tbody>
+      </table>
+      <div className="label muted">{t('mTokens')}</div>
+      <BenchBars rows={all.map(summary => ({ label: summary.label, value: summary.meanTokens }))} format={value => formatTokens(Math.round(value))} />
+      <div className="label muted">{t('mMinutes')}</div>
+      <BenchBars rows={all.map(summary => ({ label: summary.label, value: summary.meanMinutes }))} format={value => value.toFixed(1)} />
+      <details className="project-info">
+        <summary>{t('perTask')}</summary>
+        <table className="roles">
+          <thead><tr><th />{all.map(summary => <th key={summary.label}>{summary.label}</th>)}</tr></thead>
+          <tbody>{taskIds.map(id => <tr key={id}><td>{id}</td>{all.map(summary => { const task = summary.perTask[id]; return <td key={summary.label}>{task ? `${task.success}/${task.runs} · ${task.meanTokens === null ? '-' : formatTokens(Math.round(task.meanTokens))}` : '-'}</td>; })}</tr>)}</tbody>
+        </table>
+      </details>
+    </div>
+  );
+}
+
+function BenchmarkView() {
+  const { t } = useI18n();
+  const [summaries, setSummaries] = useState<BenchSummary[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { api.bench().then(result => setSummaries(result.summaries)).catch((caught: unknown) => setError(errorText(caught))); }, []);
+  if (error) return <p className="error">{error}</p>;
+  if (!summaries) return null;
+  const sets = benchSets(summaries);
+  return (
+    <div className="stack bench-view">
+      <div className="card"><h2>{t('benchTitle')}</h2><p className="prose">{t('benchIntro')}</p></div>
+      {sets.length ? sets.map(set => <BenchSetCard key={set.id} set={set} />) : <div className="card muted">{t('benchEmpty')}</div>}
+      {sets.length ? <p className="muted">{t('benchCaveat')}</p> : null}
+    </div>
+  );
+}
+
 export function App() {
   const [lang, setLangState] = useState<Lang>(() => { let stored: string | null = null; try { stored = localStorage.getItem('agent-desk.lang'); } catch { /* storage may be unavailable */ } return detectLanguage(stored, navigator.language); });
   const setLang = (next: Lang): void => { setLangState(next); try { localStorage.setItem('agent-desk.lang', next); } catch { /* storage may be unavailable */ } };
@@ -369,6 +447,7 @@ export function App() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<'runs' | 'bench'>('runs');
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -391,13 +470,14 @@ export function App() {
     <I18nContext.Provider value={i18n}>
     <div className="shell">
       <header><strong>Agent Desk</strong><span className="muted">v2</span>
+        <nav className="tabs"><button className={tab === 'runs' ? 'on' : ''} onClick={() => setTab('runs')}>{i18n.t('tabRuns')}</button><button className={tab === 'bench' ? 'on' : ''} onClick={() => setTab('bench')}>{i18n.t('tabBench')}</button></nav>
         <span className="push lang" role="group" aria-label={i18n.t('language')}>
           <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>English</button>
           <button className={lang === 'ko' ? 'on' : ''} onClick={() => setLang('ko')}>한국어</button>
         </span>
       </header>
       {error ? <p className="error banner">{i18n.t('serverDown')}: {error}</p> : null}
-      <main>
+      {tab === 'bench' ? <main className="single"><BenchmarkView /></main> : <main>
         <section className="column">
           <UsageGauge />
           <StartForm active={active} onStarted={start} />
@@ -406,7 +486,7 @@ export function App() {
         <section className="column wide">
           {selected !== null ? <RunView key={selected} runId={selected} active={active} onFinished={() => { void refresh(); }} /> : <div className="card muted">{i18n.t('selectRun')}</div>}
         </section>
-      </main>
+      </main>}
     </div>
     </I18nContext.Provider>
   );

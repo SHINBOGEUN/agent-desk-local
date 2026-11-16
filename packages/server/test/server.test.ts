@@ -206,3 +206,31 @@ test('usage endpoint reports the Codex window, and says why when it cannot', asy
     assert.match(answer.reason, /offline/);
   } finally { await broken.close(); }
 });
+
+test('bench endpoint summarizes saved benchmark runs and skips environment failures', async () => {
+  const runs = tmp();
+  const label = path.join(runs, 'v2-x');
+  fs.mkdirSync(label);
+  const result = (taskId: string, success: boolean, tokens: number, extra: object = {}) => JSON.stringify({ taskId, claimedSuccess: true, grade: { success }, falseCompletion: !success, metrics: { usage: { totalTokens: tokens }, durationSec: 60, agentCount: 2 }, ...extra });
+  fs.writeFileSync(path.join(label, 'T01-r1.json'), result('T01', true, 100));
+  fs.writeFileSync(path.join(label, 'T01-r2.json'), result('T01', false, 300));
+  fs.writeFileSync(path.join(label, 'T02-r1.json'), result('T02', true, 999, { cancelReason: 'blocked_on_approval' }));
+  fs.writeFileSync(path.join(label, '_config.json'), JSON.stringify({ agents: [{ enabled: true }, { enabled: true }, { enabled: false }] }));
+  const server = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, benchDir: runs });
+  const { port } = await server.listen();
+  try {
+    const { summaries } = JSON.parse((await call(port, 'GET', '/api/bench')).body) as { summaries: { label: string; runs: number; excluded: number; successRate: number; meanTokens: number; enabledAgents: number; meanMinutes: number; perTask: Record<string, { success: number }> }[] };
+    assert.equal(summaries.length, 1);
+    const [summary] = summaries;
+    assert.equal(summary!.runs, 2);
+    assert.equal(summary!.excluded, 1);
+    assert.equal(summary!.successRate, 0.5);
+    assert.equal(summary!.meanTokens, 200);
+    assert.equal(summary!.enabledAgents, 2);
+    assert.equal(summary!.meanMinutes, 1);
+    assert.equal(summary!.perTask.T01!.success, 1);
+  } finally { await server.close(); }
+  const empty = createServer({ env: { AGENT_DESK_HOME: tmp() }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0 });
+  const second = await empty.listen();
+  try { assert.deepEqual(JSON.parse((await call(second.port, 'GET', '/api/bench')).body), { summaries: [] }); } finally { await empty.close(); }
+});

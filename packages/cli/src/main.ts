@@ -280,7 +280,8 @@ async function show(parsed: Parsed, deps: CliDeps): Promise<number> {
 
 async function serve(parsed: Parsed, deps: CliDeps): Promise<number> {
   const staticDir = deps.env.AGENT_DESK_WEB || fileURLToPath(new URL('../../../web/dist', import.meta.url));
-  const server = createServer({ env: deps.env, platform: deps.platform, createRuntime: deps.createRuntime, port: parsed.port ?? Number(deps.env.AGENT_DESK_PORT || 4317), ...(fs.existsSync(staticDir) ? { staticDir } : {}) });
+  const benchDir = deps.env.AGENT_DESK_BENCH || fileURLToPath(new URL('../../../bench/results/runs', import.meta.url));
+  const server = createServer({ env: deps.env, platform: deps.platform, createRuntime: deps.createRuntime, port: parsed.port ?? Number(deps.env.AGENT_DESK_PORT || 4317), ...(fs.existsSync(staticDir) ? { staticDir } : {}), ...(fs.existsSync(benchDir) ? { benchDir } : {}) });
   try {
     const { port } = await server.listen();
     deps.out(`agent-desk server listening on http://127.0.0.1:${port} (Ctrl+C to stop)\n`);

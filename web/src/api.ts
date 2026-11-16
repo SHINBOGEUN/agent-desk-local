@@ -1,6 +1,6 @@
 // Thin client for the local Agent Desk server. Every POST carries the per-start token from /api/state.
 
-import type { StoredEvent } from './model.ts';
+import type { BenchSummary, StoredEvent } from './model.ts';
 
 export interface RunRow {
   id: number;
@@ -74,6 +74,7 @@ export const api = {
   runs: (project?: string): Promise<{ runs: RunRow[] }> => request('GET', `/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
   run: (id: number): Promise<RunDetail> => request('GET', `/api/runs/${id}`),
   pickFolder: (start: string, title: string): Promise<{ supported: boolean; path?: string | null }> => request('POST', '/api/pick-folder', { start, title }),
+  bench: (): Promise<{ summaries: BenchSummary[] }> => request('GET', '/api/bench'),
   usage: (): Promise<UsageInfo> => request('GET', '/api/usage'),
   folder: (path: string): Promise<FolderListing> => request('GET', `/api/fs?path=${encodeURIComponent(path)}`),
   project: (path: string): Promise<ProjectInfo> => request('GET', `/api/project?path=${encodeURIComponent(path)}`),

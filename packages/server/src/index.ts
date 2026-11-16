@@ -15,6 +15,7 @@ import { checkSkills, loadMemory, loadProject, memoryFacts } from '#project';
 import type { RuntimeKind } from '#project';
 import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
+import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
 import type { PickResult } from './pick-folder.ts';
 import { RunStore, redactSecrets } from '#store';
@@ -31,6 +32,8 @@ export interface ServerOptions {
   staticDir?: string;
   /** Opens the OS folder dialog (tests replace it). Default: the native dialog on Windows and macOS. */
   pickFolder?: (startPath: string, title: string) => Promise<PickResult>;
+  /** Folder with saved benchmark runs (bench/results/runs). Omitted: the benchmark screen is empty. */
+  benchDir?: string;
   /** Reads the Codex account rate limits (tests replace it). Default: a short-lived Codex app-server. */
   readRateLimits?: () => Promise<unknown>;
 }
@@ -223,6 +226,7 @@ export function createServer(options: ServerOptions): LocalServer {
       if (result.supported && result.path && (!path.isAbsolute(result.path) || !fs.existsSync(result.path))) throw new HttpError(400, 'the chosen folder does not exist');
       return send(res, 200, result);
     }
+    if (method === 'GET' && p === '/api/bench') return send(res, 200, { summaries: options.benchDir ? summarizeBench(options.benchDir) : [] });
     if (method === 'GET' && p === '/api/usage') return send(res, 200, await codexLimits());
     if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);

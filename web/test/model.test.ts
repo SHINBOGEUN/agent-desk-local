@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
+import { benchSets, changePercent, minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -76,4 +76,14 @@ test('role summary adds time and tokens per role and keeps unknown usage apart',
   assert.equal(minutesUntil(1000 + 600, 1000 * 1000), 10);
   assert.equal(minutesUntil(null, 0), null);
   assert.equal(minutesUntil(10, 20_000), null);
+});
+
+test('bench sets pair v1 with v2 inside the same task set and compute changes', () => {
+  const summary = (label: string, meanTokens: number) => ({ label, enabledAgents: null, runs: 1, excluded: 0, successRate: 1, claimedRate: 1, falseCompletionRate: 0, meanTokens, medianTokens: meanTokens, meanAgents: 2, meanMinutes: 1, meanAccountPercent: null, perTask: {} });
+  const sets = benchSets([summary('v1-13', 600), summary('v1-13-hard', 1100), summary('v2-codex-auto', 200), summary('v2-codex-auto-hard', 500)]);
+  assert.deepEqual(sets.map(set => [set.id, set.baseline?.label, set.challengers.map(item => item.label)]), [['standard', 'v1-13', ['v2-codex-auto']], ['hard', 'v1-13-hard', ['v2-codex-auto-hard']]]);
+  assert.equal(changePercent(600, 200), -67);
+  assert.equal(changePercent(0, 5), null);
+  assert.equal(changePercent(null, 5), null);
+  assert.deepEqual(benchSets([summary('v2-only', 1)]).map(set => [set.id, set.baseline]), [['standard', null]]);
 });
