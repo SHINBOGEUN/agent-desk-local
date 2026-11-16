@@ -1,11 +1,26 @@
-<!-- 이 파일은 Claude 문서 "Agent Desk v2 전체 설계서"(개정 4, 2026-11-16)를 마크다운으로 내보낸 사본입니다. 원본: https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6
+<!-- 이 파일은 Claude 문서 "Agent Desk v2 전체 설계서"(개정 5, 2026-11-17)를 마크다운으로 내보낸 사본입니다. 원본: https://claude.ai/artifact/YJkaS7TK9NDkcNdCEecBb6
      내보내기에서 그림(실행 흐름 도식) 1개가 빠졌고, 날짜·멘션 칩은 글자로 바뀌었습니다. 설계를 바꾸면 이 사본과 원본을 함께 고치고, 바꾼 이유는 docs/adr/에 남깁니다. -->
 
 # Agent Desk v2 전체 설계서
 
-Nov 16, 2026 (개정 4) · @bogeun
+Nov 17, 2026 (개정 5) · @bogeun
 
 v2는 코드가 작업 순서와 완료 판정을 결정하고, 모델은 교체 가능한 런타임(Codex·Claude)으로 작업만 하는 로컬 하네스입니다. TypeScript, 같은 저장소의 `legacy/` 분리, 대시보드 신규 작성을 전제로 합니다.
+
+## 개정 5에서 바뀐 것
+
+설계서에는 있었지만 구현되지 않았던 부분과 책 대비 비어 있던 검증 절차를 채웠습니다. 근거는 [ADR 0010](adr/0010-run-settings-resume-self-check.md)에 있습니다.
+
+| 구분 | 변경 |
+| --- | --- |
+| 구현 | 실행 설정 기록(Run마다 모드·역할별 런타임·리뷰 정책·verify·스킬·모델·한도를 저장), 이어하기(`resume`, 대시보드 "이어서 하기"), 프로젝트 메모 제안을 대시보드에서 승인 |
+| 구현 | 대시보드에서 `config.json`·역할 파일·스킬을 직접 편집. 저장 전에 하네스와 같은 규칙으로 검사하고 실패하면 쓰지 않음 |
+| 추가 | 이미지 첨부(요청당 4장·장당 5MB, Codex·Claude 모두 전달, 리뷰에는 붙이지 않음) |
+| 추가 | 리뷰 정책 `self`(측정용): builder가 같은 세션에서 자기 작업을 점검. "두 명이 한 번씩"과 비교하는 대상 |
+| 추가 | 런타임 대체: 팀을 지정하지 않은 Run은 Codex 5시간 사용률이 `limits.switchAtCodexPercent`(기본 95) 이상이면 Claude가 Codex 역할을 맡음 |
+| 추가 | `init`이 스킬 초안 2개(`verify-before-report`, `review-checklist`)를 만들고 역할 파일에 연결 |
+| 추가 | 책의 검증 절차: `run --dry-run`, `skills trigger-test`(스킬 폴더의 `triggers.json`), `--no-skills` 비교, 벤치 분류 정확도, 실패 분석 보고서(`bench/failures.mjs`) |
+| 추가 | 원클릭 실행(`Start-AgentDesk.cmd`), 질문 대기 알림, Claude 사용량(이 PC에서 Agent Desk가 쓴 양) |
 
 ## 개정 4에서 바뀐 것
 
