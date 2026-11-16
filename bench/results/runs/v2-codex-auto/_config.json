@@ -1,0 +1,34 @@
+{
+  "label": "v2-codex-auto",
+  "recordedAt": "2026-11-16T07:58:29.773Z",
+  "adapter": "v2",
+  "settings": {
+    "review": "auto",
+    "verify": [
+      "npm test"
+    ],
+    "maxTokens": null,
+    "maxMinutes": null,
+    "runtime": "config"
+  },
+  "agents": [
+    {
+      "id": "lead",
+      "name": "lead",
+      "enabled": true
+    },
+    {
+      "id": "builder",
+      "name": "builder",
+      "enabled": true
+    },
+    {
+      "id": "verifier",
+      "name": "verifier",
+      "enabled": true
+    }
+  ],
+  "skills": [],
+  "node": "v24.20.0",
+  "platform": "win32"
+}

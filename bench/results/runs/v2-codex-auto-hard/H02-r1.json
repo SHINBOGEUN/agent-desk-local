@@ -1,0 +1,91 @@
+{
+  "label": "v2-codex-auto-hard",
+  "adapter": "v2",
+  "taskId": "H02",
+  "category": "hard-fullstack",
+  "attempt": 1,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H02-r1-2026-11-16T08-23-55-690Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H02-r1-2026-11-16T08-23-55-690Z",
+  "startedAt": "2026-11-16T08:23:56.200Z",
+  "finishedAt": "2026-11-16T08:28:03.860Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 504150,
+      "inputTokens": 494742,
+      "cachedInputTokens": 445696,
+      "uncachedInputTokens": 49046,
+      "outputTokens": 9408
+    },
+    "accountPercent": null,
+    "durationSec": 247.66,
+    "agentCount": 2,
+    "agents": [
+      "builder",
+      "verifier"
+    ],
+    "workTasks": 16,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 7,
+        "tokens": 108785
+      },
+      "builder": {
+        "calls": 10,
+        "tokens": 230869
+      },
+      "verifier": {
+        "calls": 6,
+        "tokens": 164496
+      }
+    },
+    "redo": 0,
+    "reviewSkipped": null,
+    "unverified": 1,
+    "gates": [
+      "G2:ok",
+      "G2:ok",
+      "G2:ok",
+      "G3:ok",
+      "G4:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "public/style.css",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/render.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": ""
+}

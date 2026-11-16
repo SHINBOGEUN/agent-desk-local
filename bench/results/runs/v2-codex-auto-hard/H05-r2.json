@@ -1,0 +1,89 @@
+{
+  "label": "v2-codex-auto-hard",
+  "adapter": "v2",
+  "taskId": "H05",
+  "category": "hard-security",
+  "attempt": 2,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H05-r2-2026-11-16T08-58-36-084Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H05-r2-2026-11-16T08-58-36-084Z",
+  "startedAt": "2026-11-16T08:58:36.966Z",
+  "finishedAt": "2026-11-16T09:01:32.535Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 307787,
+      "inputTokens": 301513,
+      "cachedInputTokens": 271872,
+      "uncachedInputTokens": 29641,
+      "outputTokens": 6274
+    },
+    "accountPercent": null,
+    "durationSec": 175.569,
+    "agentCount": 2,
+    "agents": [
+      "builder",
+      "verifier"
+    ],
+    "workTasks": 10,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 7,
+        "tokens": 106802
+      },
+      "builder": {
+        "calls": 7,
+        "tokens": 139896
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 61089
+      }
+    },
+    "redo": 0,
+    "reviewSkipped": null,
+    "unverified": 1,
+    "gates": [
+      "G2:ok",
+      "G2:ok",
+      "G2:ok",
+      "G3:ok",
+      "G4:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "src/app.mjs",
+      "src/config.mjs",
+      "src/db.mjs",
+      "src/server.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": ""
+}

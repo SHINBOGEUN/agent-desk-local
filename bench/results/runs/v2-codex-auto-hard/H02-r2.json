@@ -1,0 +1,94 @@
+{
+  "label": "v2-codex-auto-hard",
+  "adapter": "v2",
+  "taskId": "H02",
+  "category": "hard-fullstack",
+  "attempt": 2,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H02-r2-2026-11-16T08-44-20-049Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H02-r2-2026-11-16T08-44-20-049Z",
+  "startedAt": "2026-11-16T08:44:20.618Z",
+  "finishedAt": "2026-11-16T08:49:38.305Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 759730,
+      "inputTokens": 748231,
+      "cachedInputTokens": 661888,
+      "uncachedInputTokens": 86343,
+      "outputTokens": 11499
+    },
+    "accountPercent": null,
+    "durationSec": 317.687,
+    "agentCount": 2,
+    "agents": [
+      "builder",
+      "verifier"
+    ],
+    "workTasks": 25,
+    "consultations": 0,
+    "retries": 1,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 7,
+        "tokens": 107944
+      },
+      "builder": {
+        "calls": 14,
+        "tokens": 342418
+      },
+      "verifier": {
+        "calls": 11,
+        "tokens": 309368
+      }
+    },
+    "redo": 1,
+    "reviewSkipped": null,
+    "unverified": 1,
+    "gates": [
+      "G2:ok",
+      "G2:ok",
+      "G2:ok",
+      "G3:ok",
+      "G4:fail",
+      "G2:ok",
+      "G3:ok",
+      "G4:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "public/style.css",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/render.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": ""
+}

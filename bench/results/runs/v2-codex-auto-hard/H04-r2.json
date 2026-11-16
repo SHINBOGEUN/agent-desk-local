@@ -1,0 +1,88 @@
+{
+  "label": "v2-codex-auto-hard",
+  "adapter": "v2",
+  "taskId": "H04",
+  "category": "hard-reliability",
+  "attempt": 2,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H04-r2-2026-11-16T08-52-14-845Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H04-r2-2026-11-16T08-52-14-845Z",
+  "startedAt": "2026-11-16T08:52:15.367Z",
+  "finishedAt": "2026-11-16T08:58:34.688Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "needs_review",
+    "endReason": "needs_review",
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 705445,
+      "inputTokens": 690479,
+      "cachedInputTokens": 638720,
+      "uncachedInputTokens": 51759,
+      "outputTokens": 14966
+    },
+    "accountPercent": null,
+    "durationSec": 379.321,
+    "agentCount": 2,
+    "agents": [
+      "builder",
+      "verifier"
+    ],
+    "workTasks": 25,
+    "consultations": 0,
+    "retries": 2,
+    "failedTasks": 0,
+    "verifierVerdicts": [],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 7,
+        "tokens": 105273
+      },
+      "builder": {
+        "calls": 21,
+        "tokens": 511733
+      },
+      "verifier": {
+        "calls": 4,
+        "tokens": 88439
+      }
+    },
+    "redo": 2,
+    "reviewSkipped": null,
+    "unverified": 1,
+    "gates": [
+      "G2:ok",
+      "G2:ok",
+      "G2:ok",
+      "G3:ok",
+      "G4:fail",
+      "G2:ok",
+      "G3:ok",
+      "G2:ok",
+      "G3:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": false,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": ""
+}

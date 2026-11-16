@@ -1,0 +1,57 @@
+{
+  "label": "v2-codex-auto",
+  "adapter": "v2",
+  "taskId": "T09",
+  "category": "question",
+  "attempt": 2,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto\\T09-r2-2026-11-16T08-11-52-633Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto\\T09-r2-2026-11-16T08-11-52-633Z",
+  "startedAt": "2026-11-16T08:11:53.163Z",
+  "finishedAt": "2026-11-16T08:12:06.352Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "not_required",
+    "usage": {
+      "totalTokens": 41972,
+      "inputTokens": 41709,
+      "cachedInputTokens": 36864,
+      "uncachedInputTokens": 4845,
+      "outputTokens": 263
+    },
+    "accountPercent": null,
+    "durationSec": 13.189,
+    "agentCount": 0,
+    "agents": [],
+    "workTasks": 0,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 3,
+        "tokens": 41972
+      }
+    },
+    "redo": 0,
+    "reviewSkipped": null,
+    "unverified": 0,
+    "gates": [
+      "G2:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [],
+    "missing": [],
+    "unexpectedChanges": []
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": "서버의 기본 포트는 3100이고 데이터 파일의 기본 경로는 `data/todos.json`입니다. 각각 `PORT`와 `DATA_FILE` 환경 변수로 변경할 수 있습니다."
+}

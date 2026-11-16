@@ -1,0 +1,90 @@
+{
+  "label": "v2-codex-auto-hard",
+  "adapter": "v2",
+  "taskId": "H01",
+  "category": "hard-fullstack",
+  "attempt": 3,
+  "runId": null,
+  "projectId": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H01-r3-2026-11-16T09-01-33-917Z",
+  "workspace": "C:\\Users\\SHINBO~1\\AppData\\Local\\Temp\\agent-desk-bench\\v2-codex-auto-hard\\H01-r3-2026-11-16T09-01-33-917Z",
+  "startedAt": "2026-11-16T09:01:34.424Z",
+  "finishedAt": "2026-11-16T09:04:57.703Z",
+  "cancelReason": null,
+  "metrics": {
+    "status": "completed",
+    "endReason": null,
+    "qualityGate": "passed",
+    "usage": {
+      "totalTokens": 370006,
+      "inputTokens": 363007,
+      "cachedInputTokens": 326656,
+      "uncachedInputTokens": 36351,
+      "outputTokens": 6999
+    },
+    "accountPercent": null,
+    "durationSec": 203.279,
+    "agentCount": 2,
+    "agents": [
+      "builder",
+      "verifier"
+    ],
+    "workTasks": 12,
+    "consultations": 0,
+    "retries": 0,
+    "failedTasks": 0,
+    "verifierVerdicts": [
+      "PASS"
+    ],
+    "requiredAgents": [],
+    "perAgent": {
+      "lead": {
+        "calls": 7,
+        "tokens": 107398
+      },
+      "builder": {
+        "calls": 9,
+        "tokens": 191524
+      },
+      "verifier": {
+        "calls": 3,
+        "tokens": 71084
+      }
+    },
+    "redo": 0,
+    "reviewSkipped": null,
+    "unverified": 1,
+    "gates": [
+      "G2:ok",
+      "G2:ok",
+      "G2:ok",
+      "G3:ok",
+      "G4:ok"
+    ]
+  },
+  "grade": {
+    "success": true,
+    "changedFiles": [
+      "public/app.js",
+      "public/index.html",
+      "public/render.js",
+      "src/app.mjs",
+      "src/db.mjs",
+      "test/app.test.mjs",
+      "test/render.test.mjs"
+    ],
+    "visible": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "passed": 0,
+      "failed": 0
+    }
+  },
+  "claimedSuccess": true,
+  "falseCompletion": false,
+  "falseVerifierPass": false,
+  "answer": ""
+}
