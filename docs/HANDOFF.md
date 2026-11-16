@@ -257,3 +257,5 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 
 - (25차) 런타임 모드(ADR 0009, 기본 codex+claude), 채팅형 대시보드와 디자인 개편 완료. PC에서 `npm run web:build` 후 확인 필요. 이전 v2 벤치와 같은 조건으로 재측정하려면 `--mode codex`를 붙일 것.
 - 다시 정리한 할 일 순서: A 런타임 조합(남은 것: 4모드 비교 측정, 한도 초과 시 대체, Claude 게이지 5-7) → B 책 대비 빈 곳(트리거 검증 6-4, 스킬 유무 비교, 실패 분석·개선 루프 6-5, 드라이런·시나리오 테스트, 기본 스킬 세트 여부) → C 3D 장면 5-5(React Three Fiber + 프리미티브 캐릭터) → D PC 실측 → E README·UI 메뉴얼.
+
+- (26차) ADR 0010 구현 완료. PC에서 확인할 것: `Start-AgentDesk.cmd` 실행, 대시보드 편집 저장, 이미지 첨부가 Codex·Claude에 실제로 전달되는지, 질문 알림. 측정: 3-5(`--review self` 대 always 대 never), 3-6(리포트의 분류 정확도), 6-4(`agent-desk skills trigger-test --project bench/samples/web-notes`), `--no-skills` 비교. 3D는 컨셉 시안 승인 대기.

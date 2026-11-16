@@ -96,3 +96,11 @@ node bench/run.mjs --label v1-13-hard --set hard --repeat 3    # v1 어려운 �
 - 검증: `node bench/validate-tasks.mjs`가 모든 샘플의 과제를 증명합니다(미해결 시 숨은 테스트 실패, 참조 해법 적용 시 통과).
 
 > 런타임 모드(ADR 0009): v2의 기본값이 `codex+claude`(Codex가 만들고 Claude가 검토)로 바뀌었습니다. 기존 `v2-codex*` 결과와 같은 조건으로 비교하려면 `--mode codex`를 붙이세요. 모드 비교 예: `--label v2-mix --mode codex+claude`.
+
+## 검증 도구 (ADR 0010)
+
+- 자체 점검 비교(3-5): `--review self`(builder가 같은 세션에서 자기 작업 점검)를 `always`, `never`와 같은 과제로 비교.
+- 분류 정확도(3-6): `report.mjs` 표의 "워크플로 분류 정확도". 과제의 기대 워크플로는 질문이면 `answer`, 코드 과제면 `build`/`plan-build`(`task.json`의 `expect.workflows`로 바꿀 수 있음).
+- 스킬 유무 비교(6-4): 같은 세트를 `--no-skills`로 한 번 더 돌려 비교(`web` 세트에 `html-output` 스킬이 있음).
+- 트리거 검증(6-4): `npm run agent-desk -- skills trigger-test --project bench/samples/web-notes`.
+- 실패 분석(6-5): `node bench/failures.mjs --label <라벨>` → `bench/results/failures.md`.

@@ -142,3 +142,10 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 테스트 178개 통과, web 타입 검사 통과.
 - 실행 기록 삭제: 사이드바에서 프로젝트별 기록 삭제(× → 확인), 벤치마크 작업 폴더(`agent-desk-bench`)는 접힌 그룹으로 모으고 한 번에 삭제. `POST /api/history/delete`, `RunStore.deleteRuns`. 대시보드 기록(DB)과 복원 지점만 지우고 프로젝트 파일과 `bench/results`는 그대로.
 - 설계서 개정 4: Claude 문서(원본)와 `docs/design-v2.md`에 런타임 모드, 채팅형 대시보드, API 표, 범용성 세트 반영.
+
+## 26차 — 빈 곳 채우기, 편집 화면, 검증 도구
+- 하네스(`1ccfb55`): 실행 설정 기록(스키마 v3), 이어하기, 이미지 첨부(Codex·Claude), 메모 제안 저장, 자체 점검 리뷰 `self`, Codex 한도 95% 이상이면 Claude로 대체, 프로젝트 파일 편집 API(같은 검사로 검증 후 저장), `init` 스킬 초안 2개와 Python·웹 감지, `--dry-run`·`--no-skills`·`skills trigger-test`, 벤치 분류 정확도·`bench/failures.mjs`, web-notes 샘플 스킬과 트리거 사례 16개. [ADR 0010](adr/0010-run-settings-resume-self-check.md)
+- 대시보드(`a58f975`): 팀 설정 편집(팀 구성·역할·스킬 탭, 역할 요약에 런타임·권한·모델·스킬 설명), 초안 만들기, 이미지 첨부(버튼·붙여넣기), 이어서 하기, 메모 추가, 응답에 사용한 팀 표시, Claude 사용량, 질문 대기 알림과 탭 제목 표시.
+- 원클릭 실행: `Start-AgentDesk.cmd`/`Stop-AgentDesk.cmd`(필요하면 설치·빌드 후 서버를 백그라운드로 켜고 브라우저 열기). PowerShell이라 이 환경에서는 실행해 보지 못함.
+- 3D 장면 컨셉 시안: `docs/concepts/agent-scene-concept.png`(SVG로 그린 시안, 확정 전).
+- legacy/agents 변경분 폐기(사용자 결정). 테스트 193개 통과.
