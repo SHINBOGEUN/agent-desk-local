@@ -190,7 +190,7 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 한 일: 4-3. `packages/service/src/usage-limits.ts`(정규화·증가분·가드), `CodexRuntime.readRateLimits()`, `executeRun`이 `limits.codexUsagePercent`/`--max-usage-percent`로 가드를 켜고 한도에 닿으면 실행을 중단해 `interrupted`로 기록.
 - 확인한 것: 전체 147개 테스트와 `tsc` 통과(가짜 app-server·가짜 한도 응답).
 - 아직 없는 것: 실제 Codex의 `account/rateLimits/read` 응답 형태 확인(v1에서 쓰던 형태 그대로 가정, 스모크 스크립트에는 아직 없음), 조회 주기 15초 기본값 조정, 대시보드 표시(5단계).
-- 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정(모여Go 운영에 필요한지), 사용자 PC에서 4-5.
+- 다음 사람이 할 일: 4-4 프로세스 관리·Supabase 이식 여부 결정(필요해지면), 4-5(모여Go 운영)는 사용자 결정으로 삭제됨.
 
 ### 2026-11-15 · Claude (19차)
 - 한 일: 4-8 후속, 스킬 런타임 배치. `packages/project/src/index.ts`에 `skillsByRole(project, loaded, onSkip?)`(역할 파일의 `skills`, `config.skills`가 있으면 그 안에서만, 없거나 `skills check` 오류인 스킬은 제외하고 이유 안내), `RunConfig.skills`(역할별 `SkillRef[]`), `openSession`이 `SessionOptions.skills`에 넣고 `instructionsFor(..., skills)`가 "id: 설명 (SKILL.md 경로)" 목록과 사용 규칙을 붙임(`skillsText`). `executeRun`이 연결. **스킬 파일은 복사하지 않음**: 설계서의 "런타임별 위치에 배치"를 ADR 0008로 바꾸고 `docs/design-v2.md` 사본 수정.
@@ -241,3 +241,7 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - 재사용 가능: `web/src/scene.ts` (타임라인 → 역할별 상태/말풍선/게이트, 테스트 있음). 3D 쪽은 이 결과만 받아 그리면 된다.
 - 표현 원칙 유지: 말풍선은 하네스가 중개하는 핸드오프이지 에이전트 간 직접 대화가 아님.
 - 언어 설정 추가: 대시보드 언어 버튼 → 실행 언어(`language: ko`), CLI `--language ko`, 프로젝트 `config.language`. 한국어 실행에서 게이트(G2/G3/G5) 문구, 보호 경로 경고, 계획 확인 질문도 한국어로 나옴. 영어로 남는 것: 에이전트에게 가는 보고서 검증 에러와 도구 승인/거절 문구(에이전트용), 런타임 자체 에러 문구. 에이전트가 영어로 답하는지 실제 Codex 실행 1회로 확인 필요.
+
+## 목표 방향 (사용자 결정, 2026-11-16)
+- 이 하네스는 **특정 프로젝트(모여Go 등)에 묶이지 않는 범용 하네스**다. 4-5(모여Go 1주 운영)는 로드맵에서 삭제했고 게이트도 "프로젝트 종류와 무관하게 폴더와 설정 파일만으로 동작"으로 바꿨다.
+- 범용성은 벤치마크 과제의 종류(백엔드 버그, 기능 추가 등)와 임의 프로젝트에서 `init`/`run`이 동작하는지로 확인한다.

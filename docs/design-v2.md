@@ -103,7 +103,7 @@ v1은 "에이전트가 다른 에이전트를 부르는" 구조였습니다. v2�
 
 | 개념 | 정의 | 누가 정하나 | 예시 |
 | --- | --- | --- | --- |
-| Project | 연결된 폴더 + `.agent-desk/config.json` | 사용자 | minitodo, 모여Go |
+| Project | 연결된 폴더 + `.agent-desk/config.json` | 사용자 | minitodo 등 임의의 프로젝트 |
 | Run | 사용자 요청 하나의 전체 처리 | 사용자 | "상태 필터 버그 고쳐줘" |
 | Workflow | Run을 처리하는 Step의 고정 순서 | 코드 (분류 결과로 선택) | `answer` · `build` · `plan-build` · `investigate` |
 | Step | Workflow 안의 한 단계. 역할 하나가 턴 하나 이상 실행 | 코드 | classify, plan, build, gate, review, report |
@@ -492,7 +492,7 @@ Claude는 계정 사용률을 읽는 공식 경로를 아직 확인하지 못했
    - 게이트: `v2-claude`, `v2-mixed` 측정 완료. 독립 리뷰 대 자체 점검 비교 포함
 5. **4단계 · 서버와 설정**: HTTP API(실시간 전송 규칙 포함), SQLite·재시작 복구, `.agent-desk/` 설정·스킬·메모, v1 보안·프로세스·Supabase 이식
    - 추가 항목: 역할 정의 파일(`.agent-desk/agents/<role>.md`), `agent-desk init`, `agent-desk skills check`
-   - 게이트: 실제 프로젝트(모여Go) 하나를 설정 파일만으로 운영
+   - 게이트: 특정 프로젝트에 묶이지 않고 설정 파일만으로 운영
 6. **5단계 · 새 대시보드**: 화면 목업 → `web/` 구현
    - 게이트: v1 대시보드 없이 일상 사용 가능
 7. **6단계 · 마무리**: 최종 벤치마크(전 라벨 × 3회), 문서 정리, 이력서 문장
