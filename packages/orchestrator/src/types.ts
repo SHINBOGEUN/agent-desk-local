@@ -54,7 +54,7 @@ export interface RunConfig {
 }
 
 export type RunEventBody =
-  | { type: 'run_started'; request: string }
+  | { type: 'run_started'; request: string; runtimes?: Partial<Record<RoleId, string>> }
   | { type: 'step_started'; step: StepKind; role: RoleId }
   | { type: 'runtime'; step: StepKind; role: RoleId; event: RuntimeEvent }
   | { type: 'report'; step: StepKind; kind: string; accepted: boolean; detail: string }

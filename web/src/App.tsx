@@ -1,16 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { api, ApiError, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, roleSummary, statusTone, stepDurationMs } from './model.ts';
-import type { BenchSet, BenchSummary, GateResult, Timeline } from './model.ts';
+import { applyEvents, benchSets, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
+import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
 import { apiErrorText, currentLang, detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
-import type { I18n, Lang } from './i18n.ts';
+import type { I18n, Key, Lang } from './i18n.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
-const readProject = (): string => { try { return localStorage.getItem(PROJECT_KEY) ?? ''; } catch { return ''; } };
-const saveProject = (value: string): void => { try { localStorage.setItem(PROJECT_KEY, value); } catch { /* storage may be unavailable */ } };
+const PROJECTS_KEY = 'agent-desk.projects';
+const MODES_KEY = 'agent-desk.modes';
+const read = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
+const write = (key: string, value: string): void => { try { localStorage.setItem(key, value); } catch { /* storage may be unavailable */ } };
+const readJson = <T,>(key: string, fallback: T): T => { try { return JSON.parse(read(key) ?? '') as T; } catch { return fallback; } };
 const errorText = (error: unknown): string => (error instanceof ApiError || error instanceof Error ? apiErrorText(currentLang(), error.message) : currentLang() === 'ko' ? '문제가 발생했습니다.' : 'Something went wrong');
+const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
+type Installed = { codex: boolean; claude: boolean };
+
+/** Runtime per role for a mode, before a run reports the real assignment. */
+const previewRuntimes = (mode: RuntimeMode): Record<string, string> => {
+  const [primary, review = primary] = mode.split('+') as [string, string?];
+  return { lead: primary, builder: primary, verifier: review, researcher: primary };
+};
+
+function RuntimeTag({ kind }: { kind: string | undefined }) {
+  if (!kind) return null;
+  return <span className={`rt rt-${kind}`}>{kind === 'codex' ? 'Codex' : kind === 'claude' ? 'Claude' : kind}</span>;
+}
 
 function Badge({ status }: { status: string }) {
   const { t } = useI18n();
@@ -68,97 +84,6 @@ function FolderPicker({ start, onPick, onClose }: { start: string; onPick: (path
   );
 }
 
-function StartForm({ active, onStarted }: { active: ActiveRun | null; onStarted: (runId: number) => void }) {
-  const { t, lang } = useI18n();
-  const [project, setProject] = useState(readProject);
-  const [request, setRequest] = useState('');
-  const [runtime, setRuntime] = useState<'codex' | 'claude' | ''>('');
-  const [review, setReview] = useState<'always' | 'auto' | 'never' | ''>('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [browsing, setBrowsing] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  /** Opens the computer's own folder window; where that is not available the in-page browser is used instead. */
-  const browse = async (): Promise<void> => {
-    setError('');
-    setDialogOpen(true);
-    try {
-      const result = await api.pickFolder(project, t('dialogTitle'));
-      if (!result.supported) setBrowsing(true);
-      else if (result.path) { setProject(result.path); saveProject(result.path); }
-    } catch (caught) { setError(errorText(caught)); } finally { setDialogOpen(false); }
-  };
-
-  const submit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    setError('');
-    if (!project.trim()) { setError(t('needFolder')); return; }
-    if (!request.trim()) { setError(t('needRequest')); return; }
-    setBusy(true);
-    try {
-      saveProject(project.trim());
-      const { runId } = await api.start({ project: project.trim(), request: request.trim(), ...(runtime ? { runtime } : {}), ...(review ? { review } : {}), language: lang });
-      setRequest('');
-      onStarted(runId);
-    } catch (caught) { setError(errorText(caught)); } finally { setBusy(false); }
-  };
-
-  return (
-    <form className="card form" onSubmit={event => { void submit(event); }}>
-      <label>{t('projectFolder')}
-        <span className="row"><input value={project} onChange={event => setProject(event.target.value)} placeholder={t('chooseFolder')} /><button type="button" disabled={dialogOpen} onClick={() => { void browse(); }}>{t('browse')}</button></span>
-      </label>
-      {dialogOpen ? <p className="muted">{t('dialogOpen')}</p> : null}
-      <ProjectPanel project={project} />
-      {browsing ? <FolderPicker start={project} onPick={path => { setProject(path); saveProject(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}
-      <label>{t('whatToDo')}<textarea value={request} onChange={event => setRequest(event.target.value)} rows={4} placeholder={t('requestPlaceholder')} /></label>
-      <div className="row">
-        <label>{t('runtime')}<select value={runtime} onChange={event => setRuntime(event.target.value as typeof runtime)}><option value="">{t('fromConfig')}</option><option value="codex">Codex</option><option value="claude">Claude</option></select></label>
-        <label>{t('review')}<select value={review} onChange={event => setReview(event.target.value as typeof review)}><option value="">{t('fromConfig')}</option><option value="auto">{t('reviewAuto')}</option><option value="always">{t('reviewAlways')}</option><option value="never">{t('reviewNever')}</option></select></label>
-      </div>
-      {error ? <p className="error">{error}</p> : null}
-      <button type="submit" disabled={busy || active !== null}>{active ? t('runIsActive', { id: active.runId }) : t('run')}</button>
-    </form>
-  );
-}
-
-function RunList({ runs, selected, onSelect }: { runs: RunRow[]; selected: number | null; onSelect: (id: number) => void }) {
-  const { t } = useI18n();
-  if (!runs.length) return <div className="card muted">{t('noRuns')}</div>;
-  return (
-    <div className="card list">
-      {runs.map(run => (
-        <button key={run.id} className={`list-row${run.id === selected ? ' selected' : ''}`} onClick={() => onSelect(run.id)}>
-          <span className="id">{run.id}</span>
-          <span className="request">{run.request.replace(/\s+/g, ' ').slice(0, 60)}</span>
-          <Badge status={run.status} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PendingCard({ pending }: { pending: Pending }) {
-  const { t } = useI18n();
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
-  const send = async (answer: string): Promise<void> => {
-    if (!answer.trim()) { setError(t('needAnswerText')); return; }
-    setError('');
-    try { await api.answer(answer); setText(''); } catch (caught) { setError(errorText(caught)); }
-  };
-  return (
-    <div className="card accent">
-      <strong>{t('needsAnswer')}</strong>
-      <p className="pending-question">{pending.question}</p>
-      {pending.options?.length ? <div className="row">{pending.options.map(option => <button key={option} onClick={() => { void send(option); }}>{option}</button>)}</div> : null}
-      <div className="row"><input value={text} onChange={event => setText(event.target.value)} placeholder={t('yourAnswer')} /><button onClick={() => { void send(text); }}>{t('send')}</button></div>
-      {error ? <p className="error">{error}</p> : null}
-    </div>
-  );
-}
-
 function TimelineView({ timeline }: { timeline: Timeline }) {
   const { t, lang } = useI18n();
   const gateLabel = useGateLabel();
@@ -189,13 +114,12 @@ function List({ title, items }: { title: string; items: string[] }) {
 
 function ReportCard({ report, workflow }: { report: RunReport | null; workflow: string | null }) {
   const { t } = useI18n();
-  if (!report) return <div className="card muted">{t('reportMissing')}</div>;
+  if (!report) return <p className="msg-meta">{t('reportMissing')}</p>;
   const { answer, builder, plan, research, review } = report;
   const requirementTone = (status: string): string => (status === 'done' ? 'success' : status === 'not_done' ? 'danger' : 'warning');
   const known = (status: string): boolean => ['done', 'not_done', 'unverified'].includes(status);
   return (
-    <div className="card report">
-      <h2>{t('reportTitle')}{workflow ? <span className="muted"> · {workflow}</span> : null}</h2>
+    <div className="report" data-workflow={workflow ?? undefined}>
       {answer ? <div className="section"><div className="label">{t('answerTitle')}</div><p className="prose">{answer.answer}</p><List title={t('sources')} items={answer.sources} /></div> : null}
       {builder ? (
         <>
@@ -273,7 +197,7 @@ function ProjectPanel({ project }: { project: string }) {
       {info.errors.map((message, index) => <p key={`e${index}`} className="error">{message}</p>)}
       {info.warnings.map((message, index) => <p key={`w${index}`} className="muted">{message}</p>)}
       <dl>
-        <dt>{t('cfgRuntime')}</dt><dd>{t('cfgPrimaryReview', { primary: config.runtimes?.primary ?? t('cfgDefault'), review: config.runtimes?.review ?? config.runtimes?.primary ?? t('cfgDefault') })}</dd>
+        <dt>{t('cfgRuntime')}</dt><dd>{info.mode ? t(`mode_${info.mode}` as Key) : t('cfgPrimaryReview', { primary: config.runtimes?.primary ?? t('cfgDefault'), review: config.runtimes?.review ?? config.runtimes?.primary ?? t('cfgDefault') })}</dd>
         <dt>{t('cfgReview')}</dt><dd>{config.review ?? t('cfgDefault')}</dd>
         <dt>{t('cfgVerify')}</dt><dd className="mono">{config.verify?.length ? config.verify.join(', ') : none}</dd>
         <dt>{t('cfgLimits')}</dt><dd>{limits ? t('cfgLimitsText', { redo: limits.redo ?? t('cfgDefault'), tokens: limits.tokens ?? none, minutes: limits.minutes ?? none, pct: limits.codexUsagePercent ?? none }) : t('cfgDefault')}</dd>
@@ -298,65 +222,6 @@ function RoleTable({ timeline, detail }: { timeline: Timeline; detail: RunDetail
         <thead><tr><th>{t('colRole')}</th><th>{t('colSteps')}</th><th>{t('colTime')}</th><th>{t('colTokens')}</th></tr></thead>
         <tbody>{rows.map(row => <tr key={row.role}><td>{row.role}</td><td>{row.steps}</td><td>{durationText(lang, row.durationMs)}</td><td>{formatTokens(row.tokens)}</td></tr>)}</tbody>
       </table>
-    </div>
-  );
-}
-
-function RunView({ runId, active, onFinished }: { runId: number; active: ActiveRun | null; onFinished: () => void }) {
-  const { t } = useI18n();
-  const [detail, setDetail] = useState<RunDetail | null>(null);
-  const [timeline, setTimeline] = useState<Timeline>(emptyTimeline);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [error, setError] = useState('');
-  const [revertNote, setRevertNote] = useState('');
-  const finished = useRef(onFinished);
-  finished.current = onFinished;
-
-  const reload = useCallback(async (): Promise<void> => {
-    try { setDetail(await api.run(runId)); } catch (caught) { setError(errorText(caught)); }
-  }, [runId]);
-
-  useEffect(() => {
-    setDetail(null); setTimeline(emptyTimeline()); setPending(null); setError(''); setRevertNote('');
-    void reload();
-    return followRun(runId, {
-      onEvent: event => setTimeline(current => applyEvents(current, [event])),
-      onPending: setPending,
-      onDone: () => { void reload(); finished.current(); },
-      onError: () => { /* EventSource retries; the next event or done message clears this */ },
-    });
-  }, [runId, reload]);
-
-  const isActive = active?.runId === runId;
-  const status = detail?.run.status ?? 'running';
-  const summary = gateSummary(timeline);
-
-  const revert = async (yes: boolean): Promise<void> => {
-    try {
-      const plan = await api.revert(runId, yes);
-      setRevertNote(t(yes ? 'revertDone' : 'revertPreview', { restore: plan.restore.length, remove: plan.remove.length }));
-    } catch (caught) { setRevertNote(errorText(caught)); }
-  };
-
-  return (
-    <div className="stack">
-      <div className="card">
-        <div className="step-head"><h2>{t('runTitle', { id: runId })}</h2><Badge status={status} />
-          <span className="muted push">{detail ? `${formatTokens(detail.usageTotal)} ${t('tokens')}` : ''}</span></div>
-        {detail ? <p className="request-full">{detail.run.request}</p> : null}
-        {detail?.run.reason ? <p className="muted">{detail.run.reason}</p> : null}
-        <div className="chips">{summary.map(entry => <span key={entry.gate} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{entry.gate} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div>
-        <div className="row">
-          {isActive ? <button onClick={() => { void api.cancel(); }}>{t('stop')}</button> : null}
-          {!isActive && (status === 'needs_review' || status === 'failed') ? <><button onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button onClick={() => { void revert(true); }}>{t('applyRevert')}</button></> : null}
-        </div>
-        {revertNote ? <p className="muted">{revertNote}</p> : null}
-        {error ? <p className="error">{error}</p> : null}
-      </div>
-      {pending && isActive ? <PendingCard pending={pending} /> : null}
-      {detail && status !== 'running' ? <ReportCard report={detail.report} workflow={detail.run.workflow} /> : null}
-      <RoleTable timeline={timeline} detail={detail} />
-      <div className="card"><TimelineView timeline={timeline} /></div>
     </div>
   );
 }
@@ -395,7 +260,7 @@ function BenchSetCard({ set }: { set: BenchSet }) {
   const taskIds = [...new Set(all.flatMap(summary => Object.keys(summary.perTask)))].sort();
   return (
     <div className="card">
-      <h2>{set.id === 'hard' ? t('benchHard') : t('benchStandard')}</h2>
+      <h2>{set.id === 'hard' ? t('benchHard') : set.id === 'general' ? t('benchGeneral') : t('benchStandard')}</h2>
       {!baseline ? <p className="muted">{t('benchNoBaseline')}</p> : null}
       <table className="roles bench">
         <thead><tr><th />{all.map(summary => <th key={summary.label}>{summary.label}</th>)}{baseline && first ? <th>{t('changeLabel')}</th> : null}</tr></thead>
@@ -439,56 +304,337 @@ function BenchmarkView() {
   );
 }
 
+
+function Sidebar({ projects, current, activeRunId, onSelect, onOpen, opening, tab, onTab }: {
+  projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void; opening: boolean; tab: 'chat' | 'bench'; onTab: (tab: 'chat' | 'bench') => void;
+}) {
+  const { t, lang, setLang } = useI18n();
+  return (
+    <aside className="sidebar">
+      <div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Agent Desk</span></div>
+      <div className="side-head"><span>{t('projects')}</span></div>
+      <nav className="project-nav" aria-label={t('projects')}>
+        {projects.map(project => (
+          <button key={project.path} title={project.path} className={`project-item${tab === 'chat' && sameProject(project.path, current) ? ' on' : ''}`} onClick={() => { onSelect(project.path); onTab('chat'); }}>
+            <span className="project-initial" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span>
+            <span className="project-text"><span className="project-name">{project.name}</span><span className="project-path">{project.path}</span></span>
+            {project.active && activeRunId !== null ? <span className="live-dot" aria-label={t('status_running')} /> : null}
+          </button>
+        ))}
+        {!projects.length ? <p className="side-empty">{t('noProjectsYet')}</p> : null}
+      </nav>
+      <button className="open-project" disabled={opening} onClick={onOpen}>+ {t('openProject')}</button>
+      {opening ? <p className="side-empty">{t('dialogOpen')}</p> : null}
+      <div className="side-foot">
+        <button className={`side-link${tab === 'bench' ? ' on' : ''}`} onClick={() => onTab('bench')}>{t('tabBench')}</button>
+        <span className="lang" role="group" aria-label={t('language')}>
+          <button className={lang === 'ko' ? 'on' : ''} onClick={() => setLang('ko')}>한국어</button>
+          <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
+        </span>
+      </div>
+    </aside>
+  );
+}
+
+/** One request and the team's reply. Live runs follow the event stream; finished runs load their saved report. */
+function Exchange({ run, live, onPending, onTimeline, onFinished }: {
+  run: RunRow; live: boolean; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
+}) {
+  const { t, lang } = useI18n();
+  const [detail, setDetail] = useState<RunDetail | null>(null);
+  const [timeline, setTimeline] = useState<Timeline>(emptyTimeline);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [showSteps, setShowSteps] = useState(false);
+  const [revertNote, setRevertNote] = useState('');
+  const callbacks = useRef({ onPending, onTimeline, onFinished });
+  callbacks.current = { onPending, onTimeline, onFinished };
+  const following = live || showSteps;
+  const running = run.status === 'running';
+
+  const reload = useCallback(async (): Promise<void> => { try { setDetail(await api.run(run.id)); } catch { /* shown as missing report */ } }, [run.id]);
+  useEffect(() => { if (!running) void reload(); }, [running, reload]);
+  useEffect(() => {
+    if (!following) return;
+    return followRun(run.id, {
+      onEvent: event => setTimeline(current => applyEvents(current, [event])),
+      onPending: next => { setPending(next); if (live) callbacks.current.onPending(next); },
+      onDone: () => { setPending(null); if (live) { callbacks.current.onPending(null); callbacks.current.onFinished(); } void reload(); },
+      onError: () => { /* EventSource retries by itself */ },
+    });
+  }, [following, live, run.id, reload]);
+  useEffect(() => { if (live) callbacks.current.onTimeline(timeline); }, [live, timeline]);
+
+  const status = detail?.run.status ?? run.status;
+  const current = timeline.steps.at(-1);
+  const summary = gateSummary(timeline);
+  const time = new Date(run.startedAt).toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  const revert = async (yes: boolean): Promise<void> => {
+    try {
+      const plan = await api.revert(run.id, yes);
+      setRevertNote(t(yes ? 'revertDone' : 'revertPreview', { restore: plan.restore.length, remove: plan.remove.length }));
+    } catch (caught) { setRevertNote(errorText(caught)); }
+  };
+
+  return (
+    <article className="exchange">
+      <div className="msg msg-user">
+        <div className="bubble">{run.request}</div>
+        <span className="msg-meta">{t('you')} · {time}</span>
+      </div>
+      <div className={`msg msg-team status-${statusTone(status)}`}>
+        <div className="bubble">
+          <header className="reply-head">
+            <Badge status={status} />
+            {detail ? <span className="msg-meta">{t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) })}</span> : <span className="msg-meta">#{run.id}</span>}
+            {!running ? <button className="link push" onClick={() => setShowSteps(value => !value)}>{showSteps ? t('hideSteps') : t('showSteps')}</button> : null}
+          </header>
+          {running ? (
+            <div className="live-line">
+              <span className="pulse" aria-hidden="true" />
+              {current ? <span>{t('workingOn', { role: current.role, step: current.step })}</span> : <span>{t('starting')}</span>}
+              {current ? <RuntimeTag kind={timeline.runtimes?.[current.role]} /> : null}
+            </div>
+          ) : null}
+          {timeline.questions?.filter(question => question.answered).map((question, index) => (
+            <div key={index} className="asked"><span className="msg-meta">{t('agentAsks', { role: question.step })} · {t('answeredTag')}</span><p>{question.question}</p></div>
+          ))}
+          {pending && live ? <QuestionBlock pending={pending} /> : null}
+          {!running && detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
+          {!running ? <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} /> : null}
+          {!running && summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{entry.gate} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
+          {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
+          {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
+          {!running && (status === 'needs_review' || status === 'failed') ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
+          {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
+        </div>
+        <span className="msg-meta">Agent Desk{durationOf(run, lang)}</span>
+      </div>
+    </article>
+  );
+}
+
+const durationOf = (run: RunRow, lang: Lang): string => (run.finishedAt ? ` · ${durationText(lang, new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime())}` : '');
+
+function QuestionBlock({ pending }: { pending: Pending }) {
+  const { t } = useI18n();
+  const [error, setError] = useState('');
+  const send = async (answer: string): Promise<void> => { try { await api.answer(answer); } catch (caught) { setError(errorText(caught)); } };
+  return (
+    <div className="question" role="status">
+      <strong>{t('needsAnswer')}</strong>
+      <p>{pending.question}</p>
+      {pending.options?.length ? <div className="row">{pending.options.map(option => <button key={option} className="option" onClick={() => { void send(option); }}>{option}</button>)}</div> : null}
+      {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+function TeamRail({ runtimes, timeline, info, installed, modeChoice }: { runtimes: Record<string, string> | null; timeline: Timeline | null; info: ProjectInfo | null; installed: Installed | null; modeChoice: RuntimeMode | '' }) {
+  const { t } = useI18n();
+  const state = (role: string): 'working' | 'done' | 'idle' => {
+    const steps = timeline?.steps.filter(step => step.role === role) ?? [];
+    if (steps.some(step => !step.finishedAt) && !timeline?.finished) return 'working';
+    return steps.length ? 'done' : 'idle';
+  };
+  const usesDefault = modeChoice === '' && info !== null && !info.config.mode && !info.config.runtimes;
+  return (
+    <aside className="rail">
+      <section className="rail-block">
+        <h3>{t('teamTitle')}</h3>
+        <ul className="team">
+          {ROLES.map(role => {
+            const now = timeline ? state(role) : 'idle';
+            return (
+              <li key={role} className={`member member-${now}`}>
+                <span className={`avatar avatar-${role}`} aria-hidden="true">{role.slice(0, 1).toUpperCase()}</span>
+                <span className="member-text"><span className="member-name">{role}</span><span className="member-desc">{t(`role_${role}` as Key)}</span></span>
+                <span className="member-side"><RuntimeTag kind={runtimes?.[role]} />{now !== 'idle' ? <span className="member-state">{now === 'working' ? t('roleWorking') : t('roleDone')}</span> : null}</span>
+              </li>
+            );
+          })}
+        </ul>
+        {usesDefault && installed && !installed.claude ? <p className="rail-note">{t('modeDefaultFallback')}</p> : null}
+      </section>
+      <UsageGauge />
+    </aside>
+  );
+}
+
+function ChatView({ project, runs, active, installed, onChanged, onOpen }: { project: string; runs: RunRow[]; active: ActiveRun | null; installed: Installed | null; onChanged: () => void; onOpen: () => void }) {
+  const { t, lang } = useI18n();
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [liveTimeline, setLiveTimeline] = useState<Timeline | null>(null);
+  const [info, setInfo] = useState<ProjectInfo | null>(null);
+  const [modes, setModes] = useState<Record<string, RuntimeMode | ''>>(() => readJson(MODES_KEY, {}));
+  const [review, setReview] = useState<'always' | 'auto' | 'never' | ''>('');
+  const threadEnd = useRef<HTMLDivElement>(null);
+  const mode = modes[project] ?? '';
+  const setMode = (next: RuntimeMode | ''): void => { const all = { ...modes, [project]: next }; setModes(all); write(MODES_KEY, JSON.stringify(all)); };
+
+  useEffect(() => {
+    setInfo(null); setPending(null); setLiveTimeline(null); setError('');
+    api.project(project).then(setInfo).catch(() => setInfo(null));
+  }, [project]);
+
+  const thread = useMemo(() => runs.filter(run => sameProject(run.project, project)).sort((a, b) => a.id - b.id), [runs, project]);
+  const shown = thread.slice(-30);
+  const activeHere = active !== null && sameProject(active.project, project);
+  const activeElsewhere = active !== null && !activeHere;
+  useEffect(() => { threadEnd.current?.scrollIntoView({ block: 'end' }); }, [shown.length, liveTimeline?.steps.length, pending]);
+
+  const effectiveMode = (mode || info?.mode || null) as RuntimeMode | null;
+  const missing = mode && installed ? modeNeeds(mode).filter(kind => !installed[kind]) : [];
+  const runtimes = liveTimeline?.runtimes ?? (effectiveMode ? previewRuntimes(effectiveMode) : null);
+  const usesDefault = mode === '' && info !== null && !info.config.mode && !info.config.runtimes;
+  const railRuntimes = usesDefault && installed && !installed.claude && runtimes && !liveTimeline?.runtimes ? { ...runtimes, verifier: runtimes.builder ?? 'codex' } : runtimes;
+
+  const submit = async (): Promise<void> => {
+    const value = text.trim();
+    if (!value || busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      if (pending && activeHere) await api.answer(value);
+      else await api.start({ project, request: value, ...(mode ? { mode } : {}), ...(review ? { review } : {}), language: lang });
+      setText('');
+      onChanged();
+    } catch (caught) { setError(errorText(caught)); } finally { setBusy(false); }
+  };
+  const onKey = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); }
+  };
+  const answering = pending !== null && activeHere;
+  const blocked = (activeHere && !answering) || activeElsewhere || missing.length > 0;
+
+  return (
+    <div className="workspace">
+      <section className="chat">
+        <header className="chat-head">
+          <div className="chat-title">
+            <h1>{projectName(project)}</h1>
+            <button className="path" title={t('changeProject')} onClick={onOpen}>{project}</button>
+          </div>
+          <div className="chat-controls">
+            <label className="control">{t('teamLabel')}
+              <select value={mode} onChange={event => setMode(event.target.value as RuntimeMode | '')}>
+                <option value="">{t('modeFromConfig')}{info?.mode ? ` (${t(`mode_${info.mode}` as Key)})` : ''}</option>
+                {RUNTIME_MODES.map(option => <option key={option} value={option}>{t(`mode_${option}` as Key)}</option>)}
+              </select>
+            </label>
+            <label className="control">{t('reviewPolicy')}
+              <select value={review} onChange={event => setReview(event.target.value as typeof review)}>
+                <option value="">{t('fromConfig')}</option><option value="auto">{t('reviewAuto')}</option><option value="always">{t('reviewAlways')}</option><option value="never">{t('reviewNever')}</option>
+              </select>
+            </label>
+          </div>
+        </header>
+        <div className="thread" aria-live="polite">
+          {thread.length > shown.length ? <p className="thread-note">{t('olderRuns', { n: thread.length - shown.length })}</p> : null}
+          {!shown.length ? (
+            <div className="thread-empty">
+              <h2>{t('chatEmptyTitle', { name: projectName(project) })}</h2>
+              <p>{t('chatEmptyHint')}</p>
+              <ProjectPanel project={project} />
+            </div>
+          ) : shown.map(run => (
+            <Exchange key={run.id} run={run} live={active?.runId === run.id}
+              onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }} />
+          ))}
+          <div ref={threadEnd} />
+        </div>
+        <div className="composer-wrap">
+          {activeElsewhere && active ? <p className="composer-note">{t('otherProjectActive', { id: active.runId, name: projectName(active.project) })}</p> : null}
+          {activeHere && !answering && active ? <p className="composer-note">{t('composerBusy', { id: active.runId })}</p> : null}
+          {missing.length ? <p className="composer-note warn">{t('modeMissing', { name: missing.map(kind => (kind === 'codex' ? 'Codex' : 'Claude')).join(', ') })}</p> : null}
+          {error ? <p className="composer-note error">{error}</p> : null}
+          <div className={`composer${answering ? ' answering' : ''}`}>
+            <textarea value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} rows={2} disabled={blocked}
+              placeholder={answering ? t('composerAnswer') : t('composerPlaceholder')} aria-label={answering ? t('composerAnswer') : t('composerPlaceholder')} />
+            <button className="send" disabled={blocked || busy || !text.trim()} onClick={() => { void submit(); }}>{answering ? t('sendAnswer') : t('sendRequest')}</button>
+          </div>
+          <p className="composer-hint">{t('sendHint')}</p>
+        </div>
+      </section>
+      <TeamRail runtimes={railRuntimes} timeline={liveTimeline} info={info} installed={installed} modeChoice={mode} />
+    </div>
+  );
+}
+
+function Welcome({ onOpen, opening }: { onOpen: () => void; opening: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className="welcome">
+      <div className="welcome-art" aria-hidden="true">
+        <span className="node node-lead">L</span><span className="node node-builder">B</span><span className="node node-verifier">V</span>
+        <svg viewBox="0 0 240 120"><path d="M40 60 C 90 10, 150 10, 200 60" /><path d="M40 60 C 90 110, 150 110, 200 60" /></svg>
+      </div>
+      <h1>{t('startTitle')}</h1>
+      <p>{t('startHint')}</p>
+      <button className="primary" disabled={opening} onClick={onOpen}>{t('openProject')}</button>
+    </div>
+  );
+}
+
 export function App() {
-  const [lang, setLangState] = useState<Lang>(() => { let stored: string | null = null; try { stored = localStorage.getItem('agent-desk.lang'); } catch { /* storage may be unavailable */ } return detectLanguage(stored, navigator.language); });
-  const setLang = (next: Lang): void => { setLangState(next); try { localStorage.setItem('agent-desk.lang', next); } catch { /* storage may be unavailable */ } };
+  const [lang, setLangState] = useState<Lang>(() => detectLanguage(read('agent-desk.lang'), navigator.language));
+  const setLang = (next: Lang): void => { setLangState(next); write('agent-desk.lang', next); };
   setActiveLang(lang);
   const i18n: I18n = { lang, setLang, t: (key, values) => translate(lang, key, values) };
   const [active, setActive] = useState<ActiveRun | null>(null);
+  const [installed, setInstalled] = useState<Installed | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [saved, setSaved] = useState<string[]>(() => readJson<string[]>(PROJECTS_KEY, []));
+  const [project, setProject] = useState<string>(() => read(PROJECT_KEY) ?? '');
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<'runs' | 'bench'>('runs');
+  const [tab, setTab] = useState<'chat' | 'bench'>('chat');
+  const [opening, setOpening] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const state = await api.state();
       setActive(state.active);
+      if (state.installed) setInstalled(state.installed);
       setRuns((await api.runs()).runs);
       setError('');
     } catch (caught) { setError(errorText(caught)); }
   }, []);
-
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => { void refresh(); }, 3000);
     return () => clearInterval(timer);
   }, [refresh]);
 
-  const start = (runId: number): void => { setSelected(runId); void refresh(); };
+  const choose = (path: string): void => {
+    setProject(path); write(PROJECT_KEY, path); setTab('chat');
+    setSaved(current => { const next = current.some(item => sameProject(item, path)) ? current : [path, ...current].slice(0, 30); write(PROJECTS_KEY, JSON.stringify(next)); return next; });
+  };
+  /** Opens the computer's own folder window; where that is not available the in-page browser is used instead. */
+  const open = async (): Promise<void> => {
+    setOpening(true);
+    try {
+      const result = await api.pickFolder(project, i18n.t('dialogTitle'));
+      if (!result.supported) setBrowsing(true);
+      else if (result.path) choose(result.path);
+    } catch (caught) { setError(errorText(caught)); } finally { setOpening(false); }
+  };
 
+  const projects = projectList(saved, runs, active?.project ?? null);
   return (
     <I18nContext.Provider value={i18n}>
-    <div className="shell">
-      <header><strong>Agent Desk</strong><span className="muted">v2</span>
-        <nav className="tabs"><button className={tab === 'runs' ? 'on' : ''} onClick={() => setTab('runs')}>{i18n.t('tabRuns')}</button><button className={tab === 'bench' ? 'on' : ''} onClick={() => setTab('bench')}>{i18n.t('tabBench')}</button></nav>
-        <span className="push lang" role="group" aria-label={i18n.t('language')}>
-          <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>English</button>
-          <button className={lang === 'ko' ? 'on' : ''} onClick={() => setLang('ko')}>한국어</button>
-        </span>
-      </header>
-      {error ? <p className="error banner">{i18n.t('serverDown')}: {error}</p> : null}
-      {tab === 'bench' ? <main className="single"><BenchmarkView /></main> : <main>
-        <section className="column">
-          <UsageGauge />
-          <StartForm active={active} onStarted={start} />
-          <RunList runs={runs} selected={selected} onSelect={setSelected} />
-        </section>
-        <section className="column wide">
-          {selected !== null ? <RunView key={selected} runId={selected} active={active} onFinished={() => { void refresh(); }} /> : <div className="card muted">{i18n.t('selectRun')}</div>}
-        </section>
-      </main>}
-    </div>
+      <div className="app">
+        <Sidebar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} opening={opening} tab={tab} onTab={setTab} />
+        <main className="main">
+          {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
+          {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>
+            : project ? <ChatView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
+              : <Welcome onOpen={() => { void open(); }} opening={opening} />}
+        </main>
+        {browsing ? <FolderPicker start={project} onPick={path => { choose(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}
+      </div>
     </I18nContext.Provider>
   );
 }

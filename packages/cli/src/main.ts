@@ -11,8 +11,8 @@ import type { DoctorCheck, RoleId, Runtime, UserQuestion } from '#core';
 import { planText, revertToRestorePoint, runRequest } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
 import { RunStore } from '#store';
-import { addMemory, assignRuntimes, checkSkills, loadMemory, memoryFacts, memoryPath, newSuggestions, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
-import type { LoadedProject, RuntimeKind } from '#project';
+import { addMemory, planRuntimes, RUNTIME_MODES, checkSkills, loadMemory, memoryFacts, memoryPath, newSuggestions, draftFromInspection, inspectProject, loadProject, roleSettings, writeDraft } from '#project';
+import type { LoadedProject, RuntimeKind, RuntimeMode } from '#project';
 import { dataDirectory, executeRun, locate as locateExecutable, readMachineSettings, resolveClaudeExecutable, resolveCodexExecutable, versionWarning, writeMachineSettings } from '#service';
 import type { Found } from '#service';
 import { createServer } from '#server';
@@ -40,6 +40,7 @@ interface Parsed {
   json: boolean;
   yes: boolean;
   runtime?: RuntimeKind | undefined;
+  mode?: RuntimeMode | undefined;
   review?: ReviewPolicy;
   language?: 'en' | 'ko';
   verify: string[];
@@ -66,6 +67,8 @@ Options for run:
   --unattended          never ask questions; a needed answer ends the run as needs_user
   --verify "<command>"  command the harness runs itself (repeatable; overrides config)
   --review <policy>     always | auto | never
+  --mode <mode>         codex | claude | codex+claude | claude+codex (builder+reviewer; default from config, else codex+claude)
+  --runtime <kind>      one runtime for every role (codex | claude | fake); wins over --mode
   --max-tokens <n>      stop when total tokens exceed n (resumable)
   --max-minutes <n>     stop after n minutes (resumable)
   --max-usage-percent <n>  stop when the 5-hour Codex limit grows by n percentage points during the run
@@ -100,6 +103,7 @@ export function parseArgs(argv: string[]): Parsed {
       case '--max-usage-percent': parsed.maxUsagePercent = number(value(i, arg), arg); i++; break;
       case '--port': { const n = number(value(i, arg), arg); if (n !== undefined && (!Number.isInteger(n) || n < 1024 || n > 65535)) parsed.errors.push('--port expects 1024-65535'); else parsed.port = n; i++; break; }
       case '--max-minutes': parsed.maxMinutes = number(value(i, arg), arg); i++; break;
+      case '--mode': { const v = value(i, arg); if (v && (RUNTIME_MODES as readonly string[]).includes(v)) parsed.mode = v as RuntimeMode; else if (v) parsed.errors.push(`--mode expects ${RUNTIME_MODES.join(', ')}`); i++; break; }
       case '--runtime': { const v = value(i, arg); if (v === 'codex' || v === 'claude' || v === 'fake') parsed.runtime = v; else if (v) parsed.errors.push('--runtime expects codex, claude or fake'); i++; break; }
       case '--language': { const v = value(i, arg); if (v === 'en' || v === 'ko') parsed.language = v; else if (v) parsed.errors.push('--language expects en or ko'); i++; break; }
       case '--review': { const v = value(i, arg); if (v === 'always' || v === 'auto' || v === 'never') parsed.review = v; else if (v) parsed.errors.push('--review expects always, auto or never'); i++; break; }
@@ -144,12 +148,17 @@ async function doctor(parsed: Parsed, project: string, deps: CliDeps): Promise<n
   const dir = dataDirectory(deps.env, deps.platform);
   const saved = readMachineSettings(dir);
   const loaded = loadProject(project);
-  const kinds = [...new Set(Object.values(assignRuntimes(loaded.config, parsed.runtime)))];
+  const plan = planRuntimes(loaded.config, { override: parsed.runtime, mode: parsed.mode });
+  const kinds = [...new Set(Object.values(plan.assignment))];
 
   for (const kind of kinds) {
     let command: string | undefined;
     if (kind !== 'fake') {
       const found = locate(kind, deps, saved);
+      if (!found && plan.reviewIsDefault && kind === plan.review) {
+        checks.push({ name: `${kind} executable`, ok: true, detail: `not installed; ${plan.primary} also reviews (default mode codex+claude). Install ${kind === 'claude' ? 'Claude Code' : 'Codex'} for cross-model review, or set "mode" in .agent-desk/config.json` });
+        continue;
+      }
       if (!found) {
         checks.push(kind === 'codex'
           ? { name: 'codex executable', ok: false, detail: 'not found on PATH or in the npm global folder', fix: 'install Codex (npm i -g @openai/codex) or set AGENT_DESK_CODEX to codex.exe' }
@@ -224,6 +233,7 @@ async function run(parsed: Parsed, project: string, deps: CliDeps): Promise<numb
     platform: deps.platform,
     createRuntime: deps.createRuntime,
     runtime: parsed.runtime,
+    mode: parsed.mode,
     verify: parsed.verify,
     review: parsed.review,
     language: parsed.language,

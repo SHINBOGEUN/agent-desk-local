@@ -16,6 +16,8 @@ export interface RoleDefinition {
   access?: Access;
   effort?: Effort;
   model?: string;
+  /** Model per runtime (frontmatter model-codex / model-claude); wins over `model` for that runtime. */
+  modelByRuntime?: { codex?: string; claude?: string };
   skills: string[];
   /** Project-specific instructions (the markdown body). */
   body: string;
@@ -29,7 +31,7 @@ export interface RolesResult {
 
 /** Read-only by design: these roles may never be given write access by a file. */
 const READ_ONLY_ROLES: ReadonlySet<RoleId> = new Set(['lead', 'verifier', 'researcher']);
-const KEYS = new Set(['description', 'access', 'effort', 'model', 'skills']);
+const KEYS = new Set(['description', 'access', 'effort', 'model', 'model-codex', 'model-claude', 'skills']);
 
 export function parseFrontmatter(text: string): { data: Record<string, string | string[]>; body: string; error?: string } {
   const normalized = text.replace(/\r\n/g, '\n');
@@ -80,6 +82,7 @@ export function loadRoles(project: string): RolesResult {
         if (value !== 'low' && value !== 'medium' && value !== 'high') errors.push(`${where}: effort must be "low", "medium" or "high"`);
         else definition.effort = value;
       } else if (key === 'model') definition.model = value;
+      else if (key === 'model-codex' || key === 'model-claude') definition.modelByRuntime = { ...definition.modelByRuntime, [key === 'model-codex' ? 'codex' : 'claude']: value };
       else if (key === 'description') definition.description = value;
     }
     roles[role] = definition;

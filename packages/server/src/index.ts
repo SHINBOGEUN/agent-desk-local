@@ -11,8 +11,8 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { checkSkills, loadMemory, loadProject, memoryFacts } from '#project';
-import type { RuntimeKind } from '#project';
+import { checkSkills, loadMemory, loadProject, memoryFacts, modeOf, RUNTIME_MODES } from '#project';
+import type { RuntimeKind, RuntimeMode } from '#project';
 import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
@@ -49,6 +49,7 @@ interface ActiveRun {
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const REVIEWS = new Set(['always', 'auto', 'never']);
 const RUNTIMES = new Set(['codex', 'claude', 'fake']);
+const MODES = new Set<string>(RUNTIME_MODES);
 const MAX_BODY = 256 * 1024;
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json; charset=utf-8' };
 
@@ -112,6 +113,8 @@ export function createServer(options: ServerOptions): LocalServer {
     if (!request.trim()) throw new HttpError(400, 'request is empty');
     const runtime = body.runtime;
     if (runtime !== undefined && !(typeof runtime === 'string' && RUNTIMES.has(runtime))) throw new HttpError(400, 'unknown runtime');
+    const mode = body.mode;
+    if (mode !== undefined && !(typeof mode === 'string' && MODES.has(mode))) throw new HttpError(400, 'unknown mode');
     const review = body.review;
     if (review !== undefined && !(typeof review === 'string' && REVIEWS.has(review))) throw new HttpError(400, 'review must be always, auto or never');
     const language = body.language;
@@ -129,6 +132,7 @@ export function createServer(options: ServerOptions): LocalServer {
       executeRun({
         project, request, env: options.env, platform: options.platform, createRuntime: options.createRuntime,
         ...(runtime ? { runtime: runtime as RuntimeKind } : {}),
+        ...(mode ? { mode: mode as RuntimeMode } : {}),
         ...(review ? { review: review as ReviewPolicy } : {}),
         ...(language ? { language } : {}),
         verify, ask, signal: controller.signal,
@@ -167,7 +171,11 @@ export function createServer(options: ServerOptions): LocalServer {
     const p = url.pathname;
     if (method === 'POST' && !tokenOk(req.headers['x-agent-desk-token'])) throw new HttpError(403, 'reload the page and try again');
     if (method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, activeRunId: active?.runId ?? null, pid: process.pid });
-    if (method === 'GET' && p === '/api/state') return send(res, 200, { csrf: token, active: activeView() });
+    if (method === 'GET' && p === '/api/state') {
+      const saved = readMachineSettings(dataDirectory(options.env, options.platform));
+      const installed = { codex: !!locate('codex', options.env, options.platform, saved), claude: !!locate('claude', options.env, options.platform, saved) };
+      return send(res, 200, { csrf: token, active: activeView(), installed });
+    }
     if (method === 'GET' && p === '/api/runs') {
       const project = url.searchParams.get('project') ?? undefined;
       return send(res, 200, { runs: withStore(store => store.listRuns(project, 100)).map(run => ({ ...run, request: redactSecrets(run.request), brief: run.brief ? redactSecrets(run.brief) : null })) });
@@ -219,7 +227,7 @@ export function createServer(options: ServerOptions): LocalServer {
       if (!path.isAbsolute(project) || !fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new HttpError(400, 'path must be an existing absolute folder');
       const loaded = loadProject(project);
       const skills = checkSkills(project, loaded.config, loaded.roles);
-      return send(res, 200, { config: loaded.config, errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets), skills: skills.skills.map(skill => ({ id: skill.id, description: skill.description })), skillFindings: skills.findings });
+      return send(res, 200, { config: loaded.config, mode: modeOf(loaded.config), errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets), skills: skills.skills.map(skill => ({ id: skill.id, description: skill.description })), skillFindings: skills.findings });
     }
     if (method === 'POST' && p === '/api/pick-folder') {
       const body = await readBody(req);

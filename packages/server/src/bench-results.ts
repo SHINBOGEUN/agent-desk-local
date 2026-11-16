@@ -45,7 +45,7 @@ export function summarizeBench(runsDirectory: string): BenchSummary[] {
     const directory = path.join(runsDirectory, label);
     const all: Raw[] = [];
     for (const name of fs.readdirSync(directory)) {
-      if (!/^[TH]\d+.*-r\d+\.json$/.test(name)) continue;
+      if (!/^[THPW]\d+.*-r\d+\.json$/.test(name)) continue;
       try { all.push(JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')) as Raw); } catch { /* a damaged file is skipped */ }
     }
     if (!all.length) continue;

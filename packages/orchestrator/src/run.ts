@@ -486,7 +486,9 @@ function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g
 
 export async function runRequest(request: string, config: RunConfig): Promise<RunResult> {
   const ctx = new RunContext(config);
-  ctx.emit({ type: 'run_started', request });
+  const single = 'startSession' in config.runtime ? (config.runtime as Runtime) : null;
+  const runtimes = Object.fromEntries((['lead', 'builder', 'verifier', 'researcher'] as RoleId[]).map(role => [role, (single ?? (config.runtime as Partial<Record<RoleId, Runtime>>)[role])?.id]).filter(([, id]) => id)) as Partial<Record<RoleId, string>>;
+  ctx.emit({ type: 'run_started', request, ...(Object.keys(runtimes).length ? { runtimes } : {}) });
   try {
     const lead = new LeadCollector();
     const stopped = await runClassify(ctx, request, lead);

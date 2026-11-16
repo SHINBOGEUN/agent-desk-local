@@ -8,8 +8,8 @@ import path from 'node:path';
 import type { RoleId, Runtime, UserQuestion } from '#core';
 import { planText, runRequest } from '#orchestrator';
 import type { ReviewPolicy, RunConfig, RunEvent, RunResult } from '#orchestrator';
-import { assignRuntimes, loadMemory, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
-import type { RuntimeKind } from '#project';
+import { loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
+import type { RuntimeKind, RuntimeMode } from '#project';
 import { RunStore } from '#store';
 import { locate } from './discover.ts';
 import { startUsageGuard } from './usage-limits.ts';
@@ -23,6 +23,8 @@ export interface ExecuteOptions {
   platform: NodeJS.Platform;
   createRuntime(kind: RuntimeKind, command?: string): Runtime;
   runtime?: RuntimeKind | undefined;
+  /** Builder/reviewer runtimes ("codex+claude" ...); --runtime wins over it. */
+  mode?: RuntimeMode | undefined;
   verify?: string[];
   review?: ReviewPolicy | undefined;
   /** Language for answers and harness messages; default: config.language, then English. */
@@ -64,10 +66,15 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
   if (loaded.errors.length) return { ok: false, code: 64, message: loaded.errors.join('\n') };
   const config = loaded.config;
   for (const warning of loaded.warnings) options.onNote?.(`note: ${warning}`);
-  const settings = roleSettings(loaded);
   const skills = skillsByRole(project, loaded, (id, reason) => options.onNote?.(`note: skill "${id}" is not used: ${reason}`));
   const dir = dataDirectory(options.env, options.platform);
-  const assignment = assignRuntimes(config, options.runtime);
+  let plan = planRuntimes(config, { override: options.runtime, mode: options.mode });
+  if (plan.reviewIsDefault && plan.review !== 'fake' && !locate(plan.review, options.env, options.platform, readMachineSettings(dir))) {
+    options.onNote?.(`note: ${plan.review === 'claude' ? 'Claude' : 'Codex'} is not installed, so ${plan.primary === 'codex' ? 'Codex' : 'Claude'} also reviews. Set "mode" in .agent-desk/config.json to choose explicitly.`);
+    plan = withoutReviewRuntime(plan);
+  }
+  const assignment = plan.assignment;
+  const settings = roleSettings(loaded, assignment);
   const instances = new Map<RuntimeKind, Runtime>();
   for (const kind of new Set(Object.values(assignment))) {
     let command: string | undefined;

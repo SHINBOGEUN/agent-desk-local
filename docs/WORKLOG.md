@@ -133,3 +133,10 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 대시보드: 서버 오류 메시지(영어, API는 그대로)를 UI가 한국어일 때 한국어로 표시(`apiErrorText`).
 - `package-lock.json` 커밋(devDependencies 고정), `h04-r*.txt` 임시 파일은 .gitignore.
 - `legacy/agents/*.md` 변경분은 v1 실행이 덮어쓴 것이라 커밋하지 않고 보류(사용자 판단).
+
+## 25차 — 런타임 모드, 채팅형 대시보드, 디자인 개편
+- 런타임 모드 4종(`codex`, `claude`, `codex+claude` 기본, `claude+codex`): `config.mode`, `--mode`, 대시보드 선택. Claude 미설치 시 기본값만 Codex로 대체. 역할 파일 `model-codex`/`model-claude`. `run_started`에 역할별 런타임 기록. [ADR 0009](adr/0009-runtime-modes.md)
+- 대시보드를 v1처럼 채팅형으로: 왼쪽 프로젝트 목록(연 폴더 + 실행 기록), 가운데 대화(요청 말풍선, 팀 응답에 진행 상황·질문·결과), 아래 입력창(Enter 전송, 질문 대기 중이면 답변으로 전송), 오른쪽 팀 패널(역할별 런타임·상태, 사용량).
+- 디자인 개편: 차가운 회색 바탕 + 잉크색 사이드바, Codex=청록·Claude=보라로 모델 정체성 표시, 상태색은 게이트·결과에만. 다크 모드 지원. 목업 데이터로 헤드리스 Chrome에서 화면을 확인함(실제 서버 확인은 PC에서).
+- 벤치: `--mode` 옵션, 대시보드 벤치 탭에 `-general` 세트 추가, 서버가 P/W 결과 파일도 읽음.
+- 테스트 178개 통과, web 타입 검사 통과.

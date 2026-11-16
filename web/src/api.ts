@@ -1,6 +1,6 @@
 // Thin client for the local Agent Desk server. Every POST carries the per-start token from /api/state.
 
-import type { BenchSummary, StoredEvent } from './model.ts';
+import type { BenchSummary, RuntimeMode, StoredEvent } from './model.ts';
 
 export interface RunRow {
   id: number;
@@ -16,7 +16,7 @@ export interface RunRow {
 
 export interface Pending { question: string; options?: string[] }
 export interface ActiveRun { runId: number; project: string; request: string; pending: Pending | null }
-export interface ServerState { csrf: string; active: ActiveRun | null }
+export interface ServerState { csrf: string; active: ActiveRun | null; installed?: { codex: boolean; claude: boolean } }
 export interface RunReport {
   answer?: { answer: string; sources: string[] };
   builder?: { summary: string; changedFiles: string[]; commandsRun: { command: string; exitCode: number }[]; requirements: { id: string; status: string; evidence: string }[]; unverified: string[] };
@@ -39,11 +39,11 @@ export interface RunDetail {
   usageTotal: number;
   report: RunReport | null;
 }
-export interface ProjectConfigView { runtimes?: { primary?: string; review?: string }; verify?: string[]; review?: string; skills?: string[]; limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number } }
-export interface ProjectInfo { config: ProjectConfigView; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
+export interface ProjectConfigView { mode?: string; runtimes?: { primary?: string; review?: string }; verify?: string[]; review?: string; skills?: string[]; limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number } }
+export interface ProjectInfo { config: ProjectConfigView; mode?: string | null; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
 export interface LimitWindowView { kind: string; windowDurationMins: number | null; usedPercent: number; remainingPercent: number; resetsAt: number | null }
 export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string }
-export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; review?: 'always' | 'auto' | 'never'; language?: 'en' | 'ko'; verify?: string[] }
+export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; review?: 'always' | 'auto' | 'never'; language?: 'en' | 'ko'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
 export interface FolderEntry { name: string; path: string; isProject: boolean }

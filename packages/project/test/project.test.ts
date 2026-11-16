@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assignRuntimes, loadProject, parseFrontmatter, roleSettings, roleTemplate, skillsByRole, validateConfig } from '#project';
+import { assignRuntimes, loadProject, modeOf, planRuntimes, withoutReviewRuntime, parseFrontmatter, roleSettings, roleTemplate, skillsByRole, validateConfig } from '#project';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proj-'));
 const put = (project: string, rel: string, content: string) => { const file = path.join(project, rel); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); };
@@ -55,7 +55,7 @@ test('templates parse cleanly for every role', () => {
 });
 
 test('runtime assignment: primary/review slots, role overrides and the --runtime override', () => {
-  assert.deepEqual(assignRuntimes({}), { lead: 'codex', builder: 'codex', verifier: 'codex', researcher: 'codex' });
+  assert.deepEqual(assignRuntimes({}), { lead: 'codex', builder: 'codex', verifier: 'claude', researcher: 'codex' });
   const mixed = assignRuntimes({ runtimes: { primary: 'codex', review: 'claude' } });
   assert.equal(mixed.builder, 'codex');
   assert.equal(mixed.verifier, 'claude');
@@ -216,4 +216,30 @@ test('skillsByRole: roles get the skills their files list, limited to config.ski
   assert.deepEqual(skillsByRole(project, loadProject(project)).builder?.map(skill => skill.id), ['api-conventions', 'db-migration']);
   assert.equal(fs.existsSync(path.join(project, '.agents')), false);
   assert.equal(fs.existsSync(path.join(project, '.claude')), false);
+});
+
+test('runtime modes: default Codex builds + Claude reviews, config.mode, --mode and fallback', () => {
+  const plan = planRuntimes({});
+  assert.equal(plan.reviewIsDefault, true);
+  assert.deepEqual(withoutReviewRuntime(plan).assignment, { lead: 'codex', builder: 'codex', verifier: 'codex', researcher: 'codex' });
+  assert.equal(planRuntimes({ mode: 'claude+codex' }).assignment.builder, 'claude');
+  assert.equal(planRuntimes({ mode: 'claude+codex' }).assignment.verifier, 'codex');
+  assert.equal(planRuntimes({ mode: 'codex+claude' }).reviewIsDefault, false);
+  assert.deepEqual(Object.values(planRuntimes({}, { mode: 'claude' }).assignment), ['claude', 'claude', 'claude', 'claude']);
+  assert.equal(planRuntimes({ mode: 'claude' }, { override: 'fake' }).assignment.verifier, 'fake');
+  assert.equal(modeOf({}), 'codex+claude');
+  assert.equal(modeOf({ runtimes: { primary: 'codex' } }), 'codex');
+  assert.equal(modeOf({ runtimes: { primary: 'fake' } }), null);
+  assert.equal(validateConfig({ mode: 'claude+codex' }).ok, true);
+  assert.equal(validateConfig({ mode: 'gpt' }).ok, false);
+  assert.equal(validateConfig({ mode: 'codex', runtimes: { primary: 'codex' } }).ok, false);
+});
+
+test('role files: model-codex / model-claude follow the runtime the role runs on', () => {
+  const project = tmp();
+  put(project, '.agent-desk/agents/verifier.md', '---\nmodel: base\nmodel-claude: sonnet\nmodel-codex: gpt-5\n---\n');
+  const loaded = loadProject(project);
+  assert.equal(roleSettings(loaded, { verifier: 'claude' }).models.verifier, 'sonnet');
+  assert.equal(roleSettings(loaded, { verifier: 'codex' }).models.verifier, 'gpt-5');
+  assert.equal(roleSettings(loaded).models.verifier, 'base');
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { benchSets, changePercent, minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
+import { benchSetOf, modeNeeds, projectList, projectName, sameProject } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -86,4 +87,33 @@ test('bench sets pair v1 with v2 inside the same task set and compute changes', 
   assert.equal(changePercent(0, 5), null);
   assert.equal(changePercent(null, 5), null);
   assert.deepEqual(benchSets([summary('v2-only', 1)]).map(set => [set.id, set.baseline]), [['standard', null]]);
+});
+
+test('timeline keeps runtimes per role and the questions agents asked', () => {
+  const timeline = buildTimeline([
+    { seq: 1, at: 't1', type: 'run_started', data: { type: 'run_started', request: 'x', runtimes: { builder: 'codex', verifier: 'claude' } } },
+    { seq: 2, at: 't2', type: 'user_question', data: { type: 'user_question', step: 'plan', question: 'Proceed?', answered: true } },
+  ]);
+  assert.deepEqual(timeline.runtimes, { builder: 'codex', verifier: 'claude' });
+  assert.deepEqual(timeline.questions, [{ step: 'plan', question: 'Proceed?', answered: true }]);
+});
+
+test('project list merges saved folders and run history, newest first', () => {
+  const list = projectList(['C:\\work\\a', 'D:\\b'], [
+    { project: 'c:\\work\\a', startedAt: '2026-11-10' },
+    { project: 'E:\\c', startedAt: '2026-11-12' },
+  ], 'E:\\c');
+  assert.deepEqual(list.map(entry => entry.name), ['c', 'a', 'b']);
+  assert.equal(list[0]!.active, true);
+  assert.equal(list[1]!.runs, 1);
+  assert.equal(projectName('/home/me/proj/'), 'proj');
+  assert.equal(sameProject('C:\\A\\', 'c:\\a'), true);
+  assert.deepEqual(modeNeeds('codex+claude'), ['codex', 'claude']);
+  assert.deepEqual(modeNeeds('claude'), ['claude']);
+});
+
+test('bench labels ending in -general form their own set', () => {
+  assert.equal(benchSetOf('v2-general'), 'general');
+  assert.equal(benchSetOf('v1-13-hard'), 'hard');
+  assert.equal(benchSetOf('v2-codex-auto'), 'standard');
 });

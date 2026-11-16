@@ -1,6 +1,6 @@
 import type { Access, Effort, RoleId, SkillRef } from '#core';
 import { loadProjectConfig, ROLE_NAMES } from './config.ts';
-import type { ProjectConfig } from './config.ts';
+import type { ProjectConfig, RuntimeKind } from './config.ts';
 import { loadRoles } from './roles.ts';
 import type { RoleDefinition } from './roles.ts';
 import { checkSkills } from './skills.ts';
@@ -28,7 +28,8 @@ export function loadProject(project: string): LoadedProject {
 }
 
 /** Per-role settings for RunConfig, taken from the role files. */
-export function roleSettings(loaded: LoadedProject): { access: Partial<Record<RoleId, Access>>; effort: Partial<Record<RoleId, Effort>>; models: Partial<Record<RoleId, string>>; roleNotes: Partial<Record<RoleId, string>> } {
+/** `assignment` picks model-codex / model-claude for the runtime each role runs on; plain `model` applies otherwise. */
+export function roleSettings(loaded: LoadedProject, assignment?: Partial<Record<RoleId, RuntimeKind>>): { access: Partial<Record<RoleId, Access>>; effort: Partial<Record<RoleId, Effort>>; models: Partial<Record<RoleId, string>>; roleNotes: Partial<Record<RoleId, string>> } {
   const access: Partial<Record<RoleId, Access>> = {};
   const effort: Partial<Record<RoleId, Effort>> = {};
   const models: Partial<Record<RoleId, string>> = {};
@@ -37,7 +38,10 @@ export function roleSettings(loaded: LoadedProject): { access: Partial<Record<Ro
     const definition = loaded.roles[role];
     if (definition.access) access[role] = definition.access;
     if (definition.effort) effort[role] = definition.effort;
-    if (definition.model) models[role] = definition.model;
+    const kind = assignment?.[role];
+    const perRuntime = kind === 'codex' || kind === 'claude' ? definition.modelByRuntime?.[kind] : undefined;
+    const model = perRuntime ?? definition.model;
+    if (model) models[role] = model;
     if (definition.body) roleNotes[role] = definition.body;
   }
   return { access, effort, models, roleNotes };

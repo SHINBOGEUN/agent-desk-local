@@ -7,6 +7,7 @@
 //            [process.execPath, <repo>/packages/cli/src/bin.ts]
 //   review   always | auto | never (v2 default policy applies when omitted)
 //   verify   verify commands given to the harness. Default ["npm test"]
+//   mode     codex | claude | codex+claude | claude+codex (builder+reviewer)
 //   maxTokens, maxMinutes  harness budget (G5)
 // The 5-hour account usage limit is not enforced here: v2 tracks quota in phase 4.
 
@@ -65,7 +66,7 @@ export function runMetrics(result, durationSec) {
   };
 }
 
-export function createAdapter({ cli, review, verify: verifyOption, maxTokens, maxMinutes, runtime } = {}) {
+export function createAdapter({ cli, review, verify: verifyOption, maxTokens, maxMinutes, runtime, mode } = {}) {
   const explicitVerify = Array.isArray(verifyOption) && verifyOption.length > 0;
   const verify = explicitVerify ? verifyOption : ['npm test'];
   const command = cli || [process.execPath, path.join(repoRoot, 'packages', 'cli', 'src', 'bin.ts')];
@@ -83,7 +84,7 @@ export function createAdapter({ cli, review, verify: verifyOption, maxTokens, ma
     snapshotConfig() {
       return {
         adapter: 'v2',
-        settings: { review: review || 'default', verify, maxTokens: maxTokens ?? null, maxMinutes: maxMinutes ?? null, runtime: runtime || 'config' },
+        settings: { review: review || 'default', verify, maxTokens: maxTokens ?? null, maxMinutes: maxMinutes ?? null, runtime: runtime || 'config', mode: mode || (runtime ? null : 'config') },
         agents: ['lead', 'builder', 'verifier'].map(id => ({ id, name: id, enabled: true })),
         skills: [],
       };
@@ -95,6 +96,7 @@ export function createAdapter({ cli, review, verify: verifyOption, maxTokens, ma
       if (maxTokens) args.push('--max-tokens', String(maxTokens));
       if (maxMinutes) args.push('--max-minutes', String(maxMinutes));
       if (runtime) args.push('--runtime', runtime);
+      if (mode) args.push('--mode', mode);
       const startedAt = new Date();
       log(`  agent-desk run in ${workspacePath}`);
       const { code, stdout, stderr, timedOut } = await runProcess(command[0], args, { timeoutMs: timeoutMin * 60_000, cwd: repoRoot });

@@ -12,7 +12,7 @@ export interface GateResult {
 
 /** The parts of a stored RunEvent the dashboard reads. Unknown event types are ignored. */
 export type RunEventData =
-  | { type: 'run_started'; request: string }
+  | { type: 'run_started'; request: string; runtimes?: Record<string, string> }
   | { type: 'step_started'; step: string; role: string }
   | { type: 'step_finished'; step: string; ok: boolean; detail: string }
   | { type: 'gate'; result: GateResult }
@@ -50,6 +50,10 @@ export interface Timeline {
   steps: TimelineStep[];
   finished: { status: string; reason: string } | null;
   lastSeq: number;
+  /** Runtime per role ("codex" / "claude"), from run_started. */
+  runtimes?: Record<string, string>;
+  /** Questions agents asked the user, in order. */
+  questions?: { step: string; question: string; answered: boolean }[];
 }
 
 const emptyStep = (step: string, role: string, at: string): TimelineStep => ({ step, role, startedAt: at, finishedAt: null, ok: null, detail: '', gates: [], redo: [], retries: [], reports: [], messages: [], commands: 0, fileChanges: 0 });
@@ -59,6 +63,8 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
   let steps = timeline.steps;
   let finished = timeline.finished;
   let lastSeq = timeline.lastSeq;
+  let runtimes = timeline.runtimes;
+  let questions = timeline.questions;
   const copy = (): TimelineStep[] => {
     if (steps === timeline.steps) steps = timeline.steps.map(step => ({ ...step, gates: [...step.gates], redo: [...step.redo], retries: [...step.retries], reports: [...step.reports], messages: [...step.messages] }));
     return steps;
@@ -85,10 +91,13 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
         break;
       }
       case 'run_finished': finished = { status: event.status, reason: event.reason }; break;
+      case 'run_started': if (event.runtimes) runtimes = { ...event.runtimes }; break;
+      case 'user_question': questions = [...(questions ?? []), { step: event.step, question: event.question, answered: event.answered }]; break;
       default: break;
     }
   }
-  return lastSeq === timeline.lastSeq ? timeline : { steps, finished, lastSeq };
+  if (lastSeq === timeline.lastSeq) return timeline;
+  return { steps, finished, lastSeq, ...(runtimes ? { runtimes } : {}), ...(questions ? { questions } : {}) };
 }
 
 export const emptyTimeline = (): Timeline => ({ steps: [], finished: null, lastSeq: 0 });
@@ -191,13 +200,16 @@ export interface BenchSummary {
   meanTokens: number | null; medianTokens: number | null; meanAgents: number | null; meanMinutes: number | null; meanAccountPercent: number | null;
   perTask: Record<string, BenchTask>;
 }
-export interface BenchSet { id: 'standard' | 'hard'; baseline: BenchSummary | null; challengers: BenchSummary[] }
+export interface BenchSet { id: 'standard' | 'hard' | 'general'; baseline: BenchSummary | null; challengers: BenchSummary[] }
 
-/** Groups results by task set ("-hard" labels are the hard set) and picks the v1 label as the baseline. Only sets with something to show are returned. */
+/** Task set of a label: "-hard" labels are the hard set, "-general" labels the generality set (Python and web samples), the rest standard. */
+export const benchSetOf = (label: string): BenchSet['id'] => (label.endsWith('-hard') ? 'hard' : label.endsWith('-general') ? 'general' : 'standard');
+
+/** Groups results by task set and picks the v1 label as the baseline. Only sets with something to show are returned. */
 export function benchSets(summaries: BenchSummary[]): BenchSet[] {
   const sets: BenchSet[] = [];
-  for (const id of ['standard', 'hard'] as const) {
-    const members = summaries.filter(summary => summary.label.endsWith('-hard') === (id === 'hard'));
+  for (const id of ['standard', 'hard', 'general'] as const) {
+    const members = summaries.filter(summary => benchSetOf(summary.label) === id);
     if (!members.length) continue;
     sets.push({ id, baseline: members.find(summary => summary.label.startsWith('v1')) ?? null, challengers: members.filter(summary => !summary.label.startsWith('v1')) });
   }
@@ -209,3 +221,49 @@ export function changePercent(before: number | null, after: number | null): numb
   if (before === null || after === null || before === 0) return null;
   return Math.round(((after - before) / before) * 100);
 }
+
+/** Builder/reviewer runtime choice offered in the dashboard; '' means "use the project's config". */
+export type RuntimeMode = 'codex' | 'claude' | 'codex+claude' | 'claude+codex';
+export const RUNTIME_MODES: readonly RuntimeMode[] = ['codex+claude', 'claude+codex', 'codex', 'claude'];
+
+/** Which runtimes a mode needs, so the UI can warn when one is not installed. */
+export function modeNeeds(mode: RuntimeMode): ('codex' | 'claude')[] {
+  return [...new Set(mode.split('+'))] as ('codex' | 'claude')[];
+}
+
+/** Last folder name of a path, for the sidebar. */
+export function projectName(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? path;
+}
+
+export interface ProjectEntry { path: string; name: string; lastRunAt: string | null; runs: number; active: boolean }
+
+/**
+ * Projects for the sidebar: every folder the user opened (saved) plus every
+ * folder that has runs, newest activity first. Paths compare case-insensitively
+ * on Windows-style paths so C:\\a and c:\\a are one project.
+ */
+export function projectList(saved: string[], runs: { project: string; startedAt: string }[], activeProject: string | null): ProjectEntry[] {
+  const key = (path: string): string => (/^[a-z]:\\/i.test(path) ? path.toLowerCase() : path).replace(/[\\/]+$/, '');
+  const map = new Map<string, ProjectEntry>();
+  const touch = (path: string): ProjectEntry => {
+    const k = key(path);
+    let entry = map.get(k);
+    if (!entry) { entry = { path, name: projectName(path), lastRunAt: null, runs: 0, active: false }; map.set(k, entry); }
+    return entry;
+  };
+  for (const path of saved) if (path.trim()) touch(path);
+  for (const run of runs) {
+    const entry = touch(run.project);
+    entry.runs++;
+    if (!entry.lastRunAt || run.startedAt > entry.lastRunAt) entry.lastRunAt = run.startedAt;
+  }
+  if (activeProject) { const entry = map.get(key(activeProject)); if (entry) entry.active = true; }
+  return [...map.values()].sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '') || a.name.localeCompare(b.name));
+}
+
+export const sameProject = (a: string, b: string): boolean => {
+  const key = (path: string): string => (/^[a-z]:\\/i.test(path) ? path.toLowerCase() : path).replace(/[\\/]+$/, '');
+  return key(a) === key(b);
+};

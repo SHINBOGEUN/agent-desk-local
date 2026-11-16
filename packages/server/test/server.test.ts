@@ -50,6 +50,7 @@ test('security: headers, Host and Origin checks, CSRF token required for POST', 
     assert.equal((await call(port, 'POST', '/api/runs', { body: { project: '/x', request: 'hi' } })).status, 403);
     assert.equal((await call(port, 'POST', '/api/runs', { token: 'wrong', body: { project: '/x', request: 'hi' } })).status, 403);
     const state = JSON.parse((await call(port, 'GET', '/api/state')).body) as { csrf: string };
+    assert.equal(typeof (JSON.parse((await call(port, 'GET', '/api/state')).body) as { installed?: { codex: boolean } }).installed?.codex, 'boolean');
     assert.equal(state.csrf, token);
   } finally { await server.close(); }
 });
@@ -83,6 +84,7 @@ test('bad start requests are rejected; a second run while one is active gets 409
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: '  ' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', review: 'sometimes' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', language: 'fr' } })).status, 400);
+    assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project, request: 'x', mode: 'gpt+claude' } })).status, 400);
     assert.equal((await call(port, 'POST', '/api/runs', { token, body: { project: path.join(project, 'missing'), request: 'x', runtime: 'fake' } })).status, 400);
     const started = await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Add storage', runtime: 'fake' } });
     assert.equal(started.status, 202);
