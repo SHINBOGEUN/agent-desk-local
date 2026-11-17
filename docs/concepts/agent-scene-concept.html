@@ -274,6 +274,7 @@ function makeResearcher() {
 }
 const lead = makeLead(), builder = makeBuilder(), verifier = makeVerifier(), researcher = makeResearcher();
 
+function place(c, x, y) { const p = P(x, y); c.root.setAttribute('transform', `translate(${p[0]} ${p[1]})`); return p; }
 // seats (in front of each desk)
 const seat = { builder: [3.0, 2.75], verifier: [8.35, 2.9], researcher: [1.95, 7.2], lead: [9.0, 7.45] };
 
@@ -305,142 +306,201 @@ const sparks = [...Array(8)].map(() => el('circle', { r: 3, fill: '#ffd36a', opa
 const confetti = [...Array(26)].map((_, i) => el('rect', { width: 7, height: 11, rx: 2, fill: ['#ff8a6b', '#12a594', '#7b5cf0', '#ffcd3c', '#58c49a'][i % 5], opacity: 0 }, fx));
 
 // ---------- timeline ----------
-const T = 22; // seconds per loop
-const ease = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+// Motion follows the classic animation principles instead of linear tweens:
+// anticipation before a move, squash and stretch on hops and steps, overshoot
+// that settles (springs), follow-through on antennas and scarves, idle breathing,
+// blinks, and heads that turn toward whoever is talking.
+const T = 22;
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const seg = (t, a, b) => clamp((t - a) / (b - a));
 const lerp = (a, b, k) => a + (b - a) * k;
 const lerp2 = (p, q, k) => [lerp(p[0], q[0], k), lerp(p[1], q[1], k)];
-const arcPoint = (p, q, k, lift = 120) => { const m = [(p[0] + q[0]) / 2, Math.min(p[0] && p[1], q[1]) - lift]; const a = lerp2(p, m, k), b = lerp2(m, q, k); return lerp2(a, b, k); };
+const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeOutBack = t => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+// damped spring from 0 to 1, starting at `since` seconds ago
+const spring = (since, freq = 11, damp = 6) => (since <= 0 ? 0 : 1 - Math.exp(-damp * since) * Math.cos(freq * since));
+// a one-off wobble that dies out (for follow-through)
+const wobble = (since, amp, freq = 14, damp = 5) => (since <= 0 ? 0 : amp * Math.exp(-damp * since) * Math.sin(freq * since));
+const arcPoint = (p, q, k, lift) => { const m = [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) - lift]; return lerp2(lerp2(p, m, k), lerp2(m, q, k), k); };
 const relayTop = P(5.6, 5.1, 1.0);
-const at = (x, y, z = 0) => P(x, y, z);
-
-function place(c, x, y, extra = '') { const p = P(x, y); c.root.setAttribute('transform', `translate(${p[0]} ${p[1]}) ${extra}`); return p; }
+const leadStand = [7.3, 4.9];
 function steps(name) { document.querySelectorAll('.bar span').forEach(s => s.classList.toggle('on', s.dataset.step === name)); }
 
 let start = performance.now(), paused = false, pausedAt = 0;
 document.getElementById('pause').addEventListener('click', e => { paused = !paused; if (paused) pausedAt = performance.now(); else start += performance.now() - pausedAt; e.target.textContent = paused ? '재생' : '일시정지'; });
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function typing(c, t, speed = 1, amp = 1) { // arms bob while typing
-  const a = Math.sin(t * 18 * speed) * 7 * amp, b = Math.sin(t * 18 * speed + 1.7) * 7 * amp;
-  return [a, b];
+// blink: quick close-open every few seconds, each character on its own rhythm
+const blinkAt = (t, period, offset) => { const k = ((t + offset) % period); return k < 0.13 ? 1 - Math.sin((k / 0.13) * Math.PI) * 0.92 : 1; };
+const eyeShapes = {
+  lead: [[-15, -136, 10, 9], [5, -136, 10, 9]],
+  builder: [[-15, -122, 11, 11], [4, -122, 11, 11]],
+};
+function setEyes(c, kind, open, look = [0, 0]) {
+  if (kind === 'verifier') { c.eyes.forEach((lens, i) => lens.setAttribute('transform', `translate(${(i ? 15 : -15) + look[0]} ${-120 + look[1]}) scale(${c.zoom || 1} ${(c.zoom || 1) * open})`)); return; }
+  if (kind === 'researcher') { c.eyes[0].setAttribute('transform', `translate(${look[0]} ${-100 + look[1]}) scale(1 ${open}) translate(0 100)`); return; }
+  eyeShapes[kind].forEach(([x, y, w, h], i) => { const e = c.eyes[i]; const nh = Math.max(1.5, h * open); e.setAttribute('x', x + look[0]); e.setAttribute('y', y + (h - nh) / 2 + look[1]); e.setAttribute('height', nh); });
 }
+// body pose around the feet: hop height, squash (sx>1, sy<1) / stretch, lean in degrees, facing
+function pose(c, { y = 0, sx = 1, sy = 1, lean = 0, face = 1 } = {}) {
+  c.body.setAttribute('transform', `translate(0 ${y}) rotate(${lean}) scale(${sx * face} ${sy})`);
+}
+function headTurn(c, deg, neckY, nod = 0) { c.head.setAttribute('transform', `rotate(${deg + nod} 0 ${neckY})`); }
 function screenLines(id, t, speed) {
   screens[id].forEach((line, i) => {
     const k = (Math.sin(t * speed + i * 1.3) + 1) / 2;
-    const end = P(0, 0); // unused
     const len = line.len * (0.35 + 0.65 * k);
-    const b = [line.a[0] + len * CO * S, line.a[1] + len * 0.5 * S];
-    line.el.setAttribute('x2', b[0]); line.el.setAttribute('y2', b[1]);
+    line.el.setAttribute('x2', line.a[0] + len * CO * S); line.el.setAttribute('y2', line.a[1] + len * 0.5 * S);
   });
 }
-function bubbleAt(b, who, lines, side, show) {
-  if (!show) { b.g.setAttribute('opacity', 0); return; }
-  const r = who.root.transform.baseVal.consolidate(); const m = r ? r.matrix : { e: 0, f: 0 };
-  b.show(m.e + (side === 'left' ? 12 : -12), m.f - 180, lines, side); b.g.setAttribute('opacity', show);
+function bubbleAt(b, who, lines, side, from, to, t) {
+  if (t < from || t > to) { b.g.setAttribute('opacity', 0); return; }
+  const m = who.root.transform.baseVal.consolidate().matrix;
+  const ax = m.e + (side === 'left' ? 14 : -14), ay = m.f - 188;
+  b.show(ax, ay, lines, side);
+  const pop = t < to - 0.25 ? Math.max(0.001, spring(t - from, 13, 7)) : Math.max(0.001, (to - t) / 0.25);
+  b.g.setAttribute('transform', `translate(${ax} ${ay}) scale(${pop}) translate(${-ax} ${-ay})`);
+  b.g.setAttribute('opacity', clamp(pop * 1.5));
 }
-function gateOn(i, k) { const on = k > 0; gates[i].dot.setAttribute('fill', on ? (i === 3 ? '#f6b73c' : '#3ecf72') : '#3a425b'); if (i === 3 && k >= 1) gates[i].dot.setAttribute('fill', '#3ecf72'); gates[i].halo.setAttribute('fill', gates[i].dot.getAttribute('fill')); gates[i].halo.setAttribute('opacity', on ? 0.75 : 0); }
+function gateOn(i, since, color) {
+  const on = since > 0;
+  const c = on ? color : '#3a425b';
+  gates[i].dot.setAttribute('fill', c); gates[i].halo.setAttribute('fill', c);
+  const flash = on ? 1 + wobble(since, 0.5, 18, 6) : 1;
+  gates[i].dot.setAttribute('r', 10 * flash);
+  gates[i].halo.setAttribute('opacity', on ? 0.6 + 0.4 * Math.exp(-3 * since) : 0);
+}
+function packet(g, p, prev) {
+  if (!p) { g.setAttribute('opacity', 0); return; }
+  const vx = p[0] - prev[0], vy = p[1] - prev[1], v = Math.hypot(vx, vy);
+  const ang = Math.atan2(vy, vx) * 180 / Math.PI, st = 1 + Math.min(v / 18, 0.6);
+  g.setAttribute('transform', `translate(${p[0]} ${p[1]}) rotate(${ang}) scale(${st} ${1 / st}) rotate(${-ang})`);
+  g.setAttribute('opacity', 1);
+}
+function flight(t, a, b, mid, from, hop, to, lift1, lift2) {
+  if (t < from || t > to) return null;
+  const k1 = easeInOut(seg(t, from, hop)), k2 = easeInOut(seg(t, hop + 0.15, to));
+  return t < hop + 0.15 ? arcPoint(a, mid, k1, lift1) : arcPoint(mid, b, k2, lift2);
+}
 
 function frame(now) {
   const t = reduced ? 9.5 : ((paused ? pausedAt : now) - start) / 1000 % T;
-  // --- phase marks
-  const phase = t < 3 ? 'work' : t < 7.5 ? 'plan' : t < 12.5 ? 'build' : t < 17 ? 'review' : 'done';
-  steps(phase);
+  steps(t < 3 ? 'work' : t < 7.5 ? 'plan' : t < 12.5 ? 'build' : t < 17 ? 'review' : 'done');
+  const speaker = t > 4.2 && t < 6.4 ? 'lead' : t > 7.1 && t < 8.3 ? 'builder' : t > 11.4 && t < 12.6 ? 'builder' : t > 13.7 && t < 16.8 ? 'verifier' : t > 17.4 && t < 21 ? 'lead' : null;
+  const posOf = { lead: null, builder: P(...seat.builder), verifier: P(...seat.verifier), researcher: P(...seat.researcher) };
 
-  // --- lead: walks to relay (3-5), drops plan, walks back (6.5-8), later returns at 17 to announce
-  const goOut = ease(seg(t, 3, 5)), goBack = ease(seg(t, 6.6, 8.4));
-  const leadStand = [7.3, 4.9];
-  let lp = goBack > 0 ? lerp2(leadStand, seat.lead, goBack) : lerp2(seat.lead, leadStand, goOut);
-  const leadWalking = (t > 3 && t < 5) || (t > 6.6 && t < 8.4);
-  const hover = Math.sin(t * 3) * 4 + (leadWalking ? Math.abs(Math.sin(t * 9)) * -6 : 0);
-  place(lead, lp[0], lp[1]);
-  lead.body.setAttribute('transform', `translate(0 ${hover})`);
-  const leadTyping = t < 3 || t > 8.4 && t < 17;
-  const [la, lb] = typing(lead, t, 0.8, leadTyping ? 0.7 : 0);
-  const wave = t > 17.2 && t < 21 ? Math.sin(t * 8) * 25 - 70 : (t > 4.6 && t < 6.6 ? -40 : 14 + la);
-  lead.armL.setAttribute('transform', `translate(-22 -88) rotate(${wave})`);
-  lead.armR.setAttribute('transform', `translate(22 -88) rotate(${-22 + lb})`);
-  screenLines('lead', t, leadTyping ? 5 : 0.5);
+  // ===== lead =====
+  // 3.0-3.35 anticipation crouch, 3.35-5.0 walk out, 5.0 settle; 6.6-6.9 turn, 6.9-8.4 walk back, settle
+  const out = easeInOut(seg(t, 3.35, 5.0)), back = easeInOut(seg(t, 6.9, 8.4));
+  const lp = back > 0 ? lerp2(leadStand, seat.lead, back) : lerp2(seat.lead, leadStand, out);
+  const lpos = place(lead, lp[0], lp[1]); posOf.lead = lpos;
+  const walking = (t > 3.35 && t < 5.0) || (t > 6.9 && t < 8.4);
+  const stepPhase = t * 7.5;
+  const walkBob = walking ? -Math.abs(Math.sin(stepPhase)) * 9 : 0;
+  const stepSquash = walking ? 1 - Math.abs(Math.cos(stepPhase)) * 0.05 : 1;
+  const crouch = t > 3.0 && t < 3.35 ? Math.sin(seg(t, 3.0, 3.35) * Math.PI) : 0; // anticipation
+  const arrive = wobble(t - 5.0, 0.08, 16, 6) + wobble(t - 8.4, 0.08, 16, 6); // settle
+  const breathe = Math.sin(t * 2.1) * 0.015;
+  const goingLeft = t > 3.35 && t < 5.0 ? lp[0] - P(...seat.lead)[0] : 0;
+  const face = (t > 3.0 && t < 5.2) ? -1 : 1; // turns toward the relay on the way out
+  const lean = walking ? (t < 6 ? -7 : 7) : 0;
+  const hover = Math.sin(t * 2.6) * 3;
+  pose(lead, { y: hover + walkBob + crouch * 6, sx: 1 + crouch * 0.08 - arrive * 0.5 + breathe * -0.5, sy: stepSquash - crouch * 0.12 + arrive + breathe, lean: lean - crouch * 4, face });
+  const leadTyping = t < 3 || (t > 8.6 && t < 17);
+  const typeA = leadTyping ? Math.sin(t * 13) * 6 : 0;
+  const swing = walking ? Math.sin(stepPhase) * 22 : 0;
+  const handUp = t > 4.6 && t < 6.6 ? -55 + Math.sin(t * 5) * 6 : 0;
+  const waveHi = t > 17.4 && t < 20.6 ? -95 + Math.sin(t * 11) * 22 : 0;
+  lead.armL.setAttribute('transform', `translate(-22 -88) rotate(${14 + typeA + swing + (waveHi || handUp)})`);
+  lead.armR.setAttribute('transform', `translate(22 -88) rotate(${-22 - typeA * 0.8 - swing})`);
+  const leadLook = speaker && speaker !== 'lead' ? (posOf[speaker][0] > lpos[0] ? 1 : -1) : 0;
+  headTurn(lead, leadLook * 8 + (walking ? Math.sin(stepPhase) * 3 : 0), -110, leadTyping ? Math.sin(t * 6.5) * 2 : 0);
+  setEyes(lead, 'lead', blinkAt(t, 3.7, 0.4), [leadLook * 3, leadTyping ? 2 : 0]);
+  screenLines('lead', t, leadTyping ? 5 : 0.4);
 
-  // --- builder: types, then fast build with sparks (8.4-12), hands work packet at 12
-  const bp = place(builder, ...seat.builder);
+  // ===== builder =====
+  const bpos = place(builder, ...seat.builder);
+  const gotPlan = 7.0; // plan envelope lands
+  const hopK = seg(t, gotPlan + 0.05, gotPlan + 0.55); // excited hop: squash, stretch up, land squash
+  const hopY = hopK > 0 && hopK < 1 ? -Math.sin(hopK * Math.PI) * 26 : 0;
+  const hopSquash = hopK > 0 && hopK < 1 ? (hopK < 0.15 ? -0.12 * (hopK / 0.15) : hopK < 0.85 ? 0.1 * Math.sin((hopK - 0.15) / 0.7 * Math.PI) : -0.1 * (1 - hopK) / 0.15) : wobble(t - gotPlan - 0.55, 0.07, 18, 7);
   const building = t > 8.2 && t < 12.2;
-  const [ba, bb] = typing(builder, t, building ? 1.8 : 1, t < 3 || building || t > 17 ? 1 : 0.25);
-  builder.armL.setAttribute('transform', `translate(-38 -80) rotate(${30 + ba})`);
-  builder.armR.setAttribute('transform', `translate(38 -80) rotate(${-30 + bb})`);
-  builder.body.setAttribute('transform', `translate(0 ${building ? Math.abs(Math.sin(t * 16)) * -3 : 0})`);
-  const nod = t > 7 && t < 8 ? Math.sin((t - 7) * Math.PI * 4) * 6 : 0;
-  builder.head.setAttribute('transform', `rotate(${nod} 0 -110)`);
+  const party = t > 17.6 && t < 20.8;
+  const bJump = party ? Math.max(0, Math.sin((t - 17.6) * 5.5)) : 0;
+  pose(builder, { y: hopY - bJump * 18 + (building ? -Math.abs(Math.sin(t * 15)) * 2 : 0), sx: 1 - hopSquash * 0.8 + (bJump > 0.9 ? -0.05 : 0), sy: 1 + hopSquash + Math.sin(t * 1.9 + 1) * 0.012 + bJump * 0.05, lean: building ? 4 : 0 });
+  const bSpeed = building ? 22 : 12, bAmp = t < 3 || building ? 1 : 0.25;
+  const pump = t > 11.9 && t < 12.6 ? -110 * Math.sin(seg(t, 11.9, 12.6) * Math.PI) : 0; // fist pump when tests pass
+  builder.armL.setAttribute('transform', `translate(-38 -80) rotate(${30 + Math.sin(t * bSpeed) * 8 * bAmp + (party ? -120 + Math.sin(t * 12) * 15 : 0)})`);
+  builder.armR.setAttribute('transform', `translate(38 -80) rotate(${-30 + Math.sin(t * bSpeed + 2.1) * 8 * bAmp + pump + (party ? 120 - Math.sin(t * 12) * 15 : 0)})`);
+  const bLook = speaker && speaker !== 'builder' ? (posOf[speaker][0] > bpos[0] ? 1 : -1) : 0;
+  const nod = t > 7.1 && t < 8.1 ? Math.sin((t - 7.1) * Math.PI * 4) * 7 * (1 - seg(t, 7.1, 8.1)) : 0;
+  headTurn(builder, bLook * 9 + (building ? Math.sin(t * 7.5) * 2.5 : 0), -100, nod);
+  setEyes(builder, 'builder', blinkAt(t, 4.3, 1.9), [bLook * 3, building ? 3 : 0]);
   screenLines('builder', t, building ? 14 : 4);
-  sparks.forEach((s, i) => { if (!building) { s.setAttribute('opacity', 0); return; } const k = ((t * 2.2 + i / sparks.length) % 1); const base = P(2.9, 1.45, 0.95); s.setAttribute('cx', base[0] + Math.cos(i * 2.4) * 40 * k); s.setAttribute('cy', base[1] - 20 - Math.sin(i * 1.7 + 1) * 30 * k + 40 * k * k); s.setAttribute('opacity', 1 - k); });
+  sparks.forEach((sp, i) => { if (!building) { sp.setAttribute('opacity', 0); return; } const k = ((t * 2.2 + i / sparks.length) % 1); const base = P(2.9, 1.45, 0.95); sp.setAttribute('cx', base[0] + Math.cos(i * 2.4) * 46 * k); sp.setAttribute('cy', base[1] - 20 - Math.sin(i * 1.7 + 1) * 34 * k + 50 * k * k); sp.setAttribute('opacity', 1 - k); sp.setAttribute('r', 3.5 * (1 - k) + 1); });
 
-  // --- verifier: reads books, then reviews (12.6-16.5): lenses zoom, checks appear
-  place(verifier, ...seat.verifier);
-  const reviewing = t > 13.2 && t < 16.8;
-  const [va, vb] = typing(verifier, t, 0.6, t < 3 ? 0.8 : 0.2);
-  verifier.armR.setAttribute('transform', `translate(30 -84) rotate(${-8 + (reviewing ? -18 : vb * 0.5)})`);
-  verifier.armL.setAttribute('transform', `translate(-32 -74) rotate(${va * 0.6})`);
-  const zoom = reviewing ? 1 + 0.25 * (0.5 + 0.5 * Math.sin(t * 6)) : 1;
-  verifier.eyes.forEach((lens, i) => lens.setAttribute('transform', `translate(${i ? 15 : -15} -120) scale(${zoom})`));
-  verifier.head.setAttribute('transform', `rotate(${reviewing ? Math.sin(t * 2.4) * 8 : Math.sin(t * 0.8) * 3} 0 -100)`);
-  verifier.checks.forEach((c, i) => c.setAttribute('opacity', t > 14 + i * 0.7 && t < T ? 1 : 0));
+  // ===== verifier =====
+  const vpos = place(verifier, ...seat.verifier);
+  const reviewing = t > 13.6 && t < 16.4;
+  const leanIn = reviewing ? easeOutBack(seg(t, 13.6, 14.1)) : 1 - easeInOut(seg(t, 16.4, 16.9));
+  const passNod = t > 15.9 && t < 16.9 ? Math.sin(seg(t, 15.9, 16.9) * Math.PI * 3) * 9 * (1 - seg(t, 15.9, 16.9)) : 0;
+  const vJump = party ? Math.max(0, Math.sin((t - 17.75) * 5.5)) : 0;
+  pose(verifier, { y: -vJump * 16, sx: 1 - Math.sin(t * 1.7) * 0.012, sy: 1 + Math.sin(t * 1.7) * 0.018 + vJump * 0.05, lean: leanIn * 9 });
+  verifier.armR.setAttribute('transform', `translate(30 -84) rotate(${-8 - leanIn * 16 + Math.sin(t * 1.3) * 3})`);
+  verifier.armL.setAttribute('transform', `translate(-32 -74) rotate(${Math.sin(t * 1.1) * 5 + (party ? -40 + Math.sin(t * 12) * 18 : 0)})`);
+  verifier.zoom = reviewing ? 1 + 0.22 * (0.5 + 0.5 * Math.sin(t * 5)) : 1 + wobble(t - 16.4, 0.15, 14, 6);
+  const vLook = speaker && speaker !== 'verifier' ? (posOf[speaker][0] > vpos[0] ? 1 : -1) : 0;
+  const curious = reviewing ? Math.sin(t * 1.6) * 10 : 0; // head tilts while reading
+  headTurn(verifier, vLook * 9 + curious, -100, passNod);
+  setEyes(verifier, 'verifier', blinkAt(t, 5.1, 3.3), [vLook * 2 + (reviewing ? 2 : 0), reviewing ? 2 : 0]);
+  verifier.checks.forEach((c, i) => { const since = t - (14.3 + i * 0.6); c.setAttribute('opacity', since > 0 ? clamp(since * 4) : 0); c.setAttribute('transform', since > 0 ? `translate(0 ${-wobble(since, 4, 16, 6)})` : ''); });
   screenLines('verifier', t, reviewing ? 9 : 2);
 
-  // --- researcher: floats, reads, glances
-  place(researcher, ...seat.researcher);
-  researcher.body.setAttribute('transform', `translate(0 ${Math.sin(t * 2.2) * 8})`);
-  researcher.ring.setAttribute('transform', `rotate(${Math.sin(t * 1.5) * 6} 0 -96)`);
+  // ===== researcher =====
+  const rpos = place(researcher, ...seat.researcher);
+  const drift = Math.sin(t * 1.6) * 9, sway = Math.sin(t * 1.1) * 4;
+  const rLook = speaker ? (posOf[speaker][0] > rpos[0] ? 1 : -1) : 0;
+  researcher.body.setAttribute('transform', `translate(${sway} ${drift}) rotate(${Math.cos(t * 1.6) * 4 + rLook * 5} 0 -96)`);
+  researcher.ring.setAttribute('transform', `rotate(${Math.sin(t * 1.6 - 0.8) * 9} 0 -96)`); // ring lags the body (follow-through)
   researcher.prop.setAttribute('rx', 22 * Math.abs(Math.cos(t * 30)) + 4);
+  setEyes(researcher, 'researcher', blinkAt(t, 4.8, 2.5), [rLook * 4, 0]);
   screenLines('researcher', t, 3);
 
-  // --- relay pulse when something passes through
-  const through = (t > 5 && t < 6.6) || (t > 12.2 && t < 13.4) || (t > 16.4 && t < 17.4);
-  relayGlow.setAttribute('opacity', through ? 0.95 : 0.45 + Math.sin(t * 2) * 0.1);
-  ring.setAttribute('rx', 40 + (through ? Math.sin(t * 10) * 6 : 0));
+  // ===== harness relay =====
+  const pulseSince = [5.0, 12.85, 16.85].map(x => t - x).filter(x => x > 0).sort((a, b) => a - b)[0] ?? 99;
+  relayGlow.setAttribute('opacity', 0.45 + Math.sin(t * 2) * 0.08 + 0.5 * Math.exp(-2.5 * pulseSince));
+  relayGlow.setAttribute('r', 46 * (1 + 0.35 * Math.exp(-3 * pulseSince)));
+  ring.setAttribute('rx', 40 * (1 + wobble(pulseSince, 0.25, 16, 5)));
+  ring.setAttribute('ry', 17 * (1 + wobble(pulseSince, 0.25, 16, 5)));
 
-  // --- packets (harness-mediated handoffs)
-  const leadHand = lerp2(P(...leadStand, 1.2), P(...leadStand, 1.2), 0);
-  // plan: lead -> relay (5.0-5.7) -> builder (5.9-7.0)
-  if (t > 5 && t < 7.05) {
-    const k1 = ease(seg(t, 5, 5.7)), k2 = ease(seg(t, 5.9, 7.0));
-    const p = k2 > 0 ? arcPoint(relayTop, P(seat.builder[0], seat.builder[1], 2.0), k2, 160) : arcPoint(P(leadStand[0], leadStand[1], 1.6), relayTop, k1, 60);
-    planPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); planPacket.setAttribute('opacity', 1);
-  } else planPacket.setAttribute('opacity', 0);
-  // work: builder -> relay (12.2-12.9) -> verifier (13.0-13.6)
-  if (t > 12.2 && t < 13.65) {
-    const k1 = ease(seg(t, 12.2, 12.9)), k2 = ease(seg(t, 13.0, 13.6));
-    const p = k2 > 0 ? arcPoint(relayTop, P(seat.verifier[0], seat.verifier[1], 2.0), k2, 150) : arcPoint(P(seat.builder[0], seat.builder[1], 2.0), relayTop, k1, 120);
-    workPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); workPacket.setAttribute('opacity', 1);
-  } else workPacket.setAttribute('opacity', 0);
-  // verdict: verifier -> relay -> lead (16.4-17.4)
-  if (t > 16.4 && t < 17.45) {
-    const k1 = ease(seg(t, 16.4, 16.9)), k2 = ease(seg(t, 16.95, 17.4));
-    const p = k2 > 0 ? arcPoint(relayTop, P(seat.lead[0], seat.lead[1], 2.0), k2, 110) : arcPoint(P(seat.verifier[0], seat.verifier[1], 2.0), relayTop, k1, 120);
-    verdictPacket.setAttribute('transform', `translate(${p[0]} ${p[1]})`); verdictPacket.setAttribute('opacity', 1);
-  } else verdictPacket.setAttribute('opacity', 0);
+  // ===== packets (every handoff goes through the harness) =====
+  const prev = t - 1 / 60;
+  const planAt = x => flight(x, P(leadStand[0], leadStand[1], 1.7), P(seat.builder[0], seat.builder[1], 2.1), relayTop, 4.95, 5.6, 7.0, 70, 170);
+  const workAt = x => flight(x, P(seat.builder[0], seat.builder[1], 2.1), P(seat.verifier[0], seat.verifier[1], 2.1), relayTop, 12.2, 12.85, 13.6, 130, 150);
+  const verdictAt = x => flight(x, P(seat.verifier[0], seat.verifier[1], 2.1), P(seat.lead[0], seat.lead[1], 2.1), relayTop, 16.4, 16.85, 17.4, 120, 110);
+  packet(planPacket, planAt(t), planAt(prev) || planAt(t));
+  packet(workPacket, workAt(t), workAt(prev) || workAt(t));
+  packet(verdictPacket, verdictAt(t), verdictAt(prev) || verdictAt(t));
 
-  // --- gates
-  gateOn(0, t > 8.6 ? 1 : 0); gateOn(1, t > 10.4 ? 1 : 0); gateOn(2, t > 11.6 ? 1 : 0);
-  gateOn(3, t > 13.4 ? (t > 16.2 ? 1 : 0.5) : 0); gateOn(4, t > 16.6 ? 1 : 0);
+  // ===== gates =====
+  gateOn(0, t - 8.7, '#3ecf72'); gateOn(1, t - 10.3, '#3ecf72'); gateOn(2, t - 11.7, '#3ecf72');
+  gateOn(3, t - 13.6, t > 16.2 ? '#3ecf72' : '#f6b73c'); gateOn(4, t - 16.6, '#3ecf72');
   cards[2].setAttribute('opacity', t > 16.6 ? 1 : 0.25);
 
-  // --- bubbles
-  bubbleAt(bubbles.lead, lead, ['계획 확정!', 'R1 마감일, R2 빨간 표시'], 'left', t > 4.2 && t < 6.4 ? 1 : 0);
-  if (t > 17.4 && t < 21.2) bubbleAt(bubbles.lead, lead, ['완료 보고했어요', '게이트 5개 통과 ✓'], 'right', 1);
-  bubbleAt(bubbles.builder, builder, t < 8.2 ? ['좋아요, 바로 시작!'] : ['npm test 통과', '결과 넘길게요'], 'left', (t > 7.1 && t < 8.3) || (t > 11.4 && t < 12.6) ? 1 : 0);
-  bubbleAt(bubbles.verifier, verifier, t < 15.6 ? ['R2 증거 확인 중…', 'test/app.test.mjs:42'] : ['PASS', '요구사항 2개 모두 확인'], 'right', t > 13.7 && t < 16.8 ? 1 : 0);
-  bubbleAt(bubbles.researcher, researcher, ['(조사 요청 없음 · 대기)'], 'left', t > 1 && t < 2.8 ? 0.85 : 0);
+  // ===== bubbles (pop in with overshoot) =====
+  bubbleAt(bubbles.lead, lead, t < 10 ? ['계획 확정!', 'R1 마감일, R2 빨간 표시'] : ['완료 보고했어요', '게이트 5개 통과 ✓'], t < 10 ? 'left' : 'right', t < 10 ? 4.3 : 17.5, t < 10 ? 6.4 : 21.0, t);
+  bubbleAt(bubbles.builder, builder, t < 10 ? ['좋아요, 바로 시작!'] : ['npm test 통과!', '결과 넘길게요'], 'left', t < 10 ? 7.15 : 11.5, t < 10 ? 8.4 : 12.7, t);
+  bubbleAt(bubbles.verifier, verifier, t < 15.6 ? ['음… R2 증거는', 'test/app.test.mjs:42'] : ['PASS!', '요구사항 2개 모두 확인'], 'right', t < 15.6 ? 13.8 : 15.6, t < 15.6 ? 15.6 : 16.9, t);
+  bubbleAt(bubbles.researcher, researcher, ['(이번엔 조사할 게 없네)'], 'left', 1.0, 2.8, t);
 
-  // --- celebration
-  const party = seg(t, 17.4, 20.5);
+  // ===== celebration =====
+  const partyK = seg(t, 17.5, 20.6);
   confetti.forEach((c, i) => {
-    if (party <= 0 || party >= 1) { c.setAttribute('opacity', 0); return; }
-    const k = (party * 1.4 + (i % 7) * 0.05) % 1, base = P(5.6, 5.1, 2.8);
-    const x = base[0] + Math.cos(i * 1.37) * (60 + i * 9) * k, y = base[1] - 40 + (k * k * 260) - Math.sin(i) * 60 * k;
-    c.setAttribute('transform', `translate(${x} ${y}) rotate(${i * 40 + k * 540})`); c.setAttribute('opacity', 1 - k * 0.8);
+    if (partyK <= 0 || partyK >= 1) { c.setAttribute('opacity', 0); return; }
+    const k = clamp(partyK * 1.3 - (i % 6) * 0.04), base = P(5.6, 5.1, 2.8);
+    const x = base[0] + Math.cos(i * 1.37) * (70 + i * 9) * k, y = base[1] - 60 * Math.sin(k * Math.PI) + k * k * 280;
+    c.setAttribute('transform', `translate(${x} ${y}) rotate(${i * 40 + k * 720}) scale(1 ${Math.cos(k * 18 + i)})`); c.setAttribute('opacity', 1 - k * 0.85);
   });
-  if (party > 0 && party < 1) { const hop = Math.abs(Math.sin(t * 7)) * -10; builder.body.setAttribute('transform', `translate(0 ${hop})`); verifier.body.setAttribute('transform', `translate(0 ${Math.abs(Math.sin(t * 7 + 1)) * -10})`); }
 
   if (!reduced) requestAnimationFrame(frame);
 }
