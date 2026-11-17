@@ -295,3 +295,41 @@ test('runs carry images, record their settings, can be resumed; project files an
     assert.equal(usage.claude.last5h, 0);
   } finally { await server.close(); }
 });
+
+test('quality log: rate a finished run, read the summary, export CSV and JSON', async () => {
+  const project = tmp();
+  const { server, port, token } = await start(new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }]), script([{ report: answerReport }])], builder: [] } }));
+  try {
+    const ids: number[] = [];
+    for (const request of ['Which port?', 'Which port, again?']) {
+      const { runId } = JSON.parse((await call(port, 'POST', '/api/runs', { token, body: { project, request, runtime: 'fake' } })).body) as { runId: number };
+      await call(port, 'GET', `/api/runs/${runId}/events`);
+      ids.push(runId);
+    }
+    const [first, second] = ids as [number, number];
+    assert.equal((await call(port, 'POST', '/api/feedback', { body: { runId: first, rating: 1 } })).status, 403);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: first, rating: 5 } })).status, 400);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: first, rating: -1, cause: 'mood' } })).status, 400);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: first, rating: -1, cause: 'skill', target: '../x' } })).status, 400);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: 9999, rating: 1 } })).status, 404);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: first, rating: 1, note: 'good' } })).status, 200);
+    const saved = JSON.parse((await call(port, 'POST', '/api/feedback', { token, body: { runId: second, rating: -1, cause: 'role', target: '.agent-desk/agents/lead.md', note: 'answered, "too long"' } })).body) as { feedback: { cause: string } };
+    assert.equal(saved.feedback.cause, 'role');
+    const detail = JSON.parse((await call(port, 'GET', `/api/runs/${second}`)).body) as { feedback: { rating: number } };
+    assert.equal(detail.feedback.rating, -1);
+    const quality = JSON.parse((await call(port, 'GET', `/api/quality?project=${encodeURIComponent(project)}`)).body) as { rows: { runId: number; rating: number }[]; summary: { rated: number; approval: number; byCause: Record<string, number>; targets: { target: string }[] } };
+    assert.deepEqual(quality.rows.map(row => [row.runId, row.rating]), [[second, -1], [first, 1]]);
+    assert.equal(quality.summary.approval, 0.5);
+    assert.equal(quality.summary.byCause.role, 1);
+    assert.deepEqual(quality.summary.targets.map(entry => entry.target), ['.agent-desk/agents/lead.md']);
+    const csv = await call(port, 'GET', `/api/quality/export?project=${encodeURIComponent(project)}`);
+    assert.match(String(csv.headers['content-type']), /text\/csv/);
+    assert.match(csv.body, /^﻿runId,startedAt,project/);
+    assert.match(csv.body, /"answered, ""too long"""/);
+    const json = JSON.parse((await call(port, 'GET', '/api/quality/export?format=json')).body) as { rows: unknown[]; summary: { rated: number } };
+    assert.equal(json.rows.length, 2);
+    assert.equal((await call(port, 'POST', '/api/feedback', { token, body: { runId: first, rating: 0 } })).status, 200);
+    const after = JSON.parse((await call(port, 'GET', '/api/quality')).body) as { summary: { rated: number } };
+    assert.equal(after.summary.rated, 1);
+  } finally { await server.close(); }
+});

@@ -12,7 +12,7 @@ import { sanitize } from './redact.ts';
 
 export { redactSecrets, sanitize } from './redact.ts';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_STRING = 4000;
 
 export interface RunRow {
@@ -85,7 +85,39 @@ const MIGRATIONS: string[] = [`
   ALTER TABLE runs ADD COLUMN report TEXT;
 `, `
   ALTER TABLE runs ADD COLUMN settings TEXT;
+`, `
+  CREATE TABLE feedback (
+    run_id INTEGER PRIMARY KEY REFERENCES runs(id),
+    rating INTEGER NOT NULL,
+    cause TEXT,
+    target TEXT,
+    note TEXT,
+    at TEXT NOT NULL
+  );
 `];
+
+/** Where a bad result should be fixed (the book's improvement loop): result quality -> skill, role confusion -> role file, order or routing -> workflow/config. */
+export const FEEDBACK_CAUSES = ['skill', 'role', 'workflow', 'other'] as const;
+export type FeedbackCause = typeof FEEDBACK_CAUSES[number];
+
+export interface Feedback { runId: number; rating: 1 | -1; cause: FeedbackCause | null; target: string | null; note: string | null; at: string }
+
+/** One run in the quality log: the user's rating next to what the harness measured. */
+export interface QualityRow {
+  runId: number;
+  project: string;
+  request: string;
+  workflow: string | null;
+  status: string;
+  startedAt: string;
+  tokens: number;
+  redo: number;
+  rejectedReports: number;
+  rating: 1 | -1 | null;
+  cause: FeedbackCause | null;
+  target: string | null;
+  note: string | null;
+}
 
 /** What the dashboard shows as the run's report: the reports the agents submitted, not the raw event log. */
 export function reportOf(result: RunResult): Record<string, unknown> {
@@ -212,11 +244,51 @@ export class RunStore {
     return (this.#db.prepare('SELECT project, COUNT(*) AS runs FROM runs GROUP BY project').all() as { project: string; runs: number }[]).map(row => ({ project: row.project, runs: Number(row.runs) }));
   }
 
+  /** Saves (or replaces) the user's rating of a finished run. */
+  setFeedback(feedback: Omit<Feedback, 'at'>): Feedback {
+    if (!this.getRun(feedback.runId)) throw new Error(`run ${feedback.runId} not found`);
+    if (feedback.rating !== 1 && feedback.rating !== -1) throw new Error('rating must be 1 or -1');
+    if (feedback.cause !== null && !FEEDBACK_CAUSES.includes(feedback.cause)) throw new Error(`cause must be one of ${FEEDBACK_CAUSES.join(', ')}`);
+    const clip = (value: string | null) => (value === null ? null : value.slice(0, MAX_STRING));
+    const saved: Feedback = { runId: feedback.runId, rating: feedback.rating, cause: feedback.rating === 1 ? null : feedback.cause, target: feedback.rating === 1 ? null : clip(feedback.target), note: clip(feedback.note), at: new Date().toISOString() };
+    this.#db.prepare('INSERT OR REPLACE INTO feedback (run_id, rating, cause, target, note, at) VALUES (?, ?, ?, ?, ?, ?)').run(saved.runId, saved.rating, saved.cause, saved.target, saved.note, saved.at);
+    return saved;
+  }
+
+  getFeedback(runId: number): Feedback | null {
+    const row = this.#db.prepare('SELECT * FROM feedback WHERE run_id = ?').get(runId) as Record<string, unknown> | undefined;
+    return row ? { runId: Number(row.run_id), rating: Number(row.rating) as 1 | -1, cause: (row.cause as FeedbackCause | null) ?? null, target: (row.target as string | null) ?? null, note: (row.note as string | null) ?? null, at: String(row.at) } : null;
+  }
+
+  clearFeedback(runId: number): void {
+    this.#db.prepare('DELETE FROM feedback WHERE run_id = ?').run(runId);
+  }
+
+  /** Finished runs with their rating (if any), tokens, REDO rounds and reports the evidence checks sent back. */
+  qualityRows(project?: string, limit = 500): QualityRow[] {
+    const sql = `SELECT r.id, r.project, r.request, r.workflow, r.status, r.started_at, r.report,
+        f.rating, f.cause, f.target, f.note,
+        (SELECT COALESCE(SUM(total_tokens), 0) FROM usage u WHERE u.run_id = r.id) AS tokens,
+        (SELECT COUNT(*) FROM events e WHERE e.run_id = r.id AND e.type = 'report' AND json_extract(e.data, '$.accepted') = 0) AS rejected
+      FROM runs r LEFT JOIN feedback f ON f.run_id = r.id
+      WHERE r.status != 'running' ${project ? 'AND r.project = ?' : ''} ORDER BY r.id DESC LIMIT ?`;
+    const rows = (project ? this.#db.prepare(sql).all(project, limit) : this.#db.prepare(sql).all(limit)) as Record<string, unknown>[];
+    return rows.map(row => {
+      let redo = 0;
+      try { redo = Number((JSON.parse(String(row.report ?? '{}')) as { redo?: number }).redo) || 0; } catch { /* old rows */ }
+      return {
+        runId: Number(row.id), project: String(row.project), request: String(row.request), workflow: (row.workflow as string | null) ?? null, status: String(row.status), startedAt: String(row.started_at),
+        tokens: Number(row.tokens), redo, rejectedReports: Number(row.rejected),
+        rating: row.rating === null || row.rating === undefined ? null : (Number(row.rating) as 1 | -1), cause: (row.cause as FeedbackCause | null) ?? null, target: (row.target as string | null) ?? null, note: (row.note as string | null) ?? null,
+      };
+    });
+  }
+
   /** Deletes runs and everything recorded for them (events, steps, usage). Running runs are skipped. Returns the ids deleted. */
   deleteRuns(ids: number[]): number[] {
     const deleted: number[] = [];
     const status = this.#db.prepare('SELECT status FROM runs WHERE id = ?');
-    const statements = ['DELETE FROM usage WHERE run_id = ?', 'DELETE FROM events WHERE run_id = ?', 'DELETE FROM steps WHERE run_id = ?', 'DELETE FROM runs WHERE id = ?'].map(sql => this.#db.prepare(sql));
+    const statements = ['DELETE FROM feedback WHERE run_id = ?', 'DELETE FROM usage WHERE run_id = ?', 'DELETE FROM events WHERE run_id = ?', 'DELETE FROM steps WHERE run_id = ?', 'DELETE FROM runs WHERE id = ?'].map(sql => this.#db.prepare(sql));
     this.#db.exec('BEGIN');
     try {
       for (const id of ids) {

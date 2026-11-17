@@ -136,7 +136,7 @@ test('an empty database is created with the schema and a newer schema is refused
   const file = path.join(tmp(), 'a.sqlite');
   new RunStore(file).close();
   const raw = new DatabaseSync(file);
-  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 3);
+  assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 4);
   raw.exec('PRAGMA user_version = 99');
   raw.close();
   assert.throws(() => new RunStore(file), /newer than this program supports/);
@@ -155,5 +155,34 @@ test('deleting runs removes their events, steps and usage, and skips running run
   assert.equal(store.steps(done).length, 0);
   assert.ok(store.getRun(running));
   assert.deepEqual(store.projects(), [{ project: '/bench/T01-r1', runs: 1 }]);
+  store.close();
+});
+
+test('feedback: a rating sits next to what the harness measured, and goes with the run', async () => {
+  const store = new RunStore(':memory:');
+  const cwd = tmp();
+  const first = await storedRun(store, cwd, 'make a.txt');
+  const second = await storedRun(store, cwd, 'make a.txt again');
+  const other = await storedRun(store, tmp(), 'make a.txt');
+  store.setFeedback({ runId: first.runId, rating: 1, cause: 'skill', target: 'x', note: 'good' });
+  assert.deepEqual({ ...store.getFeedback(first.runId), at: '' }, { runId: first.runId, rating: 1, cause: null, target: null, note: 'good', at: '' });
+  store.setFeedback({ runId: second.runId, rating: -1, cause: 'role', target: '.agent-desk/agents/builder.md', note: 'changed unrelated files' });
+  assert.throws(() => store.setFeedback({ runId: 999, rating: 1, cause: null, target: null, note: null }), /not found/);
+  assert.throws(() => store.setFeedback({ runId: first.runId, rating: 1, cause: 'mood' as never, target: null, note: null }), /cause must be/);
+  const rows = store.qualityRows(cwd);
+  assert.deepEqual(rows.map(row => [row.runId, row.rating, row.cause, row.target]), [[second.runId, -1, 'role', '.agent-desk/agents/builder.md'], [first.runId, 1, null, null]]);
+  assert.equal(rows[0]!.tokens, store.usageTotal(second.runId));
+  assert.ok(rows[0]!.tokens > 0);
+  // The second run's builder "changed" a.txt to the content it already had, so the change gate sent it back once.
+  assert.equal(rows[0]!.redo, second.result.redo);
+  assert.equal(rows[1]!.redo, 0);
+  assert.equal(rows[1]!.rejectedReports, 0);
+  assert.equal(store.qualityRows().length, 3);
+  store.clearFeedback(first.runId);
+  assert.equal(store.getFeedback(first.runId), null);
+  store.deleteRuns([second.runId]);
+  assert.equal(store.getFeedback(second.runId), null);
+  assert.equal(store.qualityRows().length, 2);
+  assert.ok(store.qualityRows(cwd).every(row => row.runId !== other.runId));
   store.close();
 });

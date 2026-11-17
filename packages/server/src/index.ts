@@ -18,7 +18,9 @@ import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
 import type { PickResult } from './pick-folder.ts';
-import { RunStore, redactSecrets } from '#store';
+import { FEEDBACK_CAUSES, RunStore, redactSecrets } from '#store';
+import type { FeedbackCause, QualityRow } from '#store';
+import { qualityCsv, qualitySummary } from './quality.ts';
 
 export interface ServerOptions {
   env: NodeJS.ProcessEnv;
@@ -246,7 +248,7 @@ export function createServer(options: ServerOptions): LocalServer {
       const runId = Number(runMatch[1]);
       const sub = runMatch[2];
       if (method === 'GET' && !sub) {
-        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId), report: store.getReport(runId), settings: store.getSettings(runId) } : null; });
+        const detail = withStore(store => { const run = store.getRun(runId); return run ? { run, steps: store.steps(runId), usage: store.usage(runId), usageTotal: store.usageTotal(runId), report: store.getReport(runId), settings: store.getSettings(runId), feedback: store.getFeedback(runId) } : null; });
         if (!detail) throw new HttpError(404, 'run not found');
         return send(res, 200, { ...detail, run: { ...detail.run, request: redactSecrets(detail.run.request), brief: detail.run.brief ? redactSecrets(detail.run.brief) : null } });
       }
@@ -266,6 +268,35 @@ export function createServer(options: ServerOptions): LocalServer {
         if (!result.ok) throw new HttpError(404, result.error ?? 'no restore point');
         return send(res, 200, { applied: body.yes === true, restore: result.restore, remove: result.remove });
       }
+    }
+    if (method === 'GET' && (p === '/api/quality' || p === '/api/quality/export')) {
+      const project = url.searchParams.get('project') ?? undefined;
+      const rows: QualityRow[] = withStore(store => store.qualityRows(project)).map(row => ({ ...row, request: redactSecrets(row.request), note: row.note ? redactSecrets(row.note) : null }));
+      if (p === '/api/quality') return send(res, 200, { rows, summary: qualitySummary(rows) });
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (url.searchParams.get('format') === 'json') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="agent-desk-quality-${stamp}.json"`, 'Cache-Control': 'no-store' });
+        return void res.end(JSON.stringify({ exportedAt: new Date().toISOString(), project: project ?? null, summary: qualitySummary(rows), rows }, null, 2));
+      }
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="agent-desk-quality-${stamp}.csv"`, 'Cache-Control': 'no-store' });
+      return void res.end(qualityCsv(rows));
+    }
+    if (method === 'POST' && p === '/api/feedback') {
+      const body = await readBody(req);
+      const runId = Number(body.runId);
+      if (!Number.isInteger(runId)) throw new HttpError(400, 'runId must be a run number');
+      const row = withStore(store => store.getRun(runId));
+      if (!row) throw new HttpError(404, 'run not found');
+      if (row.status === 'running') throw new HttpError(409, 'rate the run after it finishes');
+      if (body.rating === 0) { withStore(store => store.clearFeedback(runId)); return send(res, 200, { feedback: null }); }
+      if (body.rating !== 1 && body.rating !== -1) throw new HttpError(400, 'rating must be 1, -1 or 0 (clear)');
+      const cause = body.cause === undefined || body.cause === null ? null : String(body.cause);
+      if (cause !== null && !(FEEDBACK_CAUSES as readonly string[]).includes(cause)) throw new HttpError(400, `cause must be one of ${FEEDBACK_CAUSES.join(', ')}`);
+      const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+      const target = text(body.target);
+      if (target && (path.isAbsolute(target) || target.split(/[\\/]/).includes('..'))) throw new HttpError(400, 'target must be a path inside the project');
+      const feedback = withStore(store => store.setFeedback({ runId, rating: body.rating as 1 | -1, cause: cause as FeedbackCause | null, target, note: text(body.note) }));
+      return send(res, 200, { feedback });
     }
     if (method === 'POST' && p === '/api/history/delete') {
       // Forgets runs: one project's ({ project }) or every benchmark workspace's ({ benchWorkspaces: true }).
