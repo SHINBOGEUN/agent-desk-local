@@ -4,5 +4,10 @@
   "title": "HTML 이스케이프 버그 (웹)",
   "category": "bug",
   "kind": "code",
-  "prompt": "메모 제목에 <script>alert(1)</script> 나 <b>굵게</b> 같은 HTML을 넣으면 그대로 페이지에 해석돼서 위험해. 렌더링할 때 제목의 & < > \" ' 문자를 HTML 엔티티로 바꿔서 글자 그대로 보이게 고쳐줘. 기존 테스트는 계속 통과해야 해."
+  "prompt": "메모 제목에 <script>alert(1)</script> 나 <b>굵게</b> 같은 HTML을 넣으면 그대로 페이지에 해석돼서 위험해. 렌더링할 때 제목의 & < > \" ' 문자를 HTML 엔티티로 바꿔서 글자 그대로 보이게 고쳐줘. 기존 테스트는 계속 통과해야 해.",
+  "expect": {
+    "skills": [
+      "html-output"
+    ]
+  }
 }

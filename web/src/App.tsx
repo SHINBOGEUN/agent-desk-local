@@ -448,6 +448,7 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
           </header>
           {runtimes ? <div className="team-line" aria-label={t('teamUsed')}>{(['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>)}{settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}</div> : null}
           {settings?.fallback ? <p className="msg-meta warn-text">{settings.fallback}</p> : null}
+          {(() => { const used = timeline.skillsRead ?? detail?.report?.skillsRead ?? []; return used.length ? <div className="team-line" aria-label={t('skillsUsed')}>{used.map((entry, index) => <span key={index} className="team-chip skill-chip">{t('skillsUsed')} {entry.skill} · {entry.role}</span>)}</div> : null; })()}
           {running ? (
             <div className="live-line">
               <span className="pulse" aria-hidden="true" />

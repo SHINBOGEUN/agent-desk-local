@@ -14,7 +14,7 @@ const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
 const write = (file: string, content = 'x') => ({ writeFile: { path: file, content } });
 const NODE_OK = `node -e "process.exit(require('fs').existsSync('ok.txt')?0:1)"`;
 
-const buildClassify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create ok.txt' }], reason: 'one file' };
+const buildClassify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create ok.txt', quote: 'create ok.txt' }], reason: 'one file' };
 const report = (changedFiles: string[], status = 'done', extra: Record<string, unknown> = {}) => ({
   summary: 'did it', changedFiles, commandsRun: [], requirements: [{ id: 'R1', status, evidence: 'ok.txt' }], unverified: [], ...extra,
 });

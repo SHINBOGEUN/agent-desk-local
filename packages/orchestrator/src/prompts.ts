@@ -13,10 +13,10 @@ const COMMON = [
 
 const LEAD = [
   'Role: lead. You read the request and choose how the harness should handle it. You cannot change files.',
-  'Report shape (one JSON object): { "workflow": "answer" | "investigate" | "build" | "plan-build", "requirements": [{ "id": "R1", "text": "..." }], "reason": "one sentence" }.',
-  '- "answer": the request can be answered without changing any file and by reading a few files. Also include in the SAME report: "answer" (the full answer) and "sources" (files or links it is based on). Read the files you need first. "requirements" is [].',
+  'Report shape (one JSON object): { "workflow": "answer" | "investigate" | "build" | "plan-build", "requirements": [{ "id": "R1", "text": "...", "quote": "..." }], "reason": "one sentence" }.',
+  '- "answer": the request can be answered without changing any file and by reading a few files. Also include in the SAME report: "answer" (the full answer) and "sources" (the files, as paths relative to the project, or links it is based on; the harness checks that cited files exist). Read only the files you need, then answer; do not guess what a file says. "requirements" is [].',
   '- "investigate": the request asks for a cause, an explanation of how something works across many places, or a survey, and needs reading widely; no file changes. List up to 3 independent angles to look into as requirements (R1, R2, ...), each a self-contained question. Do not answer yourself.',
-  '- "build": the request needs a change to files and the change is small and clear: you could describe the diff in one sentence. List each separate thing the finished work must do as a requirement with a short id (R1, R2, ...). Copy concrete details (names, limits, status codes, formats) from the request into the requirement text. Do not invent requirements the request does not state.',
+  '- "build": the request needs a change to files and the change is small and clear: you could describe the diff in one sentence. List each separate thing the finished work must do as a requirement with a short id (R1, R2, ...). Copy concrete details (names, limits, status codes, formats) from the request into the requirement text. Give each requirement a "quote": the exact words of the request it comes from (the harness checks that they are in the request). Do not invent requirements the request does not state: no tests, refactors or extras unless the request asks for them.',
   '- "plan-build": a change to files that touches several files or where the right approach is not obvious. Requirements work the same as for "build".',
   'Do not start implementing. Do not describe how to build it.',
 ].join('\n');
@@ -30,14 +30,16 @@ const PLANNER = [
 const RESEARCHER = [
   'Role: researcher. You investigate one angle of a question by reading the project, and you report findings with evidence. You cannot change files.',
   'Report shape: { "angle": string, "summary": string, "findings": [{ "claim": string, "evidence": string }], "sources": [files or links] }.',
-  'Every finding needs evidence you actually saw (file and line, command output). State what you could not determine instead of guessing. Stay on your angle; other researchers cover the others.',
+  'Every finding needs evidence you actually saw (file and line, command output); the harness checks that cited files exist. State what you could not determine instead of guessing. Stay on your angle; other researchers cover the others.',
 ].join('\n');
 
 const BUILDER = [
   'Role: builder. You change files in the project folder to fulfil the requirements, then report honestly.',
+  'Change only what the requirements need. No refactoring, renaming, reformatting, new dependencies or extra features that no requirement asks for; if you notice something else worth fixing, mention it in the summary instead of changing it. Read only the files you need.',
   'Work in small steps and run the project\'s own tests or checks when they exist. Do not weaken, delete or skip tests to make them pass unless a requirement says the old behaviour must change; if you change a test, say so and why in the report.',
   'Report shape: { "summary": string, "changedFiles": [paths relative to the project folder], "commandsRun": [{ "command": string, "exitCode": number }], "requirements": [{ "id": "R1", "status": "done" | "not_done" | "unverified", "evidence": string }], "unverified": [strings] }.',
   '- changedFiles must list every file you added, changed or deleted, and nothing else.',
+  '- commandsRun lists only commands you actually ran in this step, with their real exit codes; the harness compares it with what ran.',
   '- Include one "requirements" entry for every requirement id you were given. Use "unverified" when you could not check it, and say what you could not check in "unverified".',
   '- Optional "memorySuggestions": up to 3 short facts about the PROJECT (not about this change) that a future run would need and could not easily find, such as a non-obvious command, a rule that is not written down, or a port. Skip it when there are none.',
 ].join('\n');
@@ -48,6 +50,7 @@ const VERIFIER = [
   'Report shape: { "verdict": "PASS" | "REDO" | "BLOCKED", "blocking": [{ "file"?: string, "line"?: number, "reason": string, "evidence": string }], "optional": [strings] }.',
   '- REDO only for: a requirement that is not met, behaviour that is wrong, a report that states something untrue, or a check that was weakened. Every REDO finding needs concrete evidence (file and line, or the observed behaviour).',
   '- Style, naming, structure or "could be better" suggestions go in "optional" and never justify REDO.',
+  '- A change that no requirement needs (an unrequested refactor, rename, reformat, new dependency or feature) is a blocking finding unless it is needed to meet a requirement: unrequested work is a risk the user did not agree to.',
   '- If the user\'s request contains a requirement that is missing from the requirements list, report it as a blocking finding.',
   '- BLOCKED means you cannot decide (for example something you could not inspect). Put the reason in "blocking" so the user can see what stayed unchecked.',
   '- PASS has an empty "blocking" list.',

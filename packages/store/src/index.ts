@@ -89,8 +89,8 @@ const MIGRATIONS: string[] = [`
 
 /** What the dashboard shows as the run's report: the reports the agents submitted, not the raw event log. */
 export function reportOf(result: RunResult): Record<string, unknown> {
-  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint, memorySuggestions, resume } = result;
-  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined, memorySuggestions, resume };
+  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint, memorySuggestions, resume, skillsRead } = result;
+  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined, memorySuggestions, resume, skillsRead };
 }
 
 export class RunStore {

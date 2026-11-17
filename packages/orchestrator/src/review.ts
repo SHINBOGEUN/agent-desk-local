@@ -54,11 +54,12 @@ export function selfReviewPrompt(input: Parameters<typeof reviewPrompt>[0]): str
   return `${reviewPrompt(input)}\n\nThis time you check your OWN work, as a reviewer would. Do not change any file. Re-read the changed files against the requirements and the request.\nSubmit a verifier report instead of a builder report. Shape: { "verdict": "PASS" | "REDO" | "BLOCKED", "blocking": [{ "file"?: string, "line"?: number, "reason": string, "evidence": string }], "optional": [strings] }. REDO only for an unmet requirement, wrong behaviour, an untrue report or a weakened check, each with concrete evidence. PASS has an empty "blocking" list.`;
 }
 
-export function reviewPrompt(input: { request: string; requirements: Requirement[]; verifyLines: string[]; diffText: string; changedFiles: readonly string[]; testFiles: readonly string[] }): string {
+export function reviewPrompt(input: { request: string; requirements: Requirement[]; verifyLines: string[]; diffText: string; changedFiles: readonly string[]; testFiles: readonly string[]; unplannedFiles?: readonly string[] }): string {
   const list = input.requirements.map(requirement => `- ${requirement.id}: ${requirement.text}`).join('\n');
   const testNote = input.testFiles.length
     ? `\nTest or check files were changed: ${input.testFiles.join(', ')}. Decide explicitly whether each change is required by the requirements or weakens a check (removed or loosened assertions, skipped tests). A weakened check is a blocking finding.\n`
     : '';
+  const scopeNote = input.unplannedFiles?.length ? `\nFiles changed that the plan did not list: ${input.unplannedFiles.join(', ')}. Check that each one is needed for a requirement; unrequested changes are blocking.\n` : '';
   const checks = input.verifyLines.length ? input.verifyLines.map(line => `- ${line}`).join('\n') : '- (no verify commands are configured; nothing was checked automatically)';
-  return `Step: review.\nUser's original request:\n${input.request}\n\nRequirements the work must meet:\n${list}\n\nChecks the harness ran itself:\n${checks}\n${testNote}\nFiles changed: ${input.changedFiles.join(', ') || '(none)'}\n\nDiff:\n${input.diffText || '(no textual diff available; read the files)'}\n\nReview the actual files, not only the diff. Report a verdict.`;
+  return `Step: review.\nUser's original request:\n${input.request}\n\nRequirements the work must meet:\n${list}\n\nChecks the harness ran itself:\n${checks}\n${testNote}${scopeNote}\nFiles changed: ${input.changedFiles.join(', ') || '(none)'}\n\nDiff:\n${input.diffText || '(no textual diff available; read the files)'}\n\nReview the actual files, not only the diff. Report a verdict.`;
 }

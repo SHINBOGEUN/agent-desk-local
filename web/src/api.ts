@@ -31,6 +31,7 @@ export interface RunReport {
   redo?: number;
   restorePoint?: { files: number; bytes: number };
   memorySuggestions?: string[];
+  skillsRead?: { step: string; role: string; skill: string }[];
   resume?: { step: string; redo: number; note: string };
 }
 

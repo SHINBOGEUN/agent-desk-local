@@ -93,14 +93,14 @@ test('init: inspects a Node project and drafts config and role files without ove
 
   const draft = draftFromInspection(inspection, ['codex', 'claude']);
   assert.deepEqual(draft.config, { mode: 'codex+claude', verify: ['npm test', 'npm run typecheck'], review: 'auto' });
-  assert.deepEqual(draft.files.filter(file => file.path.includes('/skills/')).map(file => file.path), ['.agent-desk/skills/verify-before-report/SKILL.md', '.agent-desk/skills/review-checklist/SKILL.md']);
+  assert.deepEqual(draft.files.filter(file => file.path.includes('/skills/')).map(file => file.path), ['.agent-desk/skills/verify-before-report/SKILL.md', '.agent-desk/skills/verify-before-report/triggers.json', '.agent-desk/skills/review-checklist/SKILL.md', '.agent-desk/skills/review-checklist/triggers.json']);
   assert.match(draft.files.find(file => file.path.endsWith('builder.md'))!.content, /skills: \[verify-before-report\]/);
   assert.ok(draft.rationale.some(line => /differ/.test(line)));
   put(project, '.agent-desk/agents/lead.md', '---\neffort: medium\n---\nmine\n');
   const again = draftFromInspection(inspectProject(project), ['codex']);
   assert.equal(again.files.find(file => file.path.endsWith('lead.md'))?.willWrite, false);
   const written = writeDraft(project, again);
-  assert.deepEqual(written.sort(), ['.agent-desk/agents/builder.md', '.agent-desk/agents/researcher.md', '.agent-desk/agents/verifier.md', '.agent-desk/config.json', '.agent-desk/skills/review-checklist/SKILL.md', '.agent-desk/skills/verify-before-report/SKILL.md']);
+  assert.deepEqual(written.sort(), ['.agent-desk/agents/builder.md', '.agent-desk/agents/researcher.md', '.agent-desk/agents/verifier.md', '.agent-desk/config.json', '.agent-desk/skills/review-checklist/SKILL.md', '.agent-desk/skills/review-checklist/triggers.json', '.agent-desk/skills/verify-before-report/SKILL.md', '.agent-desk/skills/verify-before-report/triggers.json']);
   assert.deepEqual(checkSkills(project, loadProject(project).config, loadProject(project).roles).findings.filter(finding => finding.level !== 'info'), []);
   assert.equal(fs.readFileSync(path.join(project, '.agent-desk/agents/lead.md'), 'utf8'), '---\neffort: medium\n---\nmine\n');
   assert.deepEqual(loadProject(project).errors, []);

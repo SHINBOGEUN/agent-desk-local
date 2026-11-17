@@ -62,6 +62,9 @@ export function summarize({ label, config, results }) {
     meanConsultations: mean(valid.map(result => result.metrics.consultations)),
     // Classification accuracy (3-6): runs whose workflow is known and matches the task's expected workflows.
     classifyAccuracy: (() => { const known = valid.filter(result => result.metrics.workflow && result.expectedWorkflows); return rate(known.filter(result => result.expectedWorkflows.includes(result.metrics.workflow)).length, known.length); })(),
+    // Skill selection (6-4): on tasks that say which skills they need, the share of runs that opened exactly those and nothing else.
+    skillSelectionAccuracy: (() => { const known = valid.filter(result => Array.isArray(result.expectedSkills) && Array.isArray(result.metrics.skillsRead)); return rate(known.filter(result => [...result.metrics.skillsRead].sort().join(',') === [...result.expectedSkills].sort().join(',')).length, known.length); })(),
+    unneededSkillReads: valid.reduce((sum, result) => sum + (Array.isArray(result.expectedSkills) && Array.isArray(result.metrics.skillsRead) ? result.metrics.skillsRead.filter(id => !result.expectedSkills.includes(id)).length : 0), 0),
     meanDurationMin: mean(valid.filter(result => result.metrics.durationSec != null).map(result => result.metrics.durationSec / 60)),
     perTask: Object.fromEntries([...new Set(valid.map(result => result.taskId))].sort().map(taskId => {
       const group = valid.filter(result => result.taskId === taskId);
@@ -92,6 +95,8 @@ export function toMarkdown(summaries) {
     ['평균 협의 턴', s => fmtNum(s.meanConsultations)],
     ['평균 소요 시간(분)', s => fmtNum(s.meanDurationMin)],
     ['워크플로 분류 정확도 (lead)', s => fmtPct(s.classifyAccuracy)],
+    ['스킬 선택 정확도 (필요한 스킬만)', s => fmtPct(s.skillSelectionAccuracy)],
+    ['불필요하게 읽은 스킬 수', s => s.unneededSkillReads],
   ];
   lines.push(`| 지표 | ${summaries.map(s => s.label).join(' | ')} |`, `|---|${summaries.map(() => '---').join('|')}|`);
   for (const [name, format] of rows) lines.push(`| ${name} | ${summaries.map(format).join(' | ')} |`);

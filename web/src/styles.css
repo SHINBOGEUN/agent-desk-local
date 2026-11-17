@@ -358,3 +358,4 @@ select { padding-right: 28px; }
 .editor-status.warn { background: var(--warn-bg); color: var(--warn); }
 .editor-status.error { background: var(--bad-bg); color: var(--bad); }
 @media (max-width: 760px) { .split { grid-template-columns: minmax(0, 1fr); } .split-list { flex-direction: row; flex-wrap: wrap; } }
+.skill-chip { background: var(--ok-bg); color: var(--ok); padding-right: 9px; }

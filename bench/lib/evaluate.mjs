@@ -46,7 +46,9 @@ export function loadTasks(filter = null, set = 'standard') {
       const task = JSON.parse(fs.readFileSync(path.join(directory, 'task.json'), 'utf8'));
       // Workflows lead may correctly choose (roadmap 3-6, classification accuracy).
       const expectedWorkflows = task.expect?.workflows ?? (task.kind === 'answer' ? ['answer'] : ['build', 'plan-build']);
-      return { ...task, expectedWorkflows, directory };
+      // Skills a correct run should open (task.json expect.skills); undefined = not measured for this task.
+      const expectedSkills = task.expect?.skills;
+      return { ...task, expectedWorkflows, ...(expectedSkills ? { expectedSkills } : {}), directory };
     })
     .filter(task => !wanted || wanted.has(task.id.toUpperCase()))
     .sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));

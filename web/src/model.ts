@@ -16,6 +16,7 @@ export type RunEventData =
   | { type: 'step_started'; step: string; role: string }
   | { type: 'step_finished'; step: string; ok: boolean; detail: string }
   | { type: 'gate'; result: GateResult }
+  | { type: 'skill_read'; step: string; role: string; skill: string }
   | { type: 'redo'; attempt: number; mode: string; reasons: string[] }
   | { type: 'retry'; step: string; reason: string }
   | { type: 'report'; step: string; kind: string; accepted: boolean; detail: string }
@@ -54,6 +55,8 @@ export interface Timeline {
   runtimes?: Record<string, string>;
   /** Questions agents asked the user, in order. */
   questions?: { step: string; question: string; answered: boolean }[];
+  /** Skills whose SKILL.md a session opened. */
+  skillsRead?: { step: string; role: string; skill: string }[];
 }
 
 const emptyStep = (step: string, role: string, at: string): TimelineStep => ({ step, role, startedAt: at, finishedAt: null, ok: null, detail: '', gates: [], redo: [], retries: [], reports: [], messages: [], commands: 0, fileChanges: 0 });
@@ -65,6 +68,7 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
   let lastSeq = timeline.lastSeq;
   let runtimes = timeline.runtimes;
   let questions = timeline.questions;
+  let skillsRead = timeline.skillsRead;
   const copy = (): TimelineStep[] => {
     if (steps === timeline.steps) steps = timeline.steps.map(step => ({ ...step, gates: [...step.gates], redo: [...step.redo], retries: [...step.retries], reports: [...step.reports], messages: [...step.messages] }));
     return steps;
@@ -92,12 +96,13 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
       }
       case 'run_finished': finished = { status: event.status, reason: event.reason }; break;
       case 'run_started': if (event.runtimes) runtimes = { ...event.runtimes }; break;
+      case 'skill_read': skillsRead = [...(skillsRead ?? []), { step: event.step, role: event.role, skill: event.skill }]; break;
       case 'user_question': questions = [...(questions ?? []), { step: event.step, question: event.question, answered: event.answered }]; break;
       default: break;
     }
   }
   if (lastSeq === timeline.lastSeq) return timeline;
-  return { steps, finished, lastSeq, ...(runtimes ? { runtimes } : {}), ...(questions ? { questions } : {}) };
+  return { steps, finished, lastSeq, ...(runtimes ? { runtimes } : {}), ...(questions ? { questions } : {}), ...(skillsRead ? { skillsRead } : {}) };
 }
 
 export const emptyTimeline = (): Timeline => ({ steps: [], finished: null, lastSeq: 0 });

@@ -10,7 +10,7 @@ import { createServer, isBenchWorkspace } from '../src/index.ts';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'srv-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
-const answerReport = { workflow: 'answer', requirements: [], reason: 'plain question', answer: 'It listens on 3000.', sources: ['server.js'] };
+const answerReport = { workflow: 'answer', requirements: [], reason: 'plain question', answer: 'It listens on 3000.', sources: ['https://nodejs.org/api/http.html'] };
 
 interface Reply { status: number; headers: http.IncomingHttpHeaders; body: string }
 function call(port: number, method: string, url: string, opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<Reply> {

@@ -14,9 +14,9 @@ import type { RunConfig } from '#orchestrator';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'v1fail-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
 const VERIFY = `node -e "process.exit(require('fs').existsSync('ok.txt')?0:1)"`;
-const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create ok.txt' }], reason: 'one file' };
+const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create ok.txt', quote: 'create ok.txt' }], reason: 'one file' };
 const report = (changedFiles: string[], extra: Record<string, unknown> = {}) => ({
-  summary: 'created ok.txt', changedFiles, commandsRun: [{ command: 'node --test', exitCode: 0 }],
+  summary: 'created ok.txt', changedFiles, commandsRun: [],
   requirements: [{ id: 'R1', status: 'done', evidence: 'ok.txt' }], unverified: [], ...extra,
 });
 const go = (runtime: FakeRuntime, cwd: string, config: Partial<RunConfig> = {}) => runRequest('create ok.txt', { cwd, runtime, review: 'never', ...config });

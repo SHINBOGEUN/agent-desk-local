@@ -73,6 +73,7 @@ async function executeTask(adapter, task, attempt, options, log) {
     taskId: task.id,
     category: task.category,
     expectedWorkflows: task.expectedWorkflows,
+    expectedSkills: task.expectedSkills,
     attempt,
     runId: run.runId,
     projectId: run.projectId,

@@ -46,6 +46,7 @@ export function runMetrics(result, durationSec) {
   return {
     status: result.status,
     workflow: result.workflow ?? null,
+    skillsRead: [...new Set((result.skillsRead || []).map(entry => entry.skill))],
     endReason: result.status === 'completed' ? null : result.failureType || result.status,
     qualityGate: result.gates?.some(gate => gate.gate === 'G3' && !gate.skipped) ? (result.gates.filter(gate => gate.gate === 'G3').at(-1).ok ? 'passed' : 'failed') : 'not_required',
     usage: { totalTokens: total('totalTokens'), inputTokens: total('inputTokens'), cachedInputTokens: total('cachedInputTokens'), uncachedInputTokens: Math.max(0, total('inputTokens') - total('cachedInputTokens')), outputTokens: total('outputTokens') },

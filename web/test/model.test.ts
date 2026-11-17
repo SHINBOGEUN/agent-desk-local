@@ -134,3 +134,8 @@ test('image attachments follow the server limits', () => {
   assert.equal(acceptImage(0, { type: 'application/pdf', size: 100 }), 'type');
   assert.equal(acceptImage(0, { type: 'image/jpeg', size: 6 * 1024 * 1024 }), 'size');
 });
+
+test('timeline lists the skills sessions opened', () => {
+  const timeline = buildTimeline([{ seq: 1, at: 't', type: 'skill_read', data: { type: 'skill_read', step: 'build', role: 'builder', skill: 'html-output' } }]);
+  assert.deepEqual(timeline.skillsRead, [{ step: 'build', role: 'builder', skill: 'html-output' }]);
+});

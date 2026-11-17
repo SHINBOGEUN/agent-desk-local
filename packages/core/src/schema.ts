@@ -47,7 +47,7 @@ const requirementId = string({ min: 1, max: 40 });
 const schemas: { [K in ReportKind]: Check } = {
   classify: object({
     workflow: oneOf(WORKFLOW_IDS),
-    requirements: array(object({ id: requirementId, text: string({ min: 1, max: 1_000 }) }), { max: 30 }),
+    requirements: array(object({ id: requirementId, text: string({ min: 1, max: 1_000 }) }, { quote: string({ max: 500 }) }), { max: 30 }),
     reason: string({ min: 1, max: 1_000 }),
   }),
   answer: object({

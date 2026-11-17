@@ -4,6 +4,7 @@
 
 import type { AnswerReport, ClassifyReport, ToolResult } from '#core';
 import { reportConsistencyErrors, validateReport } from '#core';
+import { missingSourceErrors, requirementQuoteErrors } from './evidence.ts';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -15,6 +16,10 @@ export class LeadCollector {
   get classify(): ClassifyReport | null { return this.#classify; }
   get answer(): AnswerReport | null { return this.#answer; }
   get invalidAttempts(): number { return this.#invalid; }
+
+  /** With the request and project folder, requirements must quote the request and cited files must exist. */
+  readonly context: { request: string; cwd: string } | undefined;
+  constructor(context?: { request: string; cwd: string }) { this.context = context; }
 
   readonly submit = async (raw: unknown): Promise<ToolResult> => {
     if (this.#classify) return { ok: false, message: 'A report was already accepted for this step. Do not submit another one.' };
@@ -35,6 +40,8 @@ export class LeadCollector {
         else answer = checkedAnswer.value;
       }
       if (classify && classify.workflow !== 'answer' && hasAnswerPart) errors.push('report.answer: only include "answer" and "sources" when workflow is "answer"');
+      if (this.context && classify && (classify.workflow === 'build' || classify.workflow === 'plan-build')) errors.push(...requirementQuoteErrors(this.context.request, classify.requirements));
+      if (this.context && answer) errors.push(...missingSourceErrors(this.context.cwd, answer.sources, 'report.sources'));
     }
     if (errors.length || !classify) {
       this.#invalid++;

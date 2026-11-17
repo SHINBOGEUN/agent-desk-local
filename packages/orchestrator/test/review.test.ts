@@ -12,7 +12,7 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'review-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
 const write = (file: string, content = 'x') => ({ writeFile: { path: file, content } });
 const NODE_OK = `node -e "process.exit(0)"`;
-const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create feature.txt' }], reason: 'one file' };
+const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'create feature.txt', quote: 'feature.txt' }], reason: 'one file' };
 const builderReport = (changedFiles: string[], extra: Record<string, unknown> = {}) => ({ summary: 'SECRET-BUILDER-SUMMARY', changedFiles, commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'file' }], unverified: [], ...extra });
 const pass = { verdict: 'PASS', blocking: [], optional: ['rename later'] };
 const redo = { verdict: 'REDO', blocking: [{ file: 'feature.txt', line: 1, reason: 'wrong content', evidence: 'expected "a"' }], optional: [] };

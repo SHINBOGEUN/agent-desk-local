@@ -11,10 +11,10 @@ import type { RunConfig } from '#orchestrator';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wf-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
 const VERIFY = `node -e "process.exit(require('fs').existsSync('ok.txt')?0:1)"`;
-const classifyPlanBuild = { workflow: 'plan-build', requirements: [{ id: 'R1', text: 'create ok.txt' }], reason: 'several files' };
+const classifyPlanBuild = { workflow: 'plan-build', requirements: [{ id: 'R1', text: 'create ok.txt', quote: 'do the thing' }], reason: 'several files' };
 const plan = { approach: 'write ok.txt directly', steps: ['create ok.txt'], files: ['ok.txt'], risks: ['none known'] };
 const builderReport = { summary: 'done', changedFiles: ['ok.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'ok.txt' }], unverified: [] };
-const research = (angle: string) => ({ angle, summary: `about ${angle}`, findings: [{ claim: `claim for ${angle}`, evidence: 'src/a.ts:1' }], sources: ['src/a.ts'] });
+const research = (angle: string) => ({ angle, summary: `about ${angle}`, findings: [{ claim: `claim for ${angle}`, evidence: 'src/a.ts:1' }], sources: ['https://example.test/a'] });
 const classifyInvestigate = (texts: string[]) => ({ workflow: 'investigate', requirements: texts.map((text, index) => ({ id: `R${index + 1}`, text })), reason: 'needs reading' });
 const go = (runtime: FakeRuntime, cwd: string, config: Partial<RunConfig> = {}) => runRequest('do the thing', { cwd, runtime, review: 'never', ...config });
 
@@ -68,7 +68,7 @@ test('investigate: one read-only researcher per angle, run in parallel, assemble
   assert.equal(new Set(researcherTurns.map(turn => turn.sessionId)).size, 2);
   assert.match(result.answer?.answer ?? '', /1\. where is the port set/);
   assert.match(result.answer?.answer ?? '', /claim for how is the config loaded \(src\/a\.ts:1\)/);
-  assert.deepEqual(result.answer?.sources, ['src/a.ts']);
+  assert.deepEqual(result.answer?.sources, ['https://example.test/a']);
   assert.equal(result.research?.length, 2);
   assert.equal(result.usage.totalTokens, 200);
   assert.deepEqual(fs.readdirSync(cwd), []);
@@ -100,7 +100,7 @@ test('investigate: a failing researcher fails the run; a researcher that changes
 });
 
 test('a role file can restrict the builder to read-only but nothing can widen the other roles', async () => {
-  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'build', requirements: [{ id: 'R1', text: 'x' }], reason: 'r' } }])], builder: [script([{ report: { summary: 's', changedFiles: [], commandsRun: [], requirements: [{ id: 'R1', status: 'not_done', evidence: '' }], unverified: [] } }])] } });
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'build', requirements: [{ id: 'R1', text: 'x', quote: 'do the thing' }], reason: 'r' } }])], builder: [script([{ report: { summary: 's', changedFiles: [], commandsRun: [], requirements: [{ id: 'R1', status: 'not_done', evidence: '' }], unverified: [] } }])] } });
   await go(runtime, tmp(), { access: { builder: 'read-only', lead: 'workspace-write' } });
   assert.equal(runtime.turns.find(turn => turn.role === 'builder')?.options.access, 'read-only');
   assert.equal(runtime.turns.find(turn => turn.role === 'lead')?.options.access, 'read-only');

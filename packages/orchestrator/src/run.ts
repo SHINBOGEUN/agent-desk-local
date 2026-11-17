@@ -11,6 +11,8 @@ import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gat
 import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
+import { commandClaimErrors, missingSourceErrors, skillsTouched } from './evidence.ts';
+import type { ObservedCommand } from './evidence.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt, selfReviewPrompt } from './review.ts';
 import { decideApproval } from './approval.ts';
@@ -54,6 +56,10 @@ class RunContext {
   readonly warnings: string[] = [];
   restorePoint?: RestorePointInfo;
   memorySuggestions: string[] = [];
+  /** Commands the runtime really ran, per step (checked against builder.commandsRun). */
+  readonly commands = new Map<StepKind, ObservedCommand[]>();
+  /** Skills whose SKILL.md a session opened: "role:skill" once per step. */
+  readonly skillsRead: { step: StepKind; role: RoleId; skill: string }[] = [];
   readonly ledger = new UsageLedger();
   readonly startedAt = Date.now();
   readonly #turns = new Map<string, number>();
@@ -150,6 +156,14 @@ async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: 
   let outcome: TurnOutcome = { status: 'failed', error: 'runtime ended the turn without a result' };
   for await (const event of session.runTurn({ text, ...(images?.length ? { images } : {}) }, ctx.signal)) {
     ctx.emit({ type: 'runtime', step, role, event });
+    if (event.type === 'command') { const list = ctx.commands.get(step) ?? []; list.push({ command: event.command, exitCode: event.exitCode }); ctx.commands.set(step, list); }
+    if (event.type === 'command' || event.type === 'file_read') {
+      for (const skill of skillsTouched(event, ctx.config.skills?.[role] ?? [])) {
+        if (ctx.skillsRead.some(entry => entry.step === step && entry.role === role && entry.skill === skill)) continue;
+        ctx.skillsRead.push({ step, role, skill });
+        ctx.emit({ type: 'skill_read', step, role, skill });
+      }
+    }
     if (event.type === 'usage') { ctx.ledger.record(step, turn, event.delta); ctx.enforceBudget(ctx.redo, true); }
     if (event.type === 'turn_end') outcome = { status: event.status, ...(event.error ? { error: event.error } : {}) };
   }
@@ -202,7 +216,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
@@ -300,7 +314,7 @@ async function runInvestigate(ctx: RunContext, request: string, requirements: Re
   const angles = requirements.length ? requirements.slice(0, MAX_ANGLES).map(requirement => requirement.text) : [request];
   if (requirements.length > MAX_ANGLES) ctx.warnings.push(`Only the first ${MAX_ANGLES} of ${requirements.length} angles were investigated.`);
   ctx.emit({ type: 'step_started', step: 'research', role: 'researcher' });
-  const collectors = angles.map(() => new ReportCollector('research'));
+  const collectors = angles.map(() => new ReportCollector('research', report => missingSourceErrors(ctx.config.cwd, report.sources, 'research.sources')));
   const { failure, stop } = await guardedReadOnly(ctx, 'research', async () => {
     const outcomes = await Promise.all(angles.map(async (angle, index) => {
       const collector = collectors[index]!;
@@ -339,7 +353,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
     if (point.ok) ctx.restorePoint = { dir: point.dir, files: point.files, bytes: point.bytes };
     else ctx.warnings.push(`No restore point was made: ${point.reason}. Revert will not be available for this run.`);
   }
-  const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => builderCoverageErrors(requirements, report));
+  const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => [...builderCoverageErrors(requirements, report), ...commandClaimErrors(report.commandsRun, ctx.commands.get('build') ?? [])]);
   let collector = newCollector();
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
   let session: Session | null = null;
@@ -385,7 +399,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       let reasons = [...g2.problems, ...g3.problems, ...notDone];
       let review: ReviewOutcome = { kind: 'skipped', reason: 'earlier gates failed' };
       if (!reasons.length) {
-        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3, ...(session ? { self: { session, holder } } : {}) });
+        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3, ...(plan ? { plannedFiles: plan.files } : {}), ...(session ? { self: { session, holder } } : {}) });
         if (review.kind === 'stop') {
           return review.failure ? failureResult(ctx, review.failure, { ...base, builder: report }) : finish(ctx, review.status, review.reason, { ...base, builder: report });
         }
@@ -418,7 +432,7 @@ type ReviewOutcome =
   | { kind: 'stop'; status: RunStatus; reason: string; failure?: StepFailure };
 
 /** Gate G4: decides by policy whether to review, then runs an independent read-only verifier in a new session. */
-async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult; self?: { session: Session; holder: Holder } }): Promise<ReviewOutcome> {
+async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult; plannedFiles?: string[]; self?: { session: Session; holder: Holder } }): Promise<ReviewOutcome> {
   const { config } = ctx;
   const rendered = renderDiff({ cwd: config.cwd, before: input.before, diff: input.diff });
   const decision = decideReview({
@@ -431,7 +445,9 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
   }
   const testFiles = (input.g2.data?.testFilesChanged as string[] | undefined) ?? [];
   const verifyLines = ((input.g3.data?.commands as string[] | undefined) ?? []).map(command => `\`${command}\` passed`);
-  const facts = { request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles };
+  const planned = input.plannedFiles?.map(file => file.replace(/\\/g, '/').replace(/^\.\//, ''));
+  const unplannedFiles = planned?.length ? input.diff.all.filter(file => !planned.includes(file)) : [];
+  const facts = { request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles, unplannedFiles };
   const selfCheck = config.review === 'self' && input.self !== undefined;
   const prompt = selfCheck ? selfReviewPrompt(facts) : reviewPrompt(facts);
   const collector = new ReportCollector('verifier', report => (report.verdict === 'BLOCKED' && !report.blocking.length ? ['verifier.blocking: BLOCKED needs at least one entry that says what could not be decided and why'] : []));
@@ -501,7 +517,7 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
   const runtimes = Object.fromEntries((['lead', 'builder', 'verifier', 'researcher'] as RoleId[]).map(role => [role, (single ?? (config.runtime as Partial<Record<RoleId, Runtime>>)[role])?.id]).filter(([, id]) => id)) as Partial<Record<RoleId, string>>;
   ctx.emit({ type: 'run_started', request, ...(Object.keys(runtimes).length ? { runtimes } : {}) });
   try {
-    const lead = new LeadCollector();
+    const lead = new LeadCollector({ request, cwd: config.cwd });
     const stopped = await runClassify(ctx, request, lead);
     if (stopped) return stopped;
     const classify = lead.classify!;

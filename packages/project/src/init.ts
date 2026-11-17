@@ -133,6 +133,9 @@ export function draftFromInspection(inspection: ProjectInspection, available: re
     const target = `.agent-desk/skills/${skill.id}/SKILL.md`;
     const has = exists(inspection.project, target);
     files.push({ path: target, content: has ? '' : skill.content, willWrite: !has, reason: has ? 'already exists; not overwritten' : `skill draft for the ${skill.role}: ${skill.why}` });
+    const cases = `.agent-desk/skills/${skill.id}/triggers.json`;
+    const hasCases = exists(inspection.project, cases);
+    files.push({ path: cases, content: hasCases ? '' : `${JSON.stringify(skill.triggers, null, 2)}\n`, willWrite: !hasCases, reason: hasCases ? 'already exists; not overwritten' : 'trigger test cases (agent-desk skills trigger-test); grow them to 8-10 of each from real requests' });
     (skillOf[skill.role] ??= []).push(skill.id);
   }
   if (skills.length) rationale.push(`Skill drafts: ${skills.map(skill => `${skill.id} (${skill.role})`).join(', ')}. Edit them to match how this project really works; "agent-desk skills check" checks their structure.`);
@@ -143,7 +146,7 @@ export function draftFromInspection(inspection: ProjectInspection, available: re
   return { config, files, rationale };
 }
 
-export interface SkillDraft { id: string; role: RoleId; why: string; content: string }
+export interface SkillDraft { id: string; role: RoleId; why: string; content: string; triggers: { should: string[]; shouldNot: string[] } }
 
 /**
  * Starter skills for a project, written the way the skill checks expect: the
@@ -168,7 +171,10 @@ Why: the harness runs the same commands after you report (gate G3). A failure fo
 3. Run the commands again until they pass.
 4. List each command and its exit code in "commandsRun".
 5. If a command cannot run here (missing tool, needs network or a database), put that in "unverified" instead of reporting the requirement as done.
-` });
+`, triggers: {
+      should: ['로그인 실패 시 에러 메시지를 바꿔줘', 'Add a due date field to todos', '목록 정렬을 최신순으로 바꿔줘', 'Fix the off-by-one bug in pagination', '설정 파일에서 포트를 읽도록 수정해줘', 'Rename the status filter parameter and update its callers'],
+      shouldNot: ['이 프로젝트의 기본 포트가 뭐야?', 'Explain how the router works', '테스트 명령이 뭐야? 코드는 수정하지 마', 'Which files handle authentication?', '이 함수가 왜 느린지 원인만 알려줘', 'Summarize the README'],
+    } });
   }
   const stack = inspection.stack.join(', ') || 'this project';
   const specifics: string[] = [];
@@ -189,7 +195,10 @@ Why: a reviewer who only reads the diff tends to approve what looks tidy. These 
 - Files about auth, tokens, sessions or secrets: is anything exposed or skipped?
 - Changes nobody asked for (renames, reformatting, new dependencies) are noted in "optional", or blocking if they break something.
 ${specifics.join('\n')}
-` });
+`, triggers: {
+    should: ['Review this change against the requirements', '빌더가 바꾼 파일을 검토해줘', 'Check whether the tests were weakened in this diff', '이 변경이 요구사항을 다 지켰는지 판정해줘'],
+    shouldNot: ['Add a search command', '기본 포트가 뭐야?', 'Explain the project structure', '버그를 고쳐줘'],
+  } });
   return drafts;
 }
 

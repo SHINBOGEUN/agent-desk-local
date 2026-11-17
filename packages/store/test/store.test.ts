@@ -13,11 +13,11 @@ import { RunStore, redactSecrets } from '#store';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
 const write = (file: string) => ({ writeFile: { path: file, content: 'x' } });
-const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'make a.txt' }], reason: 'one file' };
+const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'make a.txt', quote: 'a.txt' }], reason: 'one file' };
 const builder = { summary: 's', changedFiles: ['a.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'a.txt' }], unverified: [] };
 
 async function storedRun(store: RunStore, cwd: string, request: string, previousBrief?: string) {
-  const runtime = new FakeRuntime({ scripts: { lead: [script([{ usage: { inputTokens: 60, cachedInputTokens: 10, outputTokens: 10 } }, { report: classify }])], builder: [script([write('a.txt'), { usage: { inputTokens: 300, cachedInputTokens: 100, outputTokens: 50 } }, { report: builder }])] } });
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ usage: { inputTokens: 60, cachedInputTokens: 10, outputTokens: 10 } }, { report: { ...classify, requirements: [{ id: 'R1', text: 'make a.txt', quote: request }] } }])], builder: [script([write('a.txt'), { usage: { inputTokens: 300, cachedInputTokens: 100, outputTokens: 50 } }, { report: builder }])] } });
   const runId = store.startRun(cwd, request);
   const result = await runRequest(request, { cwd, runtime, review: 'never', onEvent: store.recorder(runId), ...(previousBrief ? { previousBrief } : {}) });
   const brief = store.finishRun(runId, request, result);

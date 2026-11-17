@@ -13,7 +13,7 @@ import { validateConfig } from '#project';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-'));
 const script = (...turns: FakeScript['turns']): FakeScript => ({ turns });
-const answerReport = { workflow: 'answer', requirements: [], reason: 'plain question', answer: 'It listens on 3000.', sources: ['server.js'] };
+const answerReport = { workflow: 'answer', requirements: [], reason: 'plain question', answer: 'It listens on 3000.', sources: ['https://nodejs.org/api/http.html'] };
 
 function harness(project: string, runtime: FakeRuntime, extra: Partial<CliDeps> = {}) {
   const home = tmp();
@@ -154,7 +154,7 @@ test('version warning and config validation', () => {
 test('revert: needs_review run leaves changes; revert shows a plan, then --yes restores the files', async () => {
   const project = tmp();
   fs.writeFileSync(path.join(project, 'keep.txt'), 'original');
-  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit', quote: 'edit' }], reason: 'x' };
   const builderReport = { summary: 's', changedFiles: ['keep.txt', 'new.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'keep.txt' }], unverified: [] };
   const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classify }])], builder: [script([{ writeFile: { path: 'keep.txt', content: 'changed' } }, { writeFile: { path: 'new.txt', content: 'x' } }, { report: builderReport }])] } });
   const { deps, home, out, err } = harness(project, runtime);
@@ -235,7 +235,7 @@ test('config validation covers runtimes, roles and allowCommands', () => {
 });
 
 test('plan-build in the CLI: interactive runs ask to confirm the plan; unattended runs go on', async () => {
-  const classify = { workflow: 'plan-build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const classify = { workflow: 'plan-build', requirements: [{ id: 'R1', text: 'edit', quote: 'edit' }], reason: 'x' };
   const plan = { approach: 'edit it', steps: ['edit a.txt'], files: ['a.txt'], risks: [] };
   const builderReport = { summary: 's', changedFiles: ['a.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'a.txt' }], unverified: [] };
   const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: classify }]), script([{ report: plan }])], builder: [script([{ writeFile: { path: 'a.txt', content: 'x' } }, { report: builderReport }])] } });
@@ -265,7 +265,7 @@ test('init previews by default, writes with --yes, never overwrites, and doctor 
 
   out.length = 0;
   assert.equal(await main(['init', '--yes'], deps), 0);
-  assert.match(out.join(''), /Created 7 file\(s\)/);
+  assert.match(out.join(''), /Created 9 file\(s\)/);
   assert.ok(fs.existsSync(path.join(project, '.agent-desk', 'agents', 'builder.md')));
   const config = JSON.parse(fs.readFileSync(path.join(project, '.agent-desk', 'config.json'), 'utf8'));
   assert.deepEqual(config.verify, ['npm test']);
@@ -292,7 +292,7 @@ test('skills check prints findings and exits 1 on errors', async () => {
 });
 
 test('memory: builder suggestions are printed, saved only on approval, and memory reaches every role', async () => {
-  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit' }], reason: 'x' };
+  const classify = { workflow: 'build', requirements: [{ id: 'R1', text: 'edit', quote: 'edit' }], reason: 'x' };
   const builderReport = { summary: 's', changedFiles: ['a.txt'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'a.txt' }], unverified: [], memorySuggestions: ['Emulator port is 8081', 'Tests need Docker'] };
   const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: classify }])], builder: [script([{ writeFile: { path: 'a.txt', content: 'x' } }, { report: builderReport }])] } });
   const project = tmp();

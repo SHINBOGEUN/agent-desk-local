@@ -30,6 +30,8 @@ export function classifyRun(result) {
   if (grade.unexpectedChanges?.length) return { cause: 'role', why: `a read-only task changed files: ${grade.unexpectedChanges.join(', ')}` };
   if (grade.missing?.length) return { cause: 'role', why: `the answer did not contain: ${grade.missing.join(', ')}` };
   if (result.falseVerifierPass) return { cause: 'role', why: 'the reviewer passed work that fails the hidden tests' };
+  const skillMiss = Array.isArray(result.expectedSkills) && Array.isArray(metrics.skillsRead) ? [...result.expectedSkills.filter(id => !metrics.skillsRead.includes(id)).map(id => `missed ${id}`), ...metrics.skillsRead.filter(id => !result.expectedSkills.includes(id)).map(id => `read ${id} without need`)] : [];
+  if (skillMiss.length && !grade.success) return { cause: 'skill', why: `skill trigger: ${skillMiss.join(', ')}` };
   if (metrics.workflow && result.expectedWorkflows && !result.expectedWorkflows.includes(metrics.workflow)) return { cause: 'workflow', why: `lead chose "${metrics.workflow}" (expected ${result.expectedWorkflows.join(' or ')})` };
   if (metrics.status === 'needs_user') return { cause: 'workflow', why: 'stopped to ask the user in an unattended run' };
   if (metrics.status === 'needs_review' && (metrics.redo ?? 0) >= 2) return { cause: 'workflow', why: 'REDO limit reached without passing the gates' };

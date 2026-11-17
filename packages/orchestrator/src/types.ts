@@ -62,6 +62,7 @@ export type RunEventBody =
   | { type: 'report'; step: StepKind; kind: string; accepted: boolean; detail: string }
   | { type: 'user_question'; step: StepKind; question: string; answered: boolean }
   | { type: 'gate'; result: GateResult }
+  | { type: 'skill_read'; step: StepKind; role: RoleId; skill: string }
   | { type: 'retry'; step: StepKind; reason: string }
   | { type: 'redo'; attempt: number; mode: 'same-session' | 'new-session'; reasons: string[] }
   | { type: 'step_finished'; step: StepKind; ok: boolean; detail: string }
@@ -80,6 +81,8 @@ export interface RunResult {
   builder?: BuilderReport;
   /** Facts the builder proposed for .agent-desk/memory.md; nothing is written automatically. */
   memorySuggestions?: string[];
+  /** Skills whose SKILL.md a session actually opened, in order. */
+  skillsRead?: { step: StepKind; role: RoleId; skill: string }[];
   plan?: PlanReport;
   research?: ResearchReport[];
   review?: VerifierReport;

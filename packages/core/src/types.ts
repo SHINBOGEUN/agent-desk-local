@@ -35,6 +35,8 @@ export interface TokenUsage {
 export interface Requirement {
   id: string;   // stable within a run, e.g. "R1"
   text: string;
+  /** The words of the user's request this requirement comes from (checked by the harness). */
+  quote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +113,8 @@ export type RuntimeEvent =
   | { type: 'message'; text: string; final: boolean }
   | { type: 'command'; command: string; exitCode: number | null; output: string }
   | { type: 'file_change'; path: string; kind: 'add' | 'update' | 'delete' }
+  /** A file the session read with a read tool (Claude's Read). Codex reads through commands. */
+  | { type: 'file_read'; path: string }
   | { type: 'approval_request'; id: string; kind: string; detail: unknown }
   | { type: 'usage'; delta: TokenUsage }
   | { type: 'turn_end'; status: 'completed' | 'interrupted' | 'failed'; error?: string };
