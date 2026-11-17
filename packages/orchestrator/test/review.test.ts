@@ -170,3 +170,58 @@ test('attached images go with the first prompt of each step that reads the reque
   assert.deepEqual(runtime.turns.find(item => item.role === 'builder')!.input.images, ['/tmp/shot.png']);
   assert.equal(runtime.turns.find(item => item.role === 'verifier')!.input.images, undefined);
 });
+
+// ---------- finding checks (ADR 0012) ----------
+
+import { findingLocationErrors, staleFindingErrors } from '../src/evidence.ts';
+
+test('verifier findings must cite real files and lines, and REDO without a file must name a requirement', () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'a.js'), 'one\ntwo\n');
+  const ctx = { deleted: ['gone.js'], requirementIds: ['R1', 'R2'] };
+  const at = (finding: Record<string, unknown>, verdict = 'REDO') => findingLocationErrors(cwd, { verdict, blocking: [{ reason: 'x', evidence: 'y', ...finding }] }, ctx);
+  assert.deepEqual(at({ file: 'a.js', line: 2 }), []);
+  assert.deepEqual(at({ file: './a.js:2' }), []);
+  assert.deepEqual(at({ file: 'gone.js', line: 40 }), []);
+  assert.match(at({ file: 'missing.js' })[0] ?? '', /not a file in the project/);
+  assert.match(at({ file: 'a.js', line: 9 })[0] ?? '', /outside "a\.js" \(3 lines\)/);
+  assert.match(at({ file: '../outside.js' })[0] ?? '', /not a file in the project/);
+  assert.match(at({})[0] ?? '', /needs a "file"/);
+  assert.deepEqual(at({ reason: 'R2 is not met' }), []);
+  assert.deepEqual(at({ reason: 'the request asks for a button' }), []);
+  assert.deepEqual(at({}, 'BLOCKED'), []);
+  assert.match(at({ reason: 'R10 missing' })[0] ?? '', /needs a "file"/);
+});
+
+test('a re-review may only block on earlier findings or files changed since', () => {
+  const ctx = { changedSince: ['b.js'], earlierFiles: ['a.js'] };
+  assert.deepEqual(staleFindingErrors([{ file: 'a.js' }, { file: './b.js:3' }, {}], ctx), []);
+  assert.match(staleFindingErrors([{ file: 'c.js' }], ctx)[0] ?? '', /has not changed since your last review/);
+});
+
+test('a made-up finding location is rejected and corrected in the same verifier turn', async () => {
+  const fake = { verdict: 'REDO', blocking: [{ file: 'nowhere.txt', line: 3, reason: 'bug', evidence: 'saw it' }], optional: [] };
+  const runtime = setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: fake }, { report: pass }])]);
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.redo, 0);
+  const results = runtime.turns.find(turn => turn.role === 'verifier')?.toolResults ?? [];
+  assert.deepEqual(results.map(item => item.ok), [false, true]);
+  assert.match(results[0]?.message ?? '', /"nowhere\.txt" is not a file in the project/);
+});
+
+test('after a REDO the re-review gets the earlier findings and only the diff since then', async () => {
+  const runtime = setup(
+    [script([write('feature.txt', 'b'), write('other.txt', 'untouched'), { report: builderReport(['feature.txt', 'other.txt']) }], [write('feature.txt', 'a'), { report: builderReport(['feature.txt', 'other.txt']) }])],
+    [script([{ report: redo }]), script([{ report: { verdict: 'REDO', blocking: [{ file: 'other.txt', reason: 'new idea', evidence: 'saw it' }], optional: [] } }, { report: pass }])],
+  );
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  const second = runtime.turns.filter(turn => turn.role === 'verifier')[1]!;
+  assert.match(second.input.text, /re-review after a redo/);
+  assert.match(second.input.text, /1\. wrong content \(feature\.txt:1\)/);
+  assert.match(second.input.text, /Files changed since that review: feature\.txt/);
+  assert.match(second.input.text, /modified: feature\.txt[\s\S]*-b\n\+a/);
+  assert.doesNotMatch(second.input.text, /untouched/);
+  assert.match(second.toolResults[0]?.message ?? '', /"other\.txt" has not changed since your last review/);
+});

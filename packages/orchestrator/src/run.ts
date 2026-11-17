@@ -11,10 +11,11 @@ import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gat
 import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
-import { commandClaimErrors, missingSourceErrors, skillsTouched } from './evidence.ts';
+import { commandClaimErrors, findingLocationErrors, missingSourceErrors, skillsTouched, staleFindingErrors } from './evidence.ts';
 import type { ObservedCommand } from './evidence.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt, selfReviewPrompt } from './review.ts';
+import type { PreviousReview } from './review.ts';
 import { decideApproval } from './approval.ts';
 import { createRestorePoint } from './restore-point.ts';
 import type { RestorePointInfo } from './restore-point.ts';
@@ -360,6 +361,8 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
   const closeSession = async () => { await session?.close().catch(() => {}); session = null; };
   let prompt = buildPrompt(request, requirements, plan);
   let fresh = prompt;
+  // The last REDO review: its findings and the files as they were then, so a re-review only covers what changed since.
+  let lastReview: { snapshot: Snapshot; findings: VerifierReport['blocking'] } | null = null;
   ctx.emit({ type: 'step_started', step: 'build', role: 'builder' });
   try {
     for (;;) {
@@ -399,10 +402,12 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       let reasons = [...g2.problems, ...g3.problems, ...notDone];
       let review: ReviewOutcome = { kind: 'skipped', reason: 'earlier gates failed' };
       if (!reasons.length) {
-        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3, ...(plan ? { plannedFiles: plan.files } : {}), ...(session ? { self: { session, holder } } : {}) });
+        const previous = lastReview ? { snapshot: lastReview.snapshot, findings: lastReview.findings, diff: diffSnapshots(lastReview.snapshot, after) } : undefined;
+        review = await runReview(ctx, { request, requirements, before, diff: diffSnapshots(before, after), g2, g3, ...(plan ? { plannedFiles: plan.files } : {}), ...(session ? { self: { session, holder } } : {}), ...(previous ? { previous } : {}) });
         if (review.kind === 'stop') {
           return review.failure ? failureResult(ctx, review.failure, { ...base, builder: report }) : finish(ctx, review.status, review.reason, { ...base, builder: report });
         }
+        if (review.kind === 'verdict' && review.report.verdict === 'REDO') lastReview = { snapshot: takeSnapshot(config.cwd, { ignore: ctx.ignore, keepContent: true }), findings: review.report.blocking };
         if (review.kind === 'verdict' && review.report.verdict === 'REDO') reasons = review.report.blocking.map(finding => `Review: ${finding.reason}${finding.file ? ` (${finding.file}${finding.line ? `:${finding.line}` : ''})` : ''}. Evidence: ${finding.evidence}`);
       }
       if (!reasons.length) return completeBuild(ctx, report, g2, g3, base, review);
@@ -432,9 +437,12 @@ type ReviewOutcome =
   | { kind: 'stop'; status: RunStatus; reason: string; failure?: StepFailure };
 
 /** Gate G4: decides by policy whether to review, then runs an independent read-only verifier in a new session. */
-async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult; plannedFiles?: string[]; self?: { session: Session; holder: Holder } }): Promise<ReviewOutcome> {
+async function runReview(ctx: RunContext, input: { request: string; requirements: Requirement[]; before: Snapshot; diff: Diff; g2: GateResult; g3: GateResult; plannedFiles?: string[]; self?: { session: Session; holder: Holder }; previous?: { snapshot: Snapshot; findings: VerifierReport['blocking']; diff: Diff } }): Promise<ReviewOutcome> {
   const { config } = ctx;
   const rendered = renderDiff({ cwd: config.cwd, before: input.before, diff: input.diff });
+  // A re-review sees only the diff since the last review (fewer tokens, no moved goalposts).
+  const since = input.previous ? renderDiff({ cwd: config.cwd, before: input.previous.snapshot, diff: input.previous.diff }) : null;
+  const previous: PreviousReview | undefined = input.previous ? { findings: input.previous.findings, changedSince: input.previous.diff.all } : undefined;
   const decision = decideReview({
     policy: config.review ?? 'always', verifySkipped: input.g3.skipped === true, changedFiles: input.diff.all, changedLines: rendered.lines, linesUnknown: rendered.unknown,
     limits: { ...DEFAULT_AUTO_LIMITS, ...config.autoReview },
@@ -447,10 +455,15 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
   const verifyLines = ((input.g3.data?.commands as string[] | undefined) ?? []).map(command => `\`${command}\` passed`);
   const planned = input.plannedFiles?.map(file => file.replace(/\\/g, '/').replace(/^\.\//, ''));
   const unplannedFiles = planned?.length ? input.diff.all.filter(file => !planned.includes(file)) : [];
-  const facts = { request: input.request, requirements: input.requirements, verifyLines, diffText: rendered.text, changedFiles: input.diff.all, testFiles, unplannedFiles };
+  const facts = { request: input.request, requirements: input.requirements, verifyLines, diffText: since ? since.text : rendered.text, changedFiles: input.diff.all, testFiles, unplannedFiles, ...(previous ? { previous } : {}) };
   const selfCheck = config.review === 'self' && input.self !== undefined;
   const prompt = selfCheck ? selfReviewPrompt(facts) : reviewPrompt(facts);
-  const collector = new ReportCollector('verifier', report => (report.verdict === 'BLOCKED' && !report.blocking.length ? ['verifier.blocking: BLOCKED needs at least one entry that says what could not be decided and why'] : []));
+  const earlierFiles = input.previous?.findings.flatMap(finding => (finding.file ? [finding.file] : [])) ?? [];
+  const collector = new ReportCollector('verifier', report => [
+    ...(report.verdict === 'BLOCKED' && !report.blocking.length ? ['verifier.blocking: BLOCKED needs at least one entry that says what could not be decided and why'] : []),
+    ...findingLocationErrors(config.cwd, report, { deleted: input.diff.deleted, requirementIds: input.requirements.map(requirement => requirement.id) }),
+    ...(previous && report.verdict === 'REDO' ? staleFindingErrors(report.blocking, { changedSince: previous.changedSince, earlierFiles }) : []),
+  ]);
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
   ctx.emit({ type: 'step_started', step: 'review', role: selfCheck ? 'builder' : 'verifier' });
   const guardBefore = takeSnapshot(config.cwd, { mode: 'stat', ignore: ctx.ignore });

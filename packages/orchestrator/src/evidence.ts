@@ -70,3 +70,52 @@ export function skillsTouched(event: { type: string; path?: string; command?: st
   const haystack = text.replace(/\\/g, '/');
   return skills.filter(skill => haystack.includes(skill.path.replace(/\\/g, '/')) || haystack.includes(`skills/${skill.id}/SKILL.md`)).map(skill => skill.id);
 }
+
+const slash = (file: string): string => file.replace(/\\/g, '/').replace(/^\.\//, '');
+
+/**
+ * Verifier findings must point at something real: a cited file exists (or was
+ * deleted by the change) and a cited line is inside it. A REDO finding with no
+ * file must name the requirement it is about. A REDO built on a made-up
+ * location would cost a whole builder turn, so it is rejected here instead.
+ */
+export function findingLocationErrors(cwd: string, report: { verdict: string; blocking: { file?: string; line?: number; reason: string; evidence: string }[] }, context: { deleted: readonly string[]; requirementIds: readonly string[] }): string[] {
+  const errors: string[] = [];
+  const deleted = new Set(context.deleted.map(slash));
+  report.blocking.forEach((finding, index) => {
+    const where = `verifier.blocking[${index}]`;
+    if (finding.file) {
+      const file = slash(finding.file.trim()).replace(/:\d+(-\d+)?$/, '');
+      if (deleted.has(file)) return;
+      const full = path.resolve(cwd, file);
+      const inside = full.startsWith(cwd + path.sep);
+      if (!inside || !fs.existsSync(full) || !fs.statSync(full).isFile()) { errors.push(`${where}.file: "${finding.file}" is not a file in the project. Cite a file you actually read.`); return; }
+      if (finding.line !== undefined) {
+        const lines = fs.readFileSync(full, 'utf8').split('\n').length;
+        if (finding.line < 1 || finding.line > lines) errors.push(`${where}.line: ${finding.line} is outside "${file}" (${lines} lines). Cite the line you actually saw.`);
+      }
+      return;
+    }
+    if (report.verdict !== 'REDO') return;
+    const text = `${finding.reason} ${finding.evidence}`;
+    const named = context.requirementIds.some(id => new RegExp(`(^|[^A-Za-z0-9_-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9_-])`).test(text));
+    if (!named && !/\brequest\b|요청/i.test(text)) errors.push(`${where}: a REDO finding needs a "file" (and line) you saw, or must name the requirement id it is about.`);
+  });
+  return errors;
+}
+
+/**
+ * On a re-review, a new blocking finding in a file that has not changed since
+ * the last review (and was not part of an earlier finding) moves the goalposts:
+ * that file was already reviewed. Such points belong in "optional".
+ */
+export function staleFindingErrors(blocking: { file?: string }[], context: { changedSince: readonly string[]; earlierFiles: readonly string[] }): string[] {
+  const allowed = new Set([...context.changedSince, ...context.earlierFiles].map(slash));
+  const errors: string[] = [];
+  blocking.forEach((finding, index) => {
+    if (!finding.file) return;
+    const file = slash(finding.file.trim()).replace(/:\d+(-\d+)?$/, '');
+    if (!allowed.has(file)) errors.push(`verifier.blocking[${index}].file: "${file}" has not changed since your last review and was not part of an earlier finding. Re-review only the earlier findings and the files changed since; put other remarks in "optional".`);
+  });
+  return errors;
+}

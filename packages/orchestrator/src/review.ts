@@ -54,12 +54,19 @@ export function selfReviewPrompt(input: Parameters<typeof reviewPrompt>[0]): str
   return `${reviewPrompt(input)}\n\nThis time you check your OWN work, as a reviewer would. Do not change any file. Re-read the changed files against the requirements and the request.\nSubmit a verifier report instead of a builder report. Shape: { "verdict": "PASS" | "REDO" | "BLOCKED", "blocking": [{ "file"?: string, "line"?: number, "reason": string, "evidence": string }], "optional": [strings] }. REDO only for an unmet requirement, wrong behaviour, an untrue report or a weakened check, each with concrete evidence. PASS has an empty "blocking" list.`;
 }
 
-export function reviewPrompt(input: { request: string; requirements: Requirement[]; verifyLines: string[]; diffText: string; changedFiles: readonly string[]; testFiles: readonly string[]; unplannedFiles?: readonly string[] }): string {
+/** What the previous review of this run found, for a re-review after a redo. */
+export interface PreviousReview { findings: { file?: string; line?: number; reason: string }[]; changedSince: readonly string[] }
+
+export function reviewPrompt(input: { request: string; requirements: Requirement[]; verifyLines: string[]; diffText: string; changedFiles: readonly string[]; testFiles: readonly string[]; unplannedFiles?: readonly string[]; previous?: PreviousReview }): string {
   const list = input.requirements.map(requirement => `- ${requirement.id}: ${requirement.text}`).join('\n');
   const testNote = input.testFiles.length
     ? `\nTest or check files were changed: ${input.testFiles.join(', ')}. Decide explicitly whether each change is required by the requirements or weakens a check (removed or loosened assertions, skipped tests). A weakened check is a blocking finding.\n`
     : '';
   const scopeNote = input.unplannedFiles?.length ? `\nFiles changed that the plan did not list: ${input.unplannedFiles.join(', ')}. Check that each one is needed for a requirement; unrequested changes are blocking.\n` : '';
   const checks = input.verifyLines.length ? input.verifyLines.map(line => `- ${line}`).join('\n') : '- (no verify commands are configured; nothing was checked automatically)';
+  if (input.previous) {
+    const earlier = input.previous.findings.map((finding, index) => `${index + 1}. ${finding.reason}${finding.file ? ` (${finding.file}${finding.line ? `:${finding.line}` : ''})` : ''}`).join('\n');
+    return `Step: review (re-review after a redo).\nUser's original request:\n${input.request}\n\nRequirements the work must meet:\n${list}\n\nChecks the harness ran itself:\n${checks}\n${testNote}\nYour earlier blocking findings:\n${earlier}\n\nFiles changed since that review: ${input.previous.changedSince.join(', ') || '(none)'}\n\nDiff since that review:\n${input.diffText || '(no textual diff available; read the files)'}\n\nThe rest of the work was already reviewed. Decide for each earlier finding whether it is fixed: keep an unfixed one in "blocking" with the same file. Add a new blocking finding only for a file changed since that review. Other remarks go in "optional".`;
+  }
   return `Step: review.\nUser's original request:\n${input.request}\n\nRequirements the work must meet:\n${list}\n\nChecks the harness ran itself:\n${checks}\n${testNote}${scopeNote}\nFiles changed: ${input.changedFiles.join(', ') || '(none)'}\n\nDiff:\n${input.diffText || '(no textual diff available; read the files)'}\n\nReview the actual files, not only the diff. Report a verdict.`;
 }

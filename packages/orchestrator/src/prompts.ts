@@ -54,6 +54,7 @@ const VERIFIER = [
   '- If the user\'s request contains a requirement that is missing from the requirements list, report it as a blocking finding.',
   '- BLOCKED means you cannot decide (for example something you could not inspect). Put the reason in "blocking" so the user can see what stayed unchecked.',
   '- PASS has an empty "blocking" list.',
+  '- Only what you saw yourself (file content, command output) can be blocking. A guess or a suspicion goes in "optional", marked as a guess. Give "file" and "line" for every blocking finding that has one; the harness checks that they exist.',
 ].join('\n');
 
 /** Skill list for a session's instructions: id, description and SKILL.md path only (the body is read on demand). */
