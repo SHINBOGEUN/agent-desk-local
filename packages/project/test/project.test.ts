@@ -156,10 +156,25 @@ test('skills check: structure errors and description weaknesses are reported', (
   has(/warn vague: description does not say when NOT to use/);
   has(/error vague: body refers to "references\/gone\.md"/);
   has(/warn vague: "orphan\.md" is never mentioned/);
-  has(/info shouty: 6 absolute rules/);
+  has(/warn shouty: 6 absolute rules/);
   has(/error project: config\.skills lists "ghost"/);
   has(/error project: \.agent-desk\/agents\/builder\.md lists skill "phantom"/);
   has(/info vague: exists but is not listed in config\.skills/);
+});
+
+test('skills check: Claude-only keys, rules without reasons, branching bodies and one-language trigger cases', () => {
+  const project = tmp();
+  const description = 'Use when the user asks to write a SQL query for sales or stock. Do not use for schema changes.';
+  put(project, '.agent-desk/skills/sql/SKILL.md', `---\nname: sql\ndescription: ${description}\ndisable-model-invocation: true\n---\n- 매출 요청이면 월별 합계\n- 재고 요청이면 부족 품목\n- 주문 요청이면 최근 30일\n- 고객 요청이면 등급별\n반드시 a. 반드시 b. 절대 c. 절대 d. NEVER e.\n`);
+  put(project, '.agent-desk/skills/sql/triggers.json', JSON.stringify({ should: ['Q4 매출', '재고 현황', '주문 목록', '고객 등급'], shouldNot: ['x'] }));
+  const messages = checkSkills(project, {}).findings.map(finding => `${finding.level} ${finding.skill}: ${finding.message}`);
+  const has = (pattern: RegExp) => assert.ok(messages.some(message => pattern.test(message)), `missing: ${pattern}\n${messages.join('\n')}`);
+  has(/info sql: "disable-model-invocation" is read by Claude Code only/);
+  has(/warn sql: 5 absolute rules/);
+  has(/warn sql: body switches on 4 kinds of request but has no references\//);
+  has(/info sql: triggers\.json "should" is all Korean/);
+  has(/info sql: triggers\.json "shouldNot" has 1 case/);
+  assert.ok(!messages.some(message => /unknown frontmatter key/.test(message)));
 });
 
 test('skills check: duplicate descriptions and body references', () => {

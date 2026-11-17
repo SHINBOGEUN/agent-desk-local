@@ -35,6 +35,26 @@ const ACTION = /\b(use|run|create|write|review|check|validate|generate|migrate|a
 const TRIGGER = /\b(when|whenever|if the user|if you|before|after|while|use this (skill )?(for|when)|trigger)\b|할 때|하는 경우|경우에|사용자가|요청|때는/i;
 const EXCLUDE = /\b(do not|don't|never use|not for|not when|except|unless|only for|instead use|skip when|avoid)\b|하지 마|제외|아닐 때|아닌 경우|쓰지 않|사용하지/i;
 
+// Keys of the open SKILL.md format, and keys only Claude Code reads (Codex ignores them; they are not mistakes).
+const STANDARD_KEYS = ['name', 'description', 'license', 'compatibility', 'allowed-tools', 'metadata'];
+const CLAUDE_KEYS = ['disable-model-invocation', 'user-invocable', 'argument-hint', 'model'];
+// Lines that switch on the kind of request ("if the request is about sales ..."): a sign the body holds several cases.
+const BRANCH = /(이면|라면|인 경우|일 때|요청이면|\bif (the )?(request|task|user|input|file|project)\b|\bwhen (the )?(request|task|user) (is|asks|mentions)\b|\bfor [a-z-]+ requests?\b)/i;
+const ABSOLUTE = /\b(ALWAYS|NEVER|MUST)\b|반드시|절대/g;
+const REASON = /because|why|so that|otherwise|이유|때문|왜냐하면|그래야/i;
+const HANGUL = /[\uac00-\ud7a3]/;
+
+/** Trigger-test sentences that are all in one language miss requests written in the other (a Korean-only list never sees "Total Amount"). */
+export function triggerCaseFindings(cases: { should: string[]; shouldNot: string[] }): string[] {
+  const notes: string[] = [];
+  for (const [name, list] of [['should', cases.should], ['shouldNot', cases.shouldNot]] as const) {
+    if (list.length && list.length < 8) notes.push(`triggers.json "${name}" has ${list.length} case(s); 8 to 10 give a usable hit rate`);
+    const korean = list.filter(text => HANGUL.test(text)).length;
+    if (list.length >= 4 && (korean === 0 || korean === list.length)) notes.push(`triggers.json "${name}" is all ${korean ? 'Korean' : 'non-Korean'}; add cases in the other language so the skill is tested on both`);
+  }
+  return notes;
+}
+
 const isDirectory = (file: string): boolean => { try { return fs.statSync(file).isDirectory(); } catch { return false; } };
 function listFiles(directory: string, base = directory): string[] {
   const out: string[] = [];
@@ -72,7 +92,10 @@ export function checkSkills(project: string, config: ProjectConfig, roles?: Part
     if (parsed.error) { add('error', id, `SKILL.md: ${parsed.error}`); continue; }
     const name = typeof parsed.data.name === 'string' ? parsed.data.name : '';
     const description = typeof parsed.data.description === 'string' ? parsed.data.description : '';
-    for (const key of Object.keys(parsed.data)) if (!['name', 'description', 'license', 'allowed-tools', 'metadata'].includes(key)) add('warn', id, `unknown frontmatter key "${key}"`);
+    for (const key of Object.keys(parsed.data)) {
+      if (CLAUDE_KEYS.includes(key)) add('info', id, `"${key}" is read by Claude Code only; Codex ignores it`);
+      else if (!STANDARD_KEYS.includes(key)) add('warn', id, `unknown frontmatter key "${key}"`);
+    }
     if (!name) add('error', id, 'frontmatter needs "name"');
     else if (name !== id) add('error', id, `name "${name}" must match the folder name "${id}"`);
     if (!description) add('error', id, 'frontmatter needs "description"');
@@ -87,10 +110,20 @@ export function checkSkills(project: string, config: ProjectConfig, roles?: Part
     else {
       const lines = parsed.body.split('\n').length;
       if (lines > 500) add('warn', id, `body is ${lines} lines; move detail into references/ files that the body points to`);
-      const shouting = (parsed.body.match(/\b(ALWAYS|NEVER|MUST)\b/g) ?? []).length;
-      if (shouting >= 5 && !/because|why|so that|otherwise|이유|때문/i.test(parsed.body)) add('info', id, `${shouting} absolute rules (ALWAYS/NEVER/MUST) with no stated reason; explain why so the model can judge edge cases`);
+      const shouting = (parsed.body.match(ABSOLUTE) ?? []).length;
+      if (shouting >= 5 && !REASON.test(parsed.body)) add('warn', id, `${shouting} absolute rules (ALWAYS/NEVER/MUST/반드시/절대) with no stated reason; explain why so the model can judge edge cases`);
     }
     const referenced = referencedFiles(parsed.body);
+    const branches = parsed.body.split('\n').filter(line => BRANCH.test(line)).length;
+    if (branches >= 4 && !referenced.some(ref => ref.startsWith('references/'))) add('warn', id, `body switches on ${branches} kinds of request but has no references/ files; keep a short router in SKILL.md and move each case to references/ so only the needed one is read`);
+    const triggers = path.join(directory, 'triggers.json');
+    if (fs.existsSync(triggers)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(triggers, 'utf8')) as { should?: unknown; shouldNot?: unknown };
+        const list = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+        for (const note of triggerCaseFindings({ should: list(raw.should), shouldNot: list(raw.shouldNot) })) add('info', id, note);
+      } catch { add('error', id, 'triggers.json is not valid JSON'); }
+    }
     for (const ref of referenced) if (!fs.existsSync(path.join(directory, ...ref.split('/')))) add('error', id, `body refers to "${ref}" which does not exist`);
     // triggers.json holds trigger-test cases for the harness (skills trigger-test), not material for the model.
     const others = listFiles(directory).filter(rel => rel !== 'SKILL.md' && rel !== 'triggers.json');

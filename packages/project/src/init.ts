@@ -171,9 +171,14 @@ Why: the harness runs the same commands after you report (gate G3). A failure fo
 3. Run the commands again until they pass.
 4. List each command and its exit code in "commandsRun".
 5. If a command cannot run here (missing tool, needs network or a database), put that in "unverified" instead of reporting the requirement as done.
+
+## Examples
+
+- Normal: you added a field and ${verify[0]} passes. "commandsRun" lists it with exit code 0 and the requirement is "done".
+- Error: ${verify[0]} cannot start because a tool is missing. Say so in "unverified" and leave the requirement "unverified", not "done".
 `, triggers: {
-      should: ['로그인 실패 시 에러 메시지를 바꿔줘', 'Add a due date field to todos', '목록 정렬을 최신순으로 바꿔줘', 'Fix the off-by-one bug in pagination', '설정 파일에서 포트를 읽도록 수정해줘', 'Rename the status filter parameter and update its callers'],
-      shouldNot: ['이 프로젝트의 기본 포트가 뭐야?', 'Explain how the router works', '테스트 명령이 뭐야? 코드는 수정하지 마', 'Which files handle authentication?', '이 함수가 왜 느린지 원인만 알려줘', 'Summarize the README'],
+      should: ['로그인 실패 시 에러 메시지를 바꿔줘', 'Add a due date field to todos', '목록 정렬을 최신순으로 바꿔줘', 'Fix the off-by-one bug in pagination', '설정 파일에서 포트를 읽도록 수정해줘', 'Rename the status filter parameter and update its callers', '회원가입 폼에 이메일 검증을 추가해줘', 'Make the export button download a CSV'],
+      shouldNot: ['이 프로젝트의 기본 포트가 뭐야?', 'Explain how the router works', '테스트 명령이 뭐야? 코드는 수정하지 마', 'Which files handle authentication?', '이 함수가 왜 느린지 원인만 알려줘', 'Summarize the README', '배포 절차를 설명해줘', 'What does the config file control?'],
     } });
   }
   const stack = inspection.stack.join(', ') || 'this project';
@@ -193,11 +198,16 @@ Why: a reviewer who only reads the diff tends to approve what looks tidy. These 
 - Every requirement has evidence in the code or in a check that ran, not only in the builder's words.
 - Changed tests: is each change required by the request, or does it remove or loosen a check? A loosened check is a blocking finding.
 - Files about auth, tokens, sessions or secrets: is anything exposed or skipped?
-- Changes nobody asked for (renames, reformatting, new dependencies) are noted in "optional", or blocking if they break something.
+- Changes nobody asked for (renames, reformatting, new dependencies) are blocking unless a requirement needs them.
 ${specifics.join('\n')}
+
+## Examples
+
+- Normal: the change meets every requirement, no test was touched and the checks passed. Verdict PASS with an empty "blocking" list.
+- Error: an assertion was deleted so the checks pass. Verdict REDO with a blocking finding that gives that test file and line.
 `, triggers: {
-    should: ['Review this change against the requirements', '빌더가 바꾼 파일을 검토해줘', 'Check whether the tests were weakened in this diff', '이 변경이 요구사항을 다 지켰는지 판정해줘'],
-    shouldNot: ['Add a search command', '기본 포트가 뭐야?', 'Explain the project structure', '버그를 고쳐줘'],
+    should: ['Review this change against the requirements', '빌더가 바꾼 파일을 검토해줘', 'Check whether the tests were weakened in this diff', '이 변경이 요구사항을 다 지켰는지 판정해줘', 'Is this diff safe to merge?', '테스트가 약해졌는지 확인해줘', 'Verify the builder did not touch unrelated files', '보안 관련 파일이 바뀌었는지 봐줘'],
+    shouldNot: ['Add a search command', '기본 포트가 뭐야?', 'Explain the project structure', '버그를 고쳐줘', 'Write a new test for the parser', '로그인 기능을 만들어줘', 'Which command starts the server?', '이 함수 이름을 바꿔줘'],
   } });
   return drafts;
 }
