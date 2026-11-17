@@ -296,3 +296,34 @@ test('editing: saves only what passes the same checks the harness uses', () => {
   assert.deepEqual(projectFiles(project).skills, []);
   assert.equal(saveProjectFile(project, { kind: 'role', id: 'chief', text: '' }).ok, false);
 });
+
+import { roleFileFindings, skillDrafts } from '#project';
+const baseInspection = () => inspectProject(tmp());
+
+test('role files: sections the harness already provides, long bodies and reasonless rules are pointed out', () => {
+  assert.deepEqual(roleFileFindings('Project-specific rules for the builder go here, one per line.'), []);
+  assert.deepEqual(roleFileFindings('- Use pnpm, not npm, because the lockfile is pnpm.\n- Never edit generated/ (it is rebuilt).'), []);
+  const book = roleFileFindings('## 핵심 역할\nx\n## 입출력 프로토콜\ny\n## 에러 핸들링\nz\n## Collaboration\nw');
+  assert.match(book[0] ?? '', /repeats what the harness already tells this role \(the role, the report shape, error handling/);
+  assert.match(book[0] ?? '', /hand-offs between roles/);
+  assert.match(roleFileFindings(Array.from({ length: 41 }, (_, i) => `- rule ${i}`).join('\n'))[0] ?? '', /41 lines of project rules/);
+  assert.match(roleFileFindings('- 반드시 a\n- 절대 b\n- NEVER c')[0] ?? '', /absolute rules without a reason/);
+  const project = tmp();
+  const messages = checkSkills(project, {}, { verifier: { role: 'verifier', file: 'f', skills: [], body: '## Error handling\nretry' } }).findings.map(finding => `${finding.level} ${finding.skill}: ${finding.message}`);
+  assert.ok(messages.some(message => /^info role:verifier: repeats/.test(message)), messages.join('\n'));
+});
+
+test('init drafts a boundary-check skill only for projects with both a UI and an API', () => {
+  const both = skillDrafts({ ...baseInspection(), stack: ['Node.js', 'React', 'Express'] }, []);
+  const skill = both.find(draft => draft.id === 'boundary-check');
+  assert.ok(skill);
+  assert.equal(skill.role, 'verifier');
+  assert.equal(skill.triggers.should.length, 8);
+  assert.equal(skill.triggers.shouldNot.length, 8);
+  assert.equal(skillDrafts({ ...baseInspection(), stack: ['Node.js', 'Express'] }, []).some(draft => draft.id === 'boundary-check'), false);
+  assert.equal(skillDrafts({ ...baseInspection(), stack: ['Web'] }, []).some(draft => draft.id === 'boundary-check'), false);
+  const project = tmp();
+  put(project, '.agent-desk/skills/boundary-check/SKILL.md', skill.content);
+  put(project, '.agent-desk/skills/boundary-check/triggers.json', JSON.stringify(skill.triggers));
+  assert.deepEqual(checkSkills(project, {}).findings.filter(finding => finding.level !== 'info' || !/not listed/.test(finding.message)), []);
+});

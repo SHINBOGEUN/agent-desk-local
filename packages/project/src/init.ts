@@ -209,6 +209,39 @@ ${specifics.join('\n')}
     should: ['Review this change against the requirements', '빌더가 바꾼 파일을 검토해줘', 'Check whether the tests were weakened in this diff', '이 변경이 요구사항을 다 지켰는지 판정해줘', 'Is this diff safe to merge?', '테스트가 약해졌는지 확인해줘', 'Verify the builder did not touch unrelated files', '보안 관련 파일이 바뀌었는지 봐줘'],
     shouldNot: ['Add a search command', '기본 포트가 뭐야?', 'Explain the project structure', '버그를 고쳐줘', 'Write a new test for the parser', '로그인 기능을 만들어줘', 'Which command starts the server?', '이 함수 이름을 바꿔줘'],
   } });
+  // Code on both sides of an HTTP boundary (a UI and the API it calls): the book's seven boundary patterns are where
+  // such changes look right in each file and still break, because each side is only wrong against the other.
+  const frontend = inspection.stack.some(item => /React|Vue|Next\.js/.test(item)) || inspection.stack.includes('Web');
+  const backend = inspection.stack.some(item => /Express|Next\.js|Supabase|Python/.test(item));
+  if (frontend && backend) drafts.push({ id: 'boundary-check', role: 'verifier', why: 'compare both sides when a change crosses the UI/API boundary', content: `---
+name: boundary-check
+description: Compares both sides of a change that crosses the boundary between the UI and the API (response shape, field names, routes, loading and error states) before you give a verdict. Use when the change touches an API handler and the code that calls it, or only one of them. Do not use for changes that stay on one side and change no data passed across.
+---
+
+# Boundary check
+
+Why: each side can look correct on its own and still break against the other. Read the handler and its caller together; a mismatch is only visible side by side.
+
+Check the pairs the change touches:
+
+1. Response wrapping: \`{ user }\` on one side, \`user\` or a list on the other.
+2. Field names: \`user_id\` against \`userId\`, and dates or numbers sent as strings.
+3. Routes and links: the path the server serves against the URL the client builds.
+4. States: loading, empty, error and success each handled where the data arrives.
+5. Calls: every endpoint the client calls exists, with the method it uses.
+6. Sync and async: a function that now returns a Promise is awaited by its callers.
+7. Optional fields: a field that can be missing is not read as if it were always there.
+
+A mismatch is a blocking finding with the file and line on both sides. If the change touches only one side and the other side is not in the diff, read it anyway; if you cannot find it, say so in "blocking" instead of passing.
+
+## Examples
+
+- Normal: the handler now returns \`{ items, total }\` and the list component reads \`data.items\`. Both sides match: no finding.
+- Error: the handler renames \`created_at\` to \`createdAt\` but the card still reads \`note.created_at\`. REDO with both locations.
+`, triggers: {
+    should: ['API 응답 형식을 바꾸고 화면도 맞춰줘', 'Rename the userId field in the API and the UI', '목록 API에 페이지네이션 추가하고 프론트에서 써줘', 'Check that the new endpoint matches the client call', '로그인 응답에 토큰 만료 시간을 넣어줘', 'Add an error state when the notes request fails', '서버에서 날짜 형식을 바꿨는데 화면도 고쳐줘', 'Change the delete route to use the note id in the path'],
+    shouldNot: ['버튼 색을 파란색으로 바꿔줘', 'Fix a typo in the README', '서버 로그 레벨을 debug로 바꿔줘', 'Add a unit test for the date formatter', 'CSS 여백을 줄여줘', 'Explain how routing works', '환경 변수 이름이 뭐야?', 'Refactor the logger module'],
+  } });
   return drafts;
 }
 

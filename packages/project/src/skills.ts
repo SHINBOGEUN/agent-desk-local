@@ -55,6 +55,28 @@ export function triggerCaseFindings(cases: { should: string[]; shouldNot: string
   return notes;
 }
 
+// The book asks agent files for 7-8 sections (role, principles, input/output, error handling, collaboration,
+// re-invocation, self-check). Here the harness writes those into every session itself, so a role file holds only
+// project rules; repeating the built-in sections costs tokens on every turn and can contradict them.
+const BUILT_IN_SECTIONS: [RegExp, string][] = [
+  [/^#{1,4}\s*(핵심 역할|역할|role|core role)(?![A-Za-z])/im, 'the role'],
+  [/^#{1,4}\s*(입출력|입력|출력|input|output|report shape|보고 형식)/im, 'the report shape'],
+  [/^#{1,4}\s*(에러 핸들링|오류 처리|error handling|errors)(?![A-Za-z])/im, 'error handling (rejected reports, unverified, BLOCKED)'],
+  [/^#{1,4}\s*(협업|팀 통신|collaboration|team)(?![A-Za-z])/im, 'hand-offs between roles'],
+  [/^#{1,4}\s*(재호출|re-?invocation|redo)(?![A-Za-z])/im, 'redo and re-review rules'],
+];
+
+/** Notes on a role file body: sections the harness already provides, and length. */
+export function roleFileFindings(body: string): string[] {
+  const notes: string[] = [];
+  const covered = BUILT_IN_SECTIONS.filter(([pattern]) => pattern.test(body)).map(([, name]) => name);
+  if (covered.length) notes.push(`repeats what the harness already tells this role (${covered.join(', ')}); keep only rules specific to this project`);
+  const lines = body.split('\n').filter(line => line.trim()).length;
+  if (lines > 40) notes.push(`${lines} lines of project rules are sent on every turn of this role; move long procedures into a skill so they are read only when needed`);
+  if (lines > 0 && !/(이유|때문|왜냐하면|because|so that|otherwise|why)/i.test(body) && (body.match(/\b(ALWAYS|NEVER|MUST)\b|반드시|절대/g) ?? []).length >= 3) notes.push('absolute rules without a reason; say why so the model can judge edge cases');
+  return notes;
+}
+
 const isDirectory = (file: string): boolean => { try { return fs.statSync(file).isDirectory(); } catch { return false; } };
 function listFiles(directory: string, base = directory): string[] {
   const out: string[] = [];
@@ -130,6 +152,8 @@ export function checkSkills(project: string, config: ProjectConfig, roles?: Part
     for (const rel of others) if (!referenced.includes(rel)) add('warn', id, `"${rel}" is never mentioned in SKILL.md, so it would never be read`);
     skills.push({ id, description, path: path.relative(project, file).split(path.sep).join('/') });
   }
+
+  for (const [role, definition] of Object.entries(roles ?? {})) for (const note of roleFileFindings(definition?.body ?? '')) add('info', `role:${role}`, note);
 
   const known = new Set(ids);
   for (const id of config.skills ?? []) if (!known.has(id)) add('error', 'project', `config.skills lists "${id}" but .agent-desk/skills/${id}/SKILL.md does not exist`);
