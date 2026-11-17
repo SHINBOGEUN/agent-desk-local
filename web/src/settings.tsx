@@ -64,13 +64,13 @@ function RoleSummary({ text, skills, runtime }: { text: string; skills: ProjectF
   );
 }
 
-export function SettingsPanel({ project, runtimes, busy, initialRole, onClose, onSaved }: { project: string; runtimes: Record<string, string> | null; busy: boolean; initialRole?: string | undefined; onClose: () => void; onSaved: () => void }) {
+export function SettingsPanel({ project, runtimes, busy, initialRole, initialSkill, onClose, onSaved }: { project: string; runtimes: Record<string, string> | null; busy: boolean; initialRole?: string | undefined; initialSkill?: string | undefined; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
   const [files, setFiles] = useState<ProjectFiles | null>(null);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<Tab>(initialRole ? 'roles' : 'config');
+  const [tab, setTab] = useState<Tab>(initialSkill ? 'skills' : initialRole ? 'roles' : 'config');
   const [role, setRole] = useState<string>(initialRole ?? 'builder');
-  const [skill, setSkill] = useState<string | null>(null);
+  const [skill, setSkill] = useState<string | null>(initialSkill ?? null);
   const [newId, setNewId] = useState('');
   const [draftNote, setDraftNote] = useState('');
 

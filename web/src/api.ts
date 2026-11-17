@@ -1,6 +1,6 @@
 // Thin client for the local Agent Desk server. Every POST carries the per-start token from /api/state.
 
-import type { BenchSummary, RuntimeMode, StoredEvent } from './model.ts';
+import type { BenchSummary, FeedbackCause, RuntimeMode, StoredEvent } from './model.ts';
 
 export interface RunRow {
   id: number;
@@ -42,7 +42,12 @@ export interface RunDetail {
   usageTotal: number;
   report: RunReport | null;
   settings?: RunSettings | null;
+  feedback?: Feedback | null;
 }
+
+export interface Feedback { runId: number; rating: 1 | -1; cause: FeedbackCause | null; target: string | null; note: string | null; at: string }
+export interface QualityRow { runId: number; project: string; request: string; workflow: string | null; status: string; startedAt: string; tokens: number; redo: number; rejectedReports: number; rating: 1 | -1 | null; cause: FeedbackCause | null; target: string | null; note: string | null }
+export interface QualitySummary { runs: number; rated: number; up: number; down: number; approval: number | null; byCause: Record<string, number>; targets: { target: string; count: number }[]; byWorkflow: { workflow: string; runs: number; up: number; down: number }[]; meanTokensUp: number | null; meanTokensDown: number | null; rejectedReports: number; redoRuns: number }
 
 /** What a run started with (recorded by the server). */
 export interface RunSettings { mode?: string | null; runtimes?: Record<string, string>; fallback?: string; review?: string; verify?: string[]; skills?: Record<string, string[]>; images?: number; resumeOf?: number; noSkills?: boolean; notes?: string[] }
@@ -96,6 +101,9 @@ export const api = {
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact }),
   deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),
+  feedback: (body: { runId: number; rating: 1 | -1 | 0; cause?: FeedbackCause | null; target?: string | null; note?: string | null }): Promise<{ feedback: Feedback | null }> => request('POST', '/api/feedback', body),
+  quality: (project?: string): Promise<{ rows: QualityRow[]; summary: QualitySummary }> => request('GET', `/api/quality${project ? `?project=${encodeURIComponent(project)}` : ''}`),
+  qualityExportUrl: (format: 'csv' | 'json', project?: string): string => `/api/quality/export?format=${format}${project ? `&project=${encodeURIComponent(project)}` : ''}`,
   revert: (id: number, yes: boolean): Promise<RevertPlan> => request('POST', `/api/runs/${id}/revert`, { yes }),
 };
 

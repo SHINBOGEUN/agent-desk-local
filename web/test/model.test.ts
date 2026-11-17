@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { benchSets, changePercent, minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
-import { acceptImage, asList, readFrontmatter, benchSetOf, modeNeeds, projectList, projectName, sameProject } from '../src/model.ts';
+import { acceptImage, asList, readFrontmatter, benchSetOf, modeNeeds, projectList, projectName, sameProject, feedbackTargets, targetLocation } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -138,4 +138,17 @@ test('image attachments follow the server limits', () => {
 test('timeline lists the skills sessions opened', () => {
   const timeline = buildTimeline([{ seq: 1, at: 't', type: 'skill_read', data: { type: 'skill_read', step: 'build', role: 'builder', skill: 'html-output' } }]);
   assert.deepEqual(timeline.skillsRead, [{ step: 'build', role: 'builder', skill: 'html-output' }]);
+});
+
+test('a 👎 offers the files that fit its cause, the ones this run touched first, and each opens the right editor', () => {
+  const context = { skillsRead: ['html-output'], projectSkills: ['review-checklist', 'html-output'], roles: ['lead', 'builder', 'lead'] };
+  assert.deepEqual(feedbackTargets('skill', context), ['.agent-desk/skills/html-output/SKILL.md', '.agent-desk/skills/review-checklist/SKILL.md']);
+  assert.deepEqual(feedbackTargets('role', context), ['lead', 'builder', 'verifier', 'researcher'].map(role => `.agent-desk/agents/${role}.md`));
+  assert.deepEqual(feedbackTargets('workflow', context), ['.agent-desk/config.json', '.agent-desk/agents/lead.md']);
+  assert.deepEqual(feedbackTargets('other', context), []);
+  assert.deepEqual(targetLocation('.agent-desk/config.json'), { tab: 'config' });
+  assert.deepEqual(targetLocation('.agent-desk/agents/builder.md'), { tab: 'roles', id: 'builder' });
+  assert.deepEqual(targetLocation('.agent-desk/skills/html-output/SKILL.md'), { tab: 'skills', id: 'html-output' });
+  assert.equal(targetLocation('.agent-desk/agents/hacker.md'), null);
+  assert.equal(targetLocation('src/app.js'), null);
 });

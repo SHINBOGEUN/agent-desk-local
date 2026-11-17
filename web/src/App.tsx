@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { api, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs } from './model.ts';
+import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, feedbackTargets, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs, targetLocation } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Key, Lang } from './i18n.ts';
 import { SettingsPanel } from './settings.tsx';
+import { FeedbackBar, QualityView } from './quality.tsx';
 import { errorText } from './util.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
@@ -342,9 +343,11 @@ function ProjectButton({ project, on, live, onSelect, onForget }: { project: Pro
   );
 }
 
+type Tab = 'chat' | 'bench' | 'quality';
+
 function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
   projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void;
-  onForget: (project: ProjectEntry) => Promise<void>; onForgetBench: () => Promise<void>; opening: boolean; tab: 'chat' | 'bench'; onTab: (tab: 'chat' | 'bench') => void;
+  onForget: (project: ProjectEntry) => Promise<void>; onForgetBench: () => Promise<void>; opening: boolean; tab: Tab; onTab: (tab: Tab) => void;
 }) {
   const { t, lang, setLang } = useI18n();
   const [confirmBench, setConfirmBench] = useState(false);
@@ -381,6 +384,7 @@ function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, o
       <button className="open-project" disabled={opening} onClick={onOpen}>+ {t('openProject')}</button>
       {opening ? <p className="side-empty">{t('dialogOpen')}</p> : null}
       <div className="side-foot">
+        <button className={`side-link${tab === 'quality' ? ' on' : ''}`} onClick={() => onTab('quality')}>{t('tabQuality')}</button>
         <button className={`side-link${tab === 'bench' ? ' on' : ''}`} onClick={() => onTab('bench')}>{t('tabBench')}</button>
         <span className="lang" role="group" aria-label={t('language')}>
           <button className={lang === 'ko' ? 'on' : ''} onClick={() => setLang('ko')}>한국어</button>
@@ -392,8 +396,9 @@ function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, o
 }
 
 /** One request and the team's reply. Live runs follow the event stream; finished runs load their saved report. */
-function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished }: {
+function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished, projectSkills, onOpenTarget }: {
   run: RunRow; live: boolean; canResume: boolean; onResume: (run: RunRow) => void; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
+  projectSkills: string[]; onOpenTarget: (target: string) => void;
 }) {
   const { t, lang } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -469,6 +474,8 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
           {!running && detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} /> : null}
           {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
           {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
+          {!running && detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
+            targetsFor={cause => feedbackTargets(cause, { skillsRead: (timeline.skillsRead ?? detail.report?.skillsRead ?? []).map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
         </div>
         <span className="msg-meta">Agent Desk{durationOf(run, lang)}</span>
       </div>
@@ -548,7 +555,12 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const [modes, setModes] = useState<Record<string, RuntimeMode | ''>>(() => readJson(MODES_KEY, {}));
   const [review, setReview] = useState<'always' | 'auto' | 'never' | 'self' | ''>('');
   const [images, setImages] = useState<Attachment[]>([]);
-  const [settingsFor, setSettingsFor] = useState<{ role?: string } | null>(null);
+  const [settingsFor, setSettingsFor] = useState<{ role?: string; skill?: string } | null>(null);
+  const openTarget = (target: string): void => {
+    const where = targetLocation(target);
+    if (!where) return;
+    setSettingsFor(where.tab === 'roles' ? { role: where.id! } : where.tab === 'skills' ? { skill: where.id! } : {});
+  };
   const fileInput = useRef<HTMLInputElement>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const mode = modes[project] ?? '';
@@ -643,7 +655,8 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
             </div>
           ) : shown.map(run => (
             <Exchange key={run.id} run={run} live={active?.runId === run.id} canResume={active === null} onResume={run => { void resume(run); }}
-              onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }} />
+              onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }}
+              projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} />
           ))}
           <div ref={threadEnd} />
         </div>
@@ -670,7 +683,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
         </div>
       </section>
       <TeamRail runtimes={railRuntimes} timeline={liveTimeline} info={info} installed={installed} modeChoice={mode} onEdit={role => setSettingsFor(role ? { role } : {})} />
-      {settingsFor ? <SettingsPanel project={project} runtimes={railRuntimes} busy={activeHere} initialRole={settingsFor.role} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
+      {settingsFor ? <SettingsPanel project={project} runtimes={railRuntimes} busy={activeHere} initialRole={settingsFor.role} initialSkill={settingsFor.skill} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
     </div>
   );
 }
@@ -701,7 +714,7 @@ export function App() {
   const [saved, setSaved] = useState<string[]>(() => readJson<string[]>(PROJECTS_KEY, []));
   const [project, setProject] = useState<string>(() => read(PROJECT_KEY) ?? '');
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<'chat' | 'bench'>('chat');
+  const [tab, setTab] = useState<Tab>('chat');
   const [opening, setOpening] = useState(false);
   const [browsing, setBrowsing] = useState(false);
 
@@ -771,6 +784,7 @@ export function App() {
         <main className="main">
           {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
           {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>
+            : tab === 'quality' ? <div className="bench-page"><QualityView project={project} /></div>
             : project ? <ChatView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
               : <Welcome onOpen={() => { void open(); }} opening={opening} />}
         </main>

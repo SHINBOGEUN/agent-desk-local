@@ -308,3 +308,30 @@ export function acceptImage(current: number, file: { type: string; size: number 
   if (file.size > IMAGE_LIMITS.bytes) return 'size';
   return 'ok';
 }
+
+// ---------- quality log (ADR 0012) ----------
+
+export type FeedbackCause = 'skill' | 'role' | 'workflow' | 'other';
+export const FEEDBACK_CAUSES: readonly FeedbackCause[] = ['skill', 'role', 'workflow', 'other'];
+export const CONFIG_TARGET = '.agent-desk/config.json';
+export const skillTarget = (id: string): string => `.agent-desk/skills/${id}/SKILL.md`;
+export const roleTarget = (role: string): string => `.agent-desk/agents/${role}.md`;
+const ALL_ROLES = ['lead', 'builder', 'verifier', 'researcher'];
+
+/** Files a 👎 can point at for its cause, the likely ones first: skills this run read, roles that took part. */
+export function feedbackTargets(cause: FeedbackCause, context: { skillsRead: string[]; projectSkills: string[]; roles: string[] }): string[] {
+  if (cause === 'skill') return [...new Set([...context.skillsRead, ...context.projectSkills])].map(skillTarget);
+  if (cause === 'role') return [...new Set([...context.roles.filter(role => ALL_ROLES.includes(role)), ...ALL_ROLES])].map(roleTarget);
+  if (cause === 'workflow') return [CONFIG_TARGET, roleTarget('lead')];
+  return [];
+}
+
+/** Which settings tab and entry edit a target file; null for anything else. */
+export function targetLocation(target: string): { tab: 'config' | 'roles' | 'skills'; id?: string } | null {
+  if (target === CONFIG_TARGET) return { tab: 'config' };
+  const role = /^\.agent-desk\/agents\/([a-z]+)\.md$/.exec(target);
+  if (role && ALL_ROLES.includes(role[1]!)) return { tab: 'roles', id: role[1]! };
+  const skill = /^\.agent-desk\/skills\/([a-z0-9][a-z0-9-]*)\/SKILL\.md$/.exec(target);
+  if (skill) return { tab: 'skills', id: skill[1]! };
+  return null;
+}
