@@ -5,7 +5,7 @@
 // specific Agent Desk version is the adapter's job (bench/adapters/<name>.mjs);
 // preparing workspaces, grading and recording results are shared here.
 //
-//   node bench/run.mjs --label v1-13 [--adapter v1] [--set standard|hard|python|web|general|all] [--tasks T01,T05] [--repeat 1]
+//   node bench/run.mjs --label v1-13 [--adapter v1|v2|bare] [--set standard|hard|python|web|general|all] [--tasks T01,T05] [--repeat 1]
 //                      [--url http://127.0.0.1:4317] [--timeout-min 40]
 //                      [v2 only: --review always|auto|never] [--runtime codex] [--mode codex+claude] [--no-skills] [--verify "npm test"] [--max-tokens N] [--max-minutes N]
 //                      [--usage-limit 20] [--work-dir <dir>] [--results-dir <dir>]
@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { benchDirectory, loadTasks, prepareWorkspace, evaluate, sampleOf, SET_PATTERNS } from './lib/evaluate.mjs';
 
-const ADAPTERS = ['v1', 'v2'];
+const ADAPTERS = ['v1', 'v2', 'bare'];
 
 export function parseArgs(argv) {
   const options = { adapter: 'v1', set: 'standard', repeat: 1, url: 'http://127.0.0.1:4317', timeoutMin: 40, pollMs: 3000, workDir: path.join(os.tmpdir(), 'agent-desk-bench'), resultsDir: path.join(benchDirectory, 'results', 'runs') };
@@ -57,7 +57,7 @@ export function parseArgs(argv) {
 async function loadAdapter(options) {
   const file = path.join(benchDirectory, 'adapters', `${options.adapter}.mjs`);
   const { createAdapter } = await import(pathToFileURL(file).href);
-  return createAdapter({ url: options.url, pollMs: options.pollMs, ...(options.adapter === 'v2' ? { cli: options.cli, review: options.review, runtime: options.runtime, mode: options.mode, noSkills: options.noSkills, verify: options.verify, maxTokens: options.maxTokens, maxMinutes: options.maxMinutes } : {}) });
+  return createAdapter({ url: options.url, pollMs: options.pollMs, ...(options.adapter === 'bare' ? { cli: options.cli } : {}), ...(options.adapter === 'v2' ? { cli: options.cli, review: options.review, runtime: options.runtime, mode: options.mode, noSkills: options.noSkills, verify: options.verify, maxTokens: options.maxTokens, maxMinutes: options.maxMinutes } : {}) });
 }
 
 async function executeTask(adapter, task, attempt, options, log) {

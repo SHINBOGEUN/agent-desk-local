@@ -65,6 +65,10 @@ export function runMetrics(result, durationSec) {
     reviewSkipped: result.reviewSkipped || null,
     unverified: result.unverified?.length || 0,
     gates: (result.gates || []).map(gate => `${gate.gate}:${gate.skipped ? 'skip' : gate.ok ? 'ok' : 'fail'}`),
+    // Reports the evidence checks sent back (ADR 0011/0012), by role.
+    rejectedReports: (result.events || []).filter(event => event.type === 'report' && event.accepted === false).reduce((counts, event) => ({ ...counts, [event.kind]: (counts[event.kind] || 0) + 1 }), {}),
+    // Tokens of each review round in order; the second is the re-review after a REDO.
+    reviewTokens: (() => { const rounds = []; let last = null; for (const entry of entries) { const step = String(entry.stepId); if (!step.startsWith('review')) { last = null; continue; } if (step !== last) rounds.push(0); last = step; rounds[rounds.length - 1] += Number(entry.delta?.totalTokens) || 0; } return rounds; })(),
   };
 }
 

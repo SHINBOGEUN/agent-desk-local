@@ -65,12 +65,29 @@ export function summarize({ label, config, results }) {
     // Skill selection (6-4): on tasks that say which skills they need, the share of runs that opened exactly those and nothing else.
     skillSelectionAccuracy: (() => { const known = valid.filter(result => Array.isArray(result.expectedSkills) && Array.isArray(result.metrics.skillsRead)); return rate(known.filter(result => [...result.metrics.skillsRead].sort().join(',') === [...result.expectedSkills].sort().join(',')).length, known.length); })(),
     unneededSkillReads: valid.reduce((sum, result) => sum + (Array.isArray(result.expectedSkills) && Array.isArray(result.metrics.skillsRead) ? result.metrics.skillsRead.filter(id => !result.expectedSkills.includes(id)).length : 0), 0),
+    rejectedReports: valid.reduce((sum, result) => sum + Object.values(result.metrics.rejectedReports || {}).reduce((a, b) => a + b, 0), 0),
+    rejectedVerifierReports: valid.reduce((sum, result) => sum + (result.metrics.rejectedReports?.verifier || 0), 0),
+    meanFirstReviewTokens: mean(valid.filter(result => result.metrics.reviewTokens?.length >= 2).map(result => result.metrics.reviewTokens[0])),
+    meanReReviewTokens: mean(valid.filter(result => result.metrics.reviewTokens?.length >= 2).map(result => result.metrics.reviewTokens[1])),
     meanDurationMin: mean(valid.filter(result => result.metrics.durationSec != null).map(result => result.metrics.durationSec / 60)),
     perTask: Object.fromEntries([...new Set(valid.map(result => result.taskId))].sort().map(taskId => {
       const group = valid.filter(result => result.taskId === taskId);
       return [taskId, { runs: group.length, success: group.filter(result => result.grade.success).length, meanTokens: mean(group.map(result => result.metrics.usage.totalTokens)), meanAgents: mean(group.map(result => result.metrics.agentCount)), falseCompletions: group.filter(result => result.falseCompletion).length }];
     })),
   };
+}
+
+/** Tasks whose success rate differs between labels; the rest cannot tell the labels apart. Only tasks run under every label count. */
+export function discrimination(summaries, taskIds) {
+  const out = { discriminating: [], allPass: [], allFail: [] };
+  for (const taskId of taskIds) {
+    const rates = summaries.map(s => s.perTask[taskId]).filter(Boolean).map(t => t.success / t.runs);
+    if (rates.length < summaries.length) continue;
+    if (rates.every(value => value === 1)) out.allPass.push(taskId);
+    else if (rates.every(value => value === 0)) out.allFail.push(taskId);
+    else out.discriminating.push(taskId);
+  }
+  return out;
 }
 
 const change = (before, after) => (before && after != null ? `${after >= before ? '+' : ''}${(((after - before) / before) * 100).toFixed(0)}%` : '-');
@@ -97,6 +114,8 @@ export function toMarkdown(summaries) {
     ['워크플로 분류 정확도 (lead)', s => fmtPct(s.classifyAccuracy)],
     ['스킬 선택 정확도 (필요한 스킬만)', s => fmtPct(s.skillSelectionAccuracy)],
     ['불필요하게 읽은 스킬 수', s => s.unneededSkillReads],
+    ['근거 검사로 반려된 보고서 (전체 / verifier)', s => `${s.rejectedReports} / ${s.rejectedVerifierReports}`],
+    ['리뷰 토큰: 1차 → REDO 후 재검토', s => (s.meanReReviewTokens == null ? '-' : `${fmtK(s.meanFirstReviewTokens)} → ${fmtK(s.meanReReviewTokens)}`)],
   ];
   lines.push(`| 지표 | ${summaries.map(s => s.label).join(' | ')} |`, `|---|${summaries.map(() => '---').join('|')}|`);
   for (const [name, format] of rows) lines.push(`| ${name} | ${summaries.map(format).join(' | ')} |`);
@@ -110,6 +129,11 @@ export function toMarkdown(summaries) {
     }
   }
   const taskIds = [...new Set(summaries.flatMap(s => Object.keys(s.perTask)))].sort();
+  if (summaries.length >= 2) {
+    const verdicts = discrimination(summaries, taskIds);
+    lines.push('', '## 과제 변별력', '', '모든 라벨에서 똑같이 성공하거나 똑같이 실패한 과제는 라벨 사이의 차이를 보여주지 못합니다. 비교에는 변별력 있는 과제만 쓰세요.', '');
+    lines.push(`- 변별력 있음 (${verdicts.discriminating.length}): ${verdicts.discriminating.join(', ') || '-'}`, `- 모두 성공 (${verdicts.allPass.length}): ${verdicts.allPass.join(', ') || '-'}`, `- 모두 실패 (${verdicts.allFail.length}): ${verdicts.allFail.join(', ') || '-'}`);
+  }
   lines.push('', '## 과제별 (성공/실행 · 평균 토큰 · 평균 에이전트)', '');
   lines.push(`| 과제 | ${summaries.map(s => s.label).join(' | ')} |`, `|---|${summaries.map(() => '---').join('|')}|`);
   for (const taskId of taskIds) lines.push(`| ${taskId} | ${summaries.map(s => { const t = s.perTask[taskId]; return t ? `${t.success}/${t.runs} · ${fmtK(t.meanTokens)} · ${fmtNum(t.meanAgents)}${t.falseCompletions ? ` · 거짓완료 ${t.falseCompletions}` : ''}` : '-'; }).join(' | ')} |`);

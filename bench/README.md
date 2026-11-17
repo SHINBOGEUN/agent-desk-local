@@ -10,7 +10,9 @@
 | `tasks/T01~T10/` | 고정 과제. `task.json`(요청문), `acceptance.test.mjs`(에이전트에게 보이지 않는 채점 테스트), `solution.mjs`(채점이 공정한지 증명하는 모범 답안) |
 | `validate-tasks.mjs` | 모든 과제가 원본에서는 실패하고 모범 답안에서는 통과하는지 확인 |
 | `run.mjs` | 과제 실행·채점·결과 저장 (버전 공통) |
-| `adapters/v1.mjs` | v1(`legacy/`) HTTP API로 과제를 실행하는 어댑터. v2 어댑터는 2단계에서 추가 |
+| `adapters/v1.mjs` | v1(`legacy/`) HTTP API로 과제를 실행하는 어댑터 |
+| `adapters/v2.mjs` | v2 CLI(`agent-desk run --json`)로 실행하는 어댑터 |
+| `adapters/bare.mjs` | 기준선: 하네스 없이 `codex exec`에 과제 문장만 넣어 실행 |
 | `report.mjs` | 라벨(구성)별 지표를 집계하고 비교 |
 | `analyze-history.mjs` | 기존 `data/state.json` 실행 기록 분석 (토큰 누적 기록 보정 포함) |
 | `selftest.mjs` | 가짜 Agent Desk 서버로 러너·채점·리포트를 끝까지 검증 (Codex 사용 없음) |
@@ -102,5 +104,7 @@ node bench/run.mjs --label v1-13-hard --set hard --repeat 3    # v1 어려운 �
 - 자체 점검 비교(3-5): `--review self`(builder가 같은 세션에서 자기 작업 점검)를 `always`, `never`와 같은 과제로 비교.
 - 분류 정확도(3-6): `report.mjs` 표의 "워크플로 분류 정확도". 과제의 기대 워크플로는 질문이면 `answer`, 코드 과제면 `build`/`plan-build`(`task.json`의 `expect.workflows`로 바꿀 수 있음).
 - 스킬 유무 비교(6-4): 같은 세트를 `--no-skills`로 한 번 더 돌려 비교(`web` 세트에 `html-output` 스킬이 있음).
+- 맨몸 기준선(ADR 0012): `node bench/run.mjs --adapter bare --label bare-std --set standard`로 Codex만 돌린 뒤 `node bench/report.mjs bare-std v2-std`로 비교합니다. 하네스가 실제로 더하는 것(성공률, 거짓 완료, 토큰)이 숫자로 나옵니다. `codex`가 PATH에 없으면 `AGENT_DESK_CODEX`에 codex.exe 경로를 지정하세요.
+- 보고서의 "과제 변별력" 절: 모든 라벨이 똑같이 성공(또는 실패)한 과제는 비교에 쓸 수 없으니 변별력 있는 과제만 보세요. "근거 검사로 반려된 보고서"와 "리뷰 토큰: 1차 → 재검토"는 ADR 0011·0012의 효과를 보여줍니다.
 - 트리거 검증(6-4): `npm run agent-desk -- skills trigger-test --project bench/samples/web-notes`.
 - 실패 분석(6-5): `node bench/failures.mjs --label <라벨>` → `bench/results/failures.md`.

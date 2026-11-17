@@ -167,6 +167,37 @@ console.log(JSON.stringify({ status: 'completed', reason: 'ok', gates: code ? [{
   const config = JSON.parse(fs.readFileSync(path.join(scratch, 'results2', 'selftest-v2', '_config.json'), 'utf8'));
   assert.equal(config.adapter, 'v2');
   assert.equal(loadResults(path.join(scratch, 'results2'), ['selftest-v2']).map(summarize)[0].falseCompletions, 1);
+
+  // ---- bare adapter: a fake codex stands in for `codex exec` ----
+  const fakeCodex = path.join(scratch, 'fake-codex.mjs');
+  fs.writeFileSync(fakeCodex, `
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const { loadTasks } = await import(${JSON.stringify(evaluateUrl)});
+const argv = process.argv.slice(2);
+if (argv[0] === '--version') { console.log('codex-cli 0.0.0'); process.exit(0); }
+const prompt = fs.readFileSync(0, 'utf8');
+const project = argv[argv.indexOf('-C') + 1];
+const task = loadTasks().find(item => item.prompt === prompt);
+if (task.kind === 'code' && task.id !== 'T01') (await import(pathToFileURL(path.join(task.directory, 'solution.mjs')).href)).apply(project);
+const lines = [{ type: 'thread.started' }, { type: 'item.completed', item: { type: 'command_execution', command: 'npm test' } }, { type: 'item.completed', item: { type: 'agent_message', text: '기본 포트는 3100이고 데이터 파일은 data\\\\todos.json 입니다.' } }, { type: 'turn.completed', usage: { input_tokens: 9000, cached_input_tokens: 6000, output_tokens: 1000 } }];
+for (const line of lines) console.log(JSON.stringify(line));
+`);
+  const bare = await runBenchmark(['--label', 'selftest-bare', '--adapter', 'bare', '--cli', JSON.stringify([process.execPath, fakeCodex]), '--work-dir', path.join(scratch, 'work3'), '--results-dir', path.join(scratch, 'results2')], quiet);
+  const bareByTask = Object.fromEntries(bare.map(result => [result.taskId, result]));
+  assert.equal(bareByTask.T01.adapter, 'bare');
+  assert.equal(bareByTask.T01.falseCompletion, true, 'bare claims done without checks');
+  assert.equal(bareByTask.T03.grade.success, true);
+  assert.equal(bareByTask.T03.metrics.usage.totalTokens, 10000);
+  assert.equal(bareByTask.T03.metrics.commands, 1);
+  const compared = toMarkdown(loadResults(path.join(scratch, 'results2'), ['selftest-bare', 'selftest-v2']).map(summarize));
+  assert.match(compared, /## 과제 변별력/);
+  assert.match(compared, /변별력 있음 \(2\): T01, T02/);
+  const { runMetrics } = await import('./adapters/v2.mjs');
+  const counted = runMetrics({ status: 'completed', usage: {}, gates: [], usageEntries: [{ stepId: 'build', delta: { totalTokens: 9 } }, { stepId: 'review', delta: { totalTokens: 5 } }, { stepId: 'review', delta: { totalTokens: 1 } }, { stepId: 'build', delta: { totalTokens: 9 } }, { stepId: 'review', delta: { totalTokens: 2 } }], events: [{ type: 'report', kind: 'verifier', accepted: false }, { type: 'report', kind: 'verifier', accepted: true }, { type: 'report', kind: 'builder', accepted: false }] }, 1);
+  assert.deepEqual(counted.reviewTokens, [6, 2]);
+  assert.deepEqual(counted.rejectedReports, { verifier: 1, builder: 1 });
   console.log('Benchmark self-test passed.');
 } finally {
   server.close();
