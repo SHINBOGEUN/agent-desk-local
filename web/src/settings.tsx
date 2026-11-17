@@ -134,7 +134,7 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
           <div className="split">
             <nav className="split-list">
               {files.skills.map(entry => <button key={entry.id} className={skill === entry.id ? 'on' : ''} onClick={() => setSkill(entry.id)}>{entry.id}</button>)}
-              {!files.skills.length ? <p className="editor-note">{t('noSkillsYet')}</p> : null}
+              {!files.skills.length ? <div className="editor-note"><p>{t('noSkillsYet')}</p><p>{t('skillDraftsHint')}</p><button disabled={busy} onClick={() => { void drafts(); }}>{t('createDrafts')}</button></div> : null}
               <div className="new-skill">
                 <label>{t('skillIdLabel')}<input value={newId} onChange={event => setNewId(event.target.value.toLowerCase())} placeholder="api-rules" /></label>
                 <button disabled={busy || !/^[a-z0-9][a-z0-9-]*$/.test(newId)} onClick={() => { void createSkill(); }}>{t('createSkill')}</button>
