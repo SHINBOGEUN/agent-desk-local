@@ -52,12 +52,23 @@ export function usageTotalOf(notification: RpcNotification): number | null {
   return total > 0 ? total : null;
 }
 
+// Notifications this runtime understands or that carry nothing to account for. Any other method is recorded
+// once per turn as a "notice:" tool event, so a model call that left no item can still be traced.
+const KNOWN_NOTIFICATIONS = new Set(['thread/tokenUsage/updated', 'item/started', 'item/completed', 'turn/started', 'turn/completed', 'thread/started', 'thread/status/changed', 'account/rateLimits/updated']);
+
 /** Translates one app-server notification into runtime events. */
 export function eventsFromNotification(notification: RpcNotification): RuntimeEvent[] {
   const { method, params } = notification;
   if (method === 'thread/tokenUsage/updated') {
     const tokenUsage = isRecord(params.tokenUsage) ? params.tokenUsage : {};
     return isRecord(tokenUsage.last) ? [{ type: 'usage', delta: usageFromCodex(tokenUsage.last) }] : [];
+  }
+  if (method === 'item/started' && isRecord(params.item)) {
+    // Recorded when it starts: a turn the harness ends right after the report may never send its completion.
+    const type = str(params.item.type);
+    if (['agentMessage', 'userMessage', 'commandExecution', 'fileChange', ''].includes(type)) return [];
+    const detail = [str(params.item.server), str(params.item.tool)].filter(Boolean).join('/');
+    return [{ type: 'tool', name: `${type}${detail ? `:${detail}` : ''}` }];
   }
   if (method !== 'item/completed' || !isRecord(params.item)) return [];
   const item = params.item;
@@ -72,9 +83,7 @@ export function eventsFromNotification(notification: RpcNotification): RuntimeEv
       return { type: 'file_change' as const, path: str(change.path), kind };
     });
   }
-  if (item.type === 'userMessage') return [];
-  const detail = [str(item.server), str(item.tool)].filter(Boolean).join('/');
-  return [{ type: 'tool', name: `${str(item.type) || 'item'}${detail ? `:${detail}` : ''}` }];
+  return [];
 }
 
 class Queue<T> {
@@ -141,6 +150,7 @@ class CodexSession implements Session {
         yield { type: 'turn_end', status: 'failed', error: error instanceof Error ? error.message : String(error) };
         return;
       }
+      const seenMethods = new Set<string>();
       let interrupted = false;
       const interrupt = () => {
         if (interrupted) return;
@@ -163,6 +173,10 @@ class CodexSession implements Session {
               : status === 'interrupted' ? { type: 'turn_end', status: 'interrupted' }
               : { type: 'turn_end', status: 'failed', error: error || `turn ended with status "${status || 'unknown'}"` };
             return;
+          }
+          if (!KNOWN_NOTIFICATIONS.has(notification.method) && !notification.method.endsWith('/delta') && !seenMethods.has(notification.method)) {
+            seenMethods.add(notification.method);
+            yield { type: 'tool', name: `notice:${notification.method}` };
           }
           const total = usageTotalOf(notification);
           if (total !== null) {

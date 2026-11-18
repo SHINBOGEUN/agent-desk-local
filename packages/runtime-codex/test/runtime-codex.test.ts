@@ -31,9 +31,10 @@ test('usage and notification translation', () => {
   const update = (total: number) => ({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 10, outputTokens: 1 }, total: { totalTokens: total } } } });
   assert.equal(usageTotalOf(update(13106)), 13106);
   // Every other item is recorded by name, so each model call can be accounted for.
-  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'mcpToolCall', server: 'agentdesk', tool: 'submit_report' } } }), [{ type: 'tool', name: 'mcpToolCall:agentdesk/submit_report' }]);
-  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'reasoning' } } }), [{ type: 'tool', name: 'reasoning' }]);
-  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'userMessage' } } }), []);
+  assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'mcpToolCall', server: 'agentdesk', tool: 'submit_report' } } }), [{ type: 'tool', name: 'mcpToolCall:agentdesk/submit_report' }]);
+  assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'reasoning' } } }), [{ type: 'tool', name: 'reasoning' }]);
+  assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'commandExecution' } } }), []);
+  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'mcpToolCall' } } }), []);
   assert.equal(usageTotalOf({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 1 } } } }), null);
   assert.equal(usageTotalOf({ method: 'item/completed', params: {} }), null);
 });
@@ -42,7 +43,8 @@ test('a turn streams message, usage and completion', async () => {
   const runtime = runtimeWithFake();
   const session = await runtime.startSession(options(noTools(), { model: 'gpt-x' }));
   try {
-    const events = await collect(session.runTurn({ text: 'hello' }, new AbortController().signal));
+    // The fake server's own "fake/threadStarted" notice shows up as a tool event; leave it out here.
+    const events = (await collect(session.runTurn({ text: 'hello' }, new AbortController().signal))).filter(event => event.type !== 'tool');
     assert.deepEqual(events.map(event => event.type), ['message', 'usage', 'turn_end']);
     assert.deepEqual(events[0], { type: 'message', text: 'echo: hello', final: true });
     const usage = events[1] as Extract<RuntimeEvent, { type: 'usage' }>;
@@ -54,6 +56,9 @@ test('a turn streams message, usage and completion', async () => {
     // A repeated update with an unchanged thread total is the same model call, counted once.
     const repeated = await collect(session.runTurn({ text: 'repeat-usage' }, new AbortController().signal));
     assert.equal(repeated.filter(event => event.type === 'usage').length, 1);
+    // A notification this runtime does not know is recorded once per turn.
+    const noticed = await collect(session.runTurn({ text: 'plan-notice' }, new AbortController().signal));
+    assert.deepEqual(noticed.filter(event => event.type === 'tool'), [{ type: 'tool', name: 'notice:turn/plan/updated' }]);
   } finally {
     await session.close();
     await runtime.close();
@@ -64,7 +69,7 @@ test('commands and file changes become events', async () => {
   const runtime = runtimeWithFake();
   const session = await runtime.startSession(options(noTools()));
   try {
-    const events = await collect(session.runTurn({ text: 'run command' }, new AbortController().signal));
+    const events = (await collect(session.runTurn({ text: 'run command' }, new AbortController().signal))).filter(event => event.type !== 'tool');
     assert.deepEqual(events.slice(0, 4), [
       { type: 'command', command: 'npm test', exitCode: 1, output: 'boom' },
       { type: 'file_change', path: 'a.txt', kind: 'add' },

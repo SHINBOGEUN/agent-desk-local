@@ -56,6 +56,7 @@ async function playTurn(turnId: string, text: string) {
   } else {
     notify('item/completed', { threadId: 't1', turnId, item: { type: 'agentMessage', text: `echo: ${text}`, phase: 'final_answer' } });
   }
+  if (text.includes('plan-notice')) { notify('turn/plan/updated', { turnId, plan: [] }); notify('turn/plan/updated', { turnId, plan: [] }); }
   usage(100 + turnCounter);
   if (text.includes('repeat-usage')) usage(100 + turnCounter); // Codex resends the last update on interrupt
   done('completed');
