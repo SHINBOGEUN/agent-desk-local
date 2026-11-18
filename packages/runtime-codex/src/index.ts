@@ -38,6 +38,20 @@ export function usageFromCodex(raw: unknown): TokenUsage {
   return usage;
 }
 
+/**
+ * Codex repeats the last usage notification in some cases (seen when a turn is
+ * interrupted right after a model call): the same "last" again, with an
+ * unchanged thread "total". Counting it would double the call. Returns the
+ * thread total of a usage notification, or null when it has none.
+ */
+export function usageTotalOf(notification: RpcNotification): number | null {
+  if (notification.method !== 'thread/tokenUsage/updated') return null;
+  const tokenUsage = isRecord(notification.params.tokenUsage) ? notification.params.tokenUsage : {};
+  if (!isRecord(tokenUsage.total)) return null;
+  const total = usageFromCodex(tokenUsage.total).totalTokens;
+  return total > 0 ? total : null;
+}
+
 /** Translates one app-server notification into runtime events. */
 export function eventsFromNotification(notification: RpcNotification): RuntimeEvent[] {
   const { method, params } = notification;
@@ -84,6 +98,8 @@ class CodexSession implements Session {
   #queue = new Queue<Signal>();
   #exitReason: string | null = null;
   #busy = false;
+  /** Thread total from the last usage notification counted, to drop repeats. */
+  #usageTotal: number | null = null;
   #closed = false;
 
   constructor(peer: RpcPeer, registration: ToolRegistration, options: SessionOptions, threadId: string) {
@@ -145,6 +161,11 @@ class CodexSession implements Session {
               : status === 'interrupted' ? { type: 'turn_end', status: 'interrupted' }
               : { type: 'turn_end', status: 'failed', error: error || `turn ended with status "${status || 'unknown'}"` };
             return;
+          }
+          const total = usageTotalOf(notification);
+          if (total !== null) {
+            if (total === this.#usageTotal) continue;
+            this.#usageTotal = total;
           }
           yield* eventsFromNotification(notification);
         }

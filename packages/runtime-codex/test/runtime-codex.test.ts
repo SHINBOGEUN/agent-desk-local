@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import type { HarnessTools, RuntimeEvent, SessionOptions } from '#core';
-import { CodexRuntime, eventsFromNotification, usageFromCodex } from '#runtime-codex';
+import { CodexRuntime, eventsFromNotification, usageFromCodex, usageTotalOf } from '#runtime-codex';
 import { ReportCollector } from '#tools-mcp';
 
 const fakeServer = fileURLToPath(new URL('./fake-app-server.ts', import.meta.url));
@@ -28,6 +28,10 @@ test('usage and notification translation', () => {
   assert.equal(usageFromCodex({ inputTokens: 5, outputTokens: 1 }).totalTokens, 6);
   assert.deepEqual(eventsFromNotification({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { total: { totalTokens: 9 } } } }), []);
   assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'agentMessage' } } }), []);
+  const update = (total: number) => ({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 10, outputTokens: 1 }, total: { totalTokens: total } } } });
+  assert.equal(usageTotalOf(update(13106)), 13106);
+  assert.equal(usageTotalOf({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 1 } } } }), null);
+  assert.equal(usageTotalOf({ method: 'item/completed', params: {} }), null);
 });
 
 test('a turn streams message, usage and completion', async () => {
@@ -43,6 +47,9 @@ test('a turn streams message, usage and completion', async () => {
     assert.deepEqual(events[2], { type: 'turn_end', status: 'completed' });
     const second = await collect(session.runTurn({ text: 'again' }, new AbortController().signal));
     assert.equal((second[1] as Extract<RuntimeEvent, { type: 'usage' }>).delta.totalTokens, 102);
+    // A repeated update with an unchanged thread total is the same model call, counted once.
+    const repeated = await collect(session.runTurn({ text: 'repeat-usage' }, new AbortController().signal));
+    assert.equal(repeated.filter(event => event.type === 'usage').length, 1);
   } finally {
     await session.close();
     await runtime.close();
