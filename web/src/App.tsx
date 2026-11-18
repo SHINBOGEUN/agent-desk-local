@@ -449,7 +449,11 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
         <div className="bubble">
           <header className="reply-head">
             <Badge status={status} />
-            {detail ? <span className="msg-meta">{t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) })}</span> : <span className="msg-meta">#{run.id}</span>}
+            {detail ? <span className="msg-meta">{(() => {
+              const cached = detail.usage.reduce((sum, row) => sum + (row.usage.cachedInputTokens ?? 0), 0);
+              const fresh = detail.usage.reduce((sum, row) => sum + Math.max(0, (row.usage.inputTokens ?? 0) - (row.usage.cachedInputTokens ?? 0)), 0);
+              return cached ? t('runMetaSplit', { id: run.id, tokens: formatTokens(detail.usageTotal), fresh: formatTokens(fresh), cached: formatTokens(cached) }) : t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) });
+            })()}</span> : <span className="msg-meta">#{run.id}</span>}
             {!running ? <button className="link push" onClick={() => setShowSteps(value => !value)}>{showSteps ? t('hideSteps') : t('showSteps')}</button> : null}
           </header>
           {runtimes ? <div className="team-line" aria-label={t('teamUsed')}>{(['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>)}{settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}</div> : null}

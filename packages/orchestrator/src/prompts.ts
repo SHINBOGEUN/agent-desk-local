@@ -6,6 +6,7 @@ import type { PlanReport, Requirement, RoleId, SkillRef, StepKind } from '#core'
 const COMMON = [
   'You work inside an automated harness. The harness decides what happens next; you only do the step you are given.',
   'Finish every step by calling the `submit_report` tool exactly once with the report described in the step. A step without an accepted report counts as failed.',
+  'Nobody reads messages you write outside the report, and each one can cost a whole model call. Do not announce what you are about to do or greet; go straight to the tools you need and then the report.',
   'If `submit_report` answers that the report was rejected, fix the listed fields and call it again with the complete report.',
   'Never state something was done or tested unless you did it in this step. Put anything you could not check in the report as unverified.',
   'Ask the user with `request_user_input` only when the task cannot continue without information that only they have.',
