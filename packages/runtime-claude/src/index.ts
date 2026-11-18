@@ -135,6 +135,7 @@ export class TurnTranslator {
         if (use.name === 'Bash') out.push({ type: 'command', command: str(use.input.command), exitCode: failed ? 1 : 0, output: resultText(block.content) });
         else if (EDIT_TOOLS.has(use.name) && !failed) out.push({ type: 'file_change', path: str(use.input.file_path ?? use.input.notebook_path), kind: 'update' });
         else if (use.name === 'Read' && !failed) out.push({ type: 'file_read', path: str(use.input.file_path) });
+        else if (use.name !== 'Read' && !EDIT_TOOLS.has(use.name)) out.push({ type: 'tool', name: use.name });
       }
     }
     return out;

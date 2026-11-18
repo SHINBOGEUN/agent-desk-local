@@ -30,6 +30,10 @@ test('usage and notification translation', () => {
   assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'agentMessage' } } }), []);
   const update = (total: number) => ({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 10, outputTokens: 1 }, total: { totalTokens: total } } } });
   assert.equal(usageTotalOf(update(13106)), 13106);
+  // Every other item is recorded by name, so each model call can be accounted for.
+  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'mcpToolCall', server: 'agentdesk', tool: 'submit_report' } } }), [{ type: 'tool', name: 'mcpToolCall:agentdesk/submit_report' }]);
+  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'reasoning' } } }), [{ type: 'tool', name: 'reasoning' }]);
+  assert.deepEqual(eventsFromNotification({ method: 'item/completed', params: { item: { type: 'userMessage' } } }), []);
   assert.equal(usageTotalOf({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 1 } } } }), null);
   assert.equal(usageTotalOf({ method: 'item/completed', params: {} }), null);
 });

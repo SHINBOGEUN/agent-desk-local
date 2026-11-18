@@ -116,6 +116,8 @@ export type RuntimeEvent =
   /** A file the session read with a read tool (Claude's Read). Codex reads through commands. */
   | { type: 'file_read'; path: string }
   | { type: 'approval_request'; id: string; kind: string; detail: unknown }
+  /** Any other tool the model used (a harness tool, a search, a plan update): recorded so every model call can be accounted for. */
+  | { type: 'tool'; name: string }
   | { type: 'usage'; delta: TokenUsage }
   | { type: 'turn_end'; status: 'completed' | 'interrupted' | 'failed'; error?: string };
 

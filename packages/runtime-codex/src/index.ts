@@ -72,7 +72,9 @@ export function eventsFromNotification(notification: RpcNotification): RuntimeEv
       return { type: 'file_change' as const, path: str(change.path), kind };
     });
   }
-  return [];
+  if (item.type === 'userMessage') return [];
+  const detail = [str(item.server), str(item.tool)].filter(Boolean).join('/');
+  return [{ type: 'tool', name: `${str(item.type) || 'item'}${detail ? `:${detail}` : ''}` }];
 }
 
 class Queue<T> {
