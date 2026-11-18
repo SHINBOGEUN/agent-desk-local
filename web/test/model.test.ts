@@ -67,12 +67,13 @@ test('formatting helpers and status tones', () => {
 test('role summary adds time and tokens per role and keeps unknown usage apart', () => {
   const timeline = buildTimeline(events);
   const summary = roleSummary(timeline, [
-    { stepId: timeline.steps[0]!.step, usage: { totalTokens: 100 } },
-    { stepId: `${timeline.steps[0]!.step}:2`, usage: { totalTokens: 20 } },
+    { stepId: timeline.steps[0]!.step, usage: { totalTokens: 100, inputTokens: 90, cachedInputTokens: 0, outputTokens: 10 } },
+    { stepId: `${timeline.steps[0]!.step}:2`, usage: { totalTokens: 20, inputTokens: 18, cachedInputTokens: 15, outputTokens: 2 } },
     { stepId: 'mystery', usage: { totalTokens: 5 } },
   ]);
   const first = summary.find(entry => entry.role === timeline.steps[0]!.role)!;
   assert.equal(first.tokens, 120);
+  assert.deepEqual([first.calls, first.newInput, first.cachedInput, first.output], [2, 93, 15, 12]);
   assert.equal(summary.find(entry => entry.role === 'other')!.tokens, 5);
   assert.equal(minutesUntil(1000 + 600, 1000 * 1000), 10);
   assert.equal(minutesUntil(null, 0), null);

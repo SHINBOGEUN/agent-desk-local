@@ -68,6 +68,8 @@ class RunContext {
   readonly retried = new Set<string>();
   pendingQuestion: string | null = null;
   budgetHit: string | null = null;
+  /** The turn being played. Once its report is accepted the harness ends it: the model's closing message after that is never used, but would cost a whole model call. */
+  currentTurn: { stop: AbortController; endedByReport: boolean } | null = null;
   redo = 0;
 
   constructor(config: RunConfig) {
@@ -131,6 +133,11 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
     async submitReport(report) {
       const result = await holder.current.submit(report);
       ctx.emit({ type: 'report', step, kind: role, accepted: result.ok, detail: result.message.split('\n')[0] ?? '' });
+      if (result.ok && holder.current.done()) {
+        // End the turn once the tool answer is on its way back (setImmediate), so the session history stays whole.
+        const turn = ctx.currentTurn;
+        if (turn) setImmediate(() => { if (!turn.stop.signal.aborted) { turn.endedByReport = true; turn.stop.abort(); } });
+      }
       return result;
     },
     async approve(request: ApprovalRequest): Promise<ApprovalDecision> {
@@ -155,7 +162,10 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
 async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: Session, text: string, images?: string[]): Promise<TurnOutcome> {
   const turn = ctx.nextTurn(step);
   let outcome: TurnOutcome = { status: 'failed', error: 'runtime ended the turn without a result' };
-  for await (const event of session.runTurn({ text, ...(images?.length ? { images } : {}) }, ctx.signal)) {
+  const current = { stop: new AbortController(), endedByReport: false };
+  ctx.currentTurn = current;
+  const signal = AbortSignal.any([ctx.signal, current.stop.signal]);
+  for await (const event of session.runTurn({ text, ...(images?.length ? { images } : {}) }, signal)) {
     ctx.emit({ type: 'runtime', step, role, event });
     if (event.type === 'command') { const list = ctx.commands.get(step) ?? []; list.push({ command: event.command, exitCode: event.exitCode }); ctx.commands.set(step, list); }
     if (event.type === 'command' || event.type === 'file_read') {
@@ -167,6 +177,11 @@ async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: 
     }
     if (event.type === 'usage') { ctx.ledger.record(step, turn, event.delta); ctx.enforceBudget(ctx.redo, true); }
     if (event.type === 'turn_end') outcome = { status: event.status, ...(event.error ? { error: event.error } : {}) };
+  }
+  if (ctx.currentTurn === current) ctx.currentTurn = null;
+  // Stopped by the harness after an accepted report: the step is done, not interrupted (unless the user stopped the run too).
+  if (current.endedByReport && !ctx.signal.aborted && outcome.status !== 'completed') {
+    outcome = { status: 'completed' };
   }
   return outcome;
 }

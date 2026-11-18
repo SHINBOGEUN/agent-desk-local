@@ -225,3 +225,19 @@ test('after a REDO the re-review gets the earlier findings and only the diff sin
   assert.doesNotMatch(second.input.text, /untouched/);
   assert.match(second.toolResults[0]?.message ?? '', /"other\.txt" has not changed since your last review/);
 });
+
+test('once a report is accepted the harness ends the turn instead of waiting for the model to finish talking', async () => {
+  // "hang" stands for the model's closing call after the report: without the stop the run would never end.
+  const runtime = setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }, { hang: true }])], [script([{ report: pass }, { hang: true }])]);
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.review?.verdict, 'PASS');
+});
+
+test('a rejected report does not end the turn, so the model can fix it in the same turn', async () => {
+  const fake = { verdict: 'REDO', blocking: [{ file: 'nowhere.txt', reason: 'bug', evidence: 'saw it' }], optional: [] };
+  const runtime = setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: fake }, { report: pass }, { hang: true }])]);
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.deepEqual(runtime.turns.find(turn => turn.role === 'verifier')?.toolResults.map(item => item.ok), [false, true]);
+});

@@ -171,13 +171,18 @@ export function stepDurationMs(step: TimelineStep): number | null {
   return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
 
-export interface RoleStat { role: string; steps: number; durationMs: number; tokens: number }
+export interface RoleStat {
+  role: string; steps: number; durationMs: number; tokens: number;
+  /** Model calls (usage rows), input not served from the cache, cached input and output. Cached input is re-sent context the provider bills at a discount. */
+  calls: number; newInput: number; cachedInput: number; output: number;
+}
+export interface UsageRowView { stepId: string; usage: { totalTokens: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number } }
 
 /** Time and tokens per role. Usage rows are matched to steps by step name; a suffix after ":" or "#" is ignored. */
-export function roleSummary(timeline: Timeline, usage: { stepId: string; usage: { totalTokens: number } }[]): RoleStat[] {
+export function roleSummary(timeline: Timeline, usage: UsageRowView[]): RoleStat[] {
   const stats = new Map<string, RoleStat>();
   const roleOf = new Map<string, string>();
-  const stat = (role: string): RoleStat => { if (!stats.has(role)) stats.set(role, { role, steps: 0, durationMs: 0, tokens: 0 }); return stats.get(role)!; };
+  const stat = (role: string): RoleStat => { if (!stats.has(role)) stats.set(role, { role, steps: 0, durationMs: 0, tokens: 0, calls: 0, newInput: 0, cachedInput: 0, output: 0 }); return stats.get(role)!; };
   for (const step of timeline.steps) {
     const entry = stat(step.role);
     entry.steps++;
@@ -186,7 +191,13 @@ export function roleSummary(timeline: Timeline, usage: { stepId: string; usage: 
   }
   for (const row of usage) {
     const role = roleOf.get(row.stepId) ?? roleOf.get(row.stepId.split(/[:#]/)[0] ?? '') ?? 'other';
-    stat(role).tokens += row.usage.totalTokens;
+    const entry = stat(role);
+    entry.tokens += row.usage.totalTokens;
+    entry.calls++;
+    const cached = row.usage.cachedInputTokens ?? 0;
+    entry.cachedInput += cached;
+    entry.newInput += Math.max(0, (row.usage.inputTokens ?? 0) - cached);
+    entry.output += row.usage.outputTokens ?? 0;
   }
   return [...stats.values()];
 }

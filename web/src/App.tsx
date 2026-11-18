@@ -231,9 +231,10 @@ function RoleTable({ timeline, detail }: { timeline: Timeline; detail: RunDetail
     <div className="card">
       <div className="label muted">{t('roleSummaryTitle')}</div>
       <table className="roles">
-        <thead><tr><th>{t('colRole')}</th><th>{t('colSteps')}</th><th>{t('colTime')}</th><th>{t('colTokens')}</th></tr></thead>
-        <tbody>{rows.map(row => <tr key={row.role}><td>{row.role}</td><td>{row.steps}</td><td>{durationText(lang, row.durationMs)}</td><td>{formatTokens(row.tokens)}</td></tr>)}</tbody>
+        <thead><tr><th>{t('colRole')}</th><th>{t('colSteps')}</th><th>{t('colTime')}</th><th>{t('colCalls')}</th><th>{t('colNewInput')}</th><th>{t('colCached')}</th><th>{t('colOutput')}</th><th>{t('colTokens')}</th></tr></thead>
+        <tbody>{rows.map(row => <tr key={row.role}><td>{row.role}</td><td>{row.steps}</td><td>{durationText(lang, row.durationMs)}</td><td>{row.calls}</td><td>{formatTokens(row.newInput)}</td><td className="muted">{formatTokens(row.cachedInput)}</td><td>{formatTokens(row.output)}</td><td>{formatTokens(row.tokens)}</td></tr>)}</tbody>
       </table>
+      <p className="msg-meta">{t('tokenSplitNote')}</p>
     </div>
   );
 }

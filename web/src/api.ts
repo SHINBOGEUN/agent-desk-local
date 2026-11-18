@@ -38,7 +38,7 @@ export interface RunReport {
 export interface RunDetail {
   run: RunRow;
   steps: { step: string; role: string; ok: boolean | null; detail: string | null }[];
-  usage: { stepId: string; turn: number; usage: { totalTokens: number } }[];
+  usage: { stepId: string; turn: number; usage: { totalTokens: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number } }[];
   usageTotal: number;
   report: RunReport | null;
   settings?: RunSettings | null;
