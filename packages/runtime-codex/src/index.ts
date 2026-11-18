@@ -249,7 +249,9 @@ export class CodexRuntime implements Runtime {
       const started = await peer.request<{ thread?: { id?: string } }>('thread/start', {
         cwd: options.cwd,
         ...(options.model ? { model: options.model } : {}),
-        ephemeral: true,
+        // Sessions are not saved by default. AGENT_DESK_CODEX_KEEP_SESSIONS=1 keeps them in ~/.codex/sessions,
+        // the only place that shows every item of a model call (for tracing where tokens went).
+        ephemeral: process.env.AGENT_DESK_CODEX_KEEP_SESSIONS !== '1',
         sandbox: options.access,
         approvalPolicy: 'never',
         developerInstructions: options.instructions,
