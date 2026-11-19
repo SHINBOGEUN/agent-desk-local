@@ -271,3 +271,16 @@ test('the lead and the builder get the history, the verifier does not; read_hist
   assert.deepEqual(runtime.turns.find(turn => turn.role === 'builder')?.answers, ['run #3 details']);
   assert.ok(result.events.some(event => event.type === 'runtime' && event.event.type === 'tool' && event.event.name === 'read_history:login'));
 });
+
+test('after a REDO the result keeps each attempt and why it was sent back', async () => {
+  const runtime = setup(
+    [script([write('feature.txt', 'b'), { report: builderReport(['feature.txt'], { summary: 'first try' }) }], [write('feature.txt', 'a'), { report: builderReport(['feature.txt'], { summary: 'checked, nothing more to change' }) }])],
+    [script([{ report: redo }]), script([{ report: pass }])],
+  );
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.deepEqual(result.attempts?.map(entry => [entry.attempt, entry.summary, entry.sentBackFor.length]), [[1, 'first try', 1], [2, 'checked, nothing more to change', 0]]);
+  assert.match(result.attempts?.[0]?.sentBackFor[0] ?? '', /Review: wrong content \(feature\.txt:1\)/);
+  const single = await run(setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: pass }])]));
+  assert.equal(single.attempts, undefined);
+});

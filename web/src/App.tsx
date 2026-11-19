@@ -127,7 +127,17 @@ function ReportCard({ report, workflow }: { report: RunReport | null; workflow: 
       {answer ? <div className="section"><div className="label">{t('answerTitle')}</div><p className="prose">{answer.answer}</p><List title={t('sources')} items={answer.sources} /></div> : null}
       {builder ? (
         <>
-          <div className="section"><div className="label">{t('summaryTitle')}</div><p className="prose">{builder.summary}</p></div>
+          {report.attempts && report.attempts.length > 1 ? (
+            <div className="section"><div className="label">{t('attemptsTitle')}</div>
+              <ol className="attempts">{report.attempts.map(entry => (
+                <li key={entry.attempt}>
+                  <p className="prose">{entry.summary}</p>
+                  {entry.changedFiles.length ? <div className="mono small">{entry.changedFiles.join(', ')}</div> : null}
+                  {entry.sentBackFor.length ? <ul className="sent-back">{entry.sentBackFor.map((reason, index) => <li key={index}>{t('sentBack')}: {reason}</li>)}</ul> : null}
+                </li>
+              ))}</ol>
+            </div>
+          ) : <div className="section"><div className="label">{t('summaryTitle')}</div><p className="prose">{builder.summary}</p></div>}
           <div className="section"><div className="label">{t('changedFiles')}</div>
             {builder.changedFiles.length ? <ul className="mono">{builder.changedFiles.map(file => <li key={file}>{file}</li>)}</ul> : <p className="muted">{t('noChangedFiles')}</p>}</div>
           {builder.commandsRun.length ? <div className="section"><div className="label">{t('commandsRun')}</div><ul className="mono">{builder.commandsRun.map((entry, index) => <li key={index}>{entry.command} <span className={`badge tone-${entry.exitCode === 0 ? 'success' : 'danger'}`}>{t('exitCode', { code: entry.exitCode })}</span></li>)}</ul></div> : null}

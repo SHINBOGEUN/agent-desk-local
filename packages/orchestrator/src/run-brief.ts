@@ -23,6 +23,8 @@ export function buildRunBrief(request: string, result: RunResult): string {
   if (files.length) lines.push(`변경 파일: ${list(files, 10)}`);
   const open = result.builder?.requirements.filter(entry => entry.status !== 'done').map(entry => `${entry.id}(${entry.status})`) ?? [];
   if (open.length) lines.push(`남은 요구사항: ${open.join(', ')}`);
+  const sentBack = (result.attempts ?? []).flatMap(attempt => attempt.sentBackFor).map(reason => clip(reason, 140));
+  if (sentBack.length) lines.push(`재작업 이유: ${list(sentBack, 2)}`);
   if (result.unverified.length) lines.push(`확인 못 한 것: ${list(result.unverified.map(item => clip(item, 120)), 4)}`);
   if (result.warnings.length) lines.push(`주의: ${list(result.warnings.map(item => clip(item, 120)), 3)}`);
   const brief = lines.join('\n');

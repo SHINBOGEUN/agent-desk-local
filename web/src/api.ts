@@ -33,6 +33,7 @@ export interface RunReport {
   memorySuggestions?: string[];
   skillsRead?: { step: string; role: string; skill: string }[];
   resume?: { step: string; redo: number; note: string };
+  attempts?: { attempt: number; summary: string; changedFiles: string[]; sentBackFor: string[] }[];
 }
 
 export interface RunDetail {

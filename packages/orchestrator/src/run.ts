@@ -61,6 +61,7 @@ class RunContext {
   readonly commands = new Map<StepKind, ObservedCommand[]>();
   /** Skills whose SKILL.md a session opened: "role:skill" once per step. */
   readonly skillsRead: { step: StepKind; role: RoleId; skill: string }[] = [];
+  readonly attempts: { attempt: number; summary: string; changedFiles: string[]; sentBackFor: string[] }[] = [];
   readonly ledger = new UsageLedger();
   readonly startedAt = Date.now();
   readonly #turns = new Map<string, number>();
@@ -239,7 +240,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...(ctx.attempts.length > 1 ? { attempts: ctx.attempts } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
@@ -407,6 +408,8 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
       }
       const report = collector.report!;
       ctx.memorySuggestions = report.memorySuggestions ?? [];
+      const attemptRecord = { attempt: ctx.redo + 1, summary: report.summary, changedFiles: report.changedFiles, sentBackFor: [] as string[] };
+      ctx.attempts.push(attemptRecord);
       const after = takeSnapshot(config.cwd, { ignore: ctx.ignore });
       const violation = protectedViolation(ctx, before, after);
       if (violation) {
@@ -441,6 +444,7 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'redo limit reached' });
         return finish(ctx, 'needs_review', ctx.say(`Still failing after ${ctx.redo} redo round(s): ${reasons[0]?.split('\n')[0] ?? 'unknown problem'}`, `재작업 ${ctx.redo}회 후에도 실패합니다: ${reasons[0]?.split('\n')[0] ?? '원인을 알 수 없음'}`), { ...base, builder: report, unverified: report.unverified });
       }
+      attemptRecord.sentBackFor = reasons.map(reason => reason.split('\n')[0] ?? reason);
       ctx.redo++;
       const mode = ctx.redo === 1 ? 'same-session' : 'new-session';
       ctx.emit({ type: 'redo', attempt: ctx.redo, mode, reasons });

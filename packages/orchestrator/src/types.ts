@@ -87,6 +87,8 @@ export interface RunResult {
   memorySuggestions?: string[];
   /** Skills whose SKILL.md a session actually opened, in order. */
   skillsRead?: { step: StepKind; role: RoleId; skill: string }[];
+  /** Build attempts when there was a REDO: what each attempt reported and why it was sent back. The final report alone can read as if nothing was done. */
+  attempts?: { attempt: number; summary: string; changedFiles: string[]; sentBackFor: string[] }[];
   plan?: PlanReport;
   research?: ResearchReport[];
   review?: VerifierReport;
