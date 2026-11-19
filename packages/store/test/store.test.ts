@@ -206,6 +206,10 @@ test('history lookup: by run id (same project only) or by words, with what the r
   assert.match(detail, /요구사항 결과: R1 done/);
   assert.match(historyLookup(store, cwd, { runId: other.id }), /not a finished run of this project/);
   assert.match(historyLookup(store, cwd, { search: 'login' }), /login page/);
-  assert.match(historyLookup(store, cwd, { search: 'payment' }), /No earlier run matches "payment"\. Recent runs:\n- #/);
+  assert.match(historyLookup(store, cwd, { search: 'payment' }), /No earlier run matches "payment"\. The search matches plain text: try the other language[\s\S]*Recent runs:\n- #/);
+  // Words that only appear in the stored report (the work summary "s") are found too, and a partial match falls back to "any".
+  assert.deepEqual(store.searchRuns(cwd, ['R1']), [login.runId]);
+  assert.match(historyLookup(store, cwd, { search: '로그인 login' }), /No run contains all of "로그인 login"; these contain some of the words:[\s\S]*login page/);
+  assert.deepEqual(store.searchRuns(cwd, ['로그인', 'login', 'page'], 5, 'any'), [login.runId]);
   store.close();
 });

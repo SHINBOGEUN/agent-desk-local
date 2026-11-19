@@ -65,7 +65,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       type: 'object',
       properties: {
         runId: { type: 'number', description: 'Run number, as shown in the history (#12 -> 12).' },
-        search: { type: 'string', description: 'Words to find in earlier requests and results.' },
+        search: { type: 'string', description: 'Words to find in earlier requests, results and reviews (plain text match). Give Korean and English forms together, e.g. "로그인 login", or a file name.' },
       },
       additionalProperties: false,
     },

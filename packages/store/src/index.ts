@@ -336,13 +336,20 @@ export class RunStore {
       .map(row => ({ id: Number(row.id), startedAt: String(row.started_at), brief: String(row.brief) }));
   }
 
-  /** Finished runs of a project whose request or brief contains every word (case-insensitive), newest first. */
-  searchRuns(project: string, words: readonly string[], limit = 5): number[] {
-    const terms = words.map(word => word.trim().toLowerCase()).filter(Boolean).slice(0, 6);
+  /**
+   * Finished runs of a project whose request, brief or stored report (work summary, requirements, review) contain
+   * the words, case-insensitive, newest first. "all" needs every word; "any" ranks runs by how many words they contain.
+   */
+  searchRuns(project: string, words: readonly string[], limit = 5, mode: 'all' | 'any' = 'all'): number[] {
+    const terms = [...new Set(words.map(word => word.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
     if (!terms.length) return [];
-    const where = terms.map(() => "(lower(request) LIKE ? ESCAPE '\\' OR lower(COALESCE(brief, '')) LIKE ? ESCAPE '\\')").join(' AND ');
-    const params = terms.flatMap(term => { const like = `%${term.replace(/[\\%_]/g, char => `\\${char}`)}%`; return [like, like]; });
-    return (this.#db.prepare(`SELECT id FROM runs WHERE project = ? AND status != 'running' AND ${where} ORDER BY id DESC LIMIT ?`).all(project, ...params, limit) as { id: number }[]).map(row => Number(row.id));
+    const hit = "(lower(request) LIKE ? ESCAPE '\\' OR lower(COALESCE(brief, '')) LIKE ? ESCAPE '\\' OR lower(COALESCE(report, '')) LIKE ? ESCAPE '\\')";
+    const params = terms.flatMap(term => { const like = `%${term.replace(/[\\%_]/g, char => `\\${char}`)}%`; return [like, like, like]; });
+    const sql = mode === 'all'
+      ? `SELECT id FROM runs WHERE project = ? AND status != 'running' AND ${terms.map(() => hit).join(' AND ')} ORDER BY id DESC LIMIT ?`
+      : `SELECT id FROM (SELECT id, (${terms.map(() => `CASE WHEN ${hit} THEN 1 ELSE 0 END`).join(' + ')}) AS score FROM runs WHERE project = ? AND status != 'running') WHERE score > 0 ORDER BY score DESC, id DESC LIMIT ?`;
+    const rows = (mode === 'all' ? this.#db.prepare(sql).all(project, ...params, limit) : this.#db.prepare(sql).all(...params, project, limit)) as { id: number }[];
+    return rows.map(row => Number(row.id));
   }
 
   latestBrief(project: string): string | null {

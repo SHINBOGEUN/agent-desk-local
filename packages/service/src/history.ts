@@ -47,12 +47,17 @@ export function historyLookup(store: RunStore, project: string, query: HistoryQu
     if (!run || run.project !== project || run.status === 'running') return `Run #${query.runId} is not a finished run of this project.`;
     return clip(runDetailText(run.id, run.startedAt, run.brief ?? `요청: ${run.request}`, store.getReport(run.id)), HISTORY_ANSWER_MAX_CHARS);
   }
-  const words = (query.search ?? '').split(/\s+/).filter(Boolean);
-  const ids = store.searchRuns(project, words);
+  const words = (query.search ?? '').split(/[\s,]+/).filter(Boolean);
+  let ids = store.searchRuns(project, words);
+  let note = '';
+  if (!ids.length && words.length > 1) {
+    ids = store.searchRuns(project, words, 5, 'any');
+    if (ids.length) note = `No run contains all of "${query.search ?? ''}"; these contain some of the words:\n\n`;
+  }
   if (!ids.length) {
     const recent = store.recentBriefs(project, 5).map(run => `- #${run.id} ${run.brief.split('\n')[0] ?? ''}`).join('\n');
-    return `No earlier run matches "${query.search ?? ''}".${recent ? ` Recent runs:\n${recent}` : ''}`;
+    return `No earlier run matches "${query.search ?? ''}". The search matches plain text: try the other language (로그인 / login), a file name, or a run id.${recent ? ` Recent runs:\n${recent}` : ''}`;
   }
   const parts = ids.map(id => { const run = store.getRun(id)!; return runDetailText(run.id, run.startedAt, run.brief ?? `요청: ${run.request}`, store.getReport(run.id)); });
-  return clip(parts.join('\n\n'), HISTORY_ANSWER_MAX_CHARS);
+  return clip(`${note}${parts.join('\n\n')}`, HISTORY_ANSWER_MAX_CHARS);
 }
