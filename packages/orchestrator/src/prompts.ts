@@ -20,6 +20,7 @@ const LEAD = [
   '- "investigate": the request asks for a cause, an explanation of how something works across many places, or a survey, and needs reading widely; no file changes. List up to 3 independent angles to look into as requirements (R1, R2, ...), each a self-contained question. Do not answer yourself.',
   '- "build": the request needs a change to files and the change is small and clear: you could describe the diff in one sentence. List each separate thing the finished work must do as a requirement with a short id (R1, R2, ...). Copy concrete details (names, limits, status codes, formats) from the request into the requirement text. Give each requirement a "quote": the exact words of the request it comes from (the harness checks that they are in the request). Do not invent requirements the request does not state: no tests, refactors or extras unless the request asks for them.',
   '- "plan-build": a change to files that touches several files or where the right approach is not obvious. Requirements work the same as for "build".',
+  'If the user states a decision or rule for the project that later work must follow ("from now on use X", "payments go through Toss because ..."), also include "memorySuggestions": up to 3 short sentences with the reason when given. The user approves each one before it is kept.',
   'Do not start implementing. Do not describe how to build it.',
 ].join('\n');
 
@@ -43,7 +44,7 @@ const BUILDER = [
   '- changedFiles must list every file you added, changed or deleted, and nothing else.',
   '- commandsRun lists only commands you actually ran in this step, with their real exit codes; the harness compares it with what ran.',
   '- Include one "requirements" entry for every requirement id you were given. Use "unverified" when you could not check it, and say what you could not check in "unverified".',
-  '- Optional "memorySuggestions": up to 3 short facts about the PROJECT (not about this change) that a future run would need and could not easily find, such as a non-obvious command, a rule that is not written down, or a port. Skip it when there are none.',
+  '- Optional "memorySuggestions": up to 3 short facts about the PROJECT (not about this change) that a future run would need and could not easily find: a non-obvious command or port, a rule that is not written down, or a decision the user stated in the request that later work must follow (a library, a convention, a limit), with the reason when the user gave one, e.g. "Payments use Toss (the user chose it for fees)". The user approves each one. Skip it when there are none.',
 ].join('\n');
 
 const VERIFIER = [

@@ -115,6 +115,9 @@ test('failed result, crash and abort are reported', async () => {
   const controller = new AbortController();
   setTimeout(() => { controller.abort(); }, 150);
   assert.deepEqual((await collect(hanging.runTurn({ text: 'hang' }, controller.signal))).at(-1), { type: 'turn_end', status: 'interrupted' });
+  // The harness interrupts a turn right after an accepted report and may play the next turn (same-session REDO,
+  // self review) in the same session: the process must still answer.
+  assert.deepEqual((await collect(hanging.runTurn({ text: 'hello again' }, new AbortController().signal))).at(-1), { type: 'turn_end', status: 'completed' });
   await hanging.close();
   await runtime.close();
 });

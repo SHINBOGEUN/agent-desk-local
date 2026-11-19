@@ -284,3 +284,14 @@ test('after a REDO the result keeps each attempt and why it was sent back', asyn
   const single = await run(setup([script([write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: pass }])]));
   assert.equal(single.attempts, undefined);
 });
+
+test('a decision stated in a question is offered for the project memory by the lead', async () => {
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'answer', requirements: [], reason: 'a rule, nothing to change', answer: '알겠습니다.', sources: [], memorySuggestions: ['결제는 토스를 쓴다 (수수료 때문에 사용자가 정함)'] } }])] } });
+  const result = await runRequest('앞으로 결제는 토스로 하자, 수수료가 싸서', { cwd: tmp(), runtime });
+  assert.equal(result.status, 'completed', result.reason);
+  assert.deepEqual(result.memorySuggestions, ['결제는 토스를 쓴다 (수수료 때문에 사용자가 정함)']);
+  const bad = new FakeRuntime({ scripts: { lead: [script([{ report: { workflow: 'answer', requirements: [], reason: 'r', answer: 'a', sources: [], memorySuggestions: 'not a list' } }, { report: { workflow: 'answer', requirements: [], reason: 'r', answer: 'a', sources: [] } }])] } });
+  const fixed = await runRequest('hi', { cwd: tmp(), runtime: bad });
+  assert.equal(fixed.status, 'completed');
+  assert.match(bad.turns[0]?.toolResults[0]?.message ?? '', /memorySuggestions: up to 5/);
+});

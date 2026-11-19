@@ -15,6 +15,9 @@ export class LeadCollector {
 
   get classify(): ClassifyReport | null { return this.#classify; }
   get answer(): AnswerReport | null { return this.#answer; }
+  /** Decisions or rules the user stated, offered for the project memory (the user approves each one). */
+  get memorySuggestions(): string[] { return this.#memorySuggestions; }
+  #memorySuggestions: string[] = [];
   get invalidAttempts(): number { return this.#invalid; }
 
   /** With the request and project folder, requirements must quote the request and cited files must exist. */
@@ -29,7 +32,11 @@ export class LeadCollector {
     if (!isRecord(raw)) {
       errors.push(`report: expected object, got ${Array.isArray(raw) ? 'array' : typeof raw}`);
     } else {
-      const { answer: answerText, sources, ...classifyPart } = raw;
+      const { answer: answerText, sources, memorySuggestions, ...classifyPart } = raw;
+      if (memorySuggestions !== undefined) {
+        if (!Array.isArray(memorySuggestions) || memorySuggestions.some(item => typeof item !== 'string' || !item.trim() || item.length > 1_000) || memorySuggestions.length > 5) errors.push('report.memorySuggestions: up to 5 non-empty strings');
+        else this.#memorySuggestions = memorySuggestions as string[];
+      }
       const checkedClassify = validateReport('classify', classifyPart);
       if (!checkedClassify.ok) errors.push(...checkedClassify.errors.map(error => error.replace(/^classify/, 'report')));
       else { errors.push(...reportConsistencyErrors('classify', checkedClassify.value).map(error => error.replace(/^classify/, 'report'))); classify = checkedClassify.value; }

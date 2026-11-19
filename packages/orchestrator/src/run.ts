@@ -565,6 +565,7 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
     if (classify.workflow === 'answer') {
       ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
       ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'answered without changing files' });
+      ctx.memorySuggestions = lead.memorySuggestions;
       return finish(ctx, 'completed', ctx.say('Answered from the project files. No files were changed.', '프로젝트 파일을 바탕으로 답했습니다. 변경된 파일은 없습니다.'), { ...base, answer: lead.answer! });
     }
     if (classify.workflow === 'build') return await runBuild(ctx, request, classify.requirements, base);
