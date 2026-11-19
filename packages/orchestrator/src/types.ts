@@ -5,7 +5,7 @@
 import type { FailureType } from './failure.ts';
 import type { Budget, GateResult } from './gates.ts';
 import type { ReviewPolicy } from './review.ts';
-import type { Access, AnswerReport, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, SkillRef, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
+import type { Access, AnswerReport, HistoryQuery, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, SkillRef, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
 
 export interface RunConfig {
   /** Project folder the run works in. */
@@ -37,6 +37,10 @@ export interface RunConfig {
   restorePointDir?: string;
   /** Contents of .agent-desk/memory.md, added to every role's instructions. */
   projectMemory?: string;
+  /** Earlier runs of this project (projectHistory), given to the lead and the builder. */
+  projectHistory?: string;
+  /** Looks up earlier runs for the read_history tool: by run id, or by words in their request or brief. */
+  readHistory?: (query: HistoryQuery) => Promise<string> | string;
   /** Extra shell command prefixes sessions may run without asking (runtimes that use the approval broker). */
   allowCommands?: string[];
   /** plan-build: called with the plan before the build starts; returning false stops the run (needs_user). Omitted means the plan is accepted. */

@@ -6,7 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RoleId, Runtime, UserQuestion } from '#core';
-import { planText, runRequest } from '#orchestrator';
+import { planText, projectHistory, runRequest } from '#orchestrator';
+import { historyLookup } from './history.ts';
 import type { ReviewPolicy, RunConfig, RunEvent, RunResult } from '#orchestrator';
 import { loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
@@ -153,7 +154,9 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     const runId = store.startRun(project, options.request);
     options.onStarted?.({ runId });
     const record = store.recorder(runId);
-    const previousBrief = resumed ? resumeBrief(resumed, store.getReport(resumed.id)) : store.latestBrief(project);
+    // Resuming passes what the stopped run left; otherwise the project's history (latest briefs, older runs one line each).
+    const previousBrief = resumed ? resumeBrief(resumed, store.getReport(resumed.id)) : null;
+    const history = projectHistory(store.recentBriefs(project).filter(run => run.id !== runId));
     const verify = options.verify?.length ? options.verify : config.verify ?? [];
     const maxTokens = options.maxTokens ?? config.limits?.tokens;
     const maxMinutes = options.maxMinutes ?? config.limits?.minutes;
@@ -185,6 +188,8 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       onEvent: event => { record(event); options.onEvent?.(event); },
       ...(config.allowCommands ? { allowCommands: config.allowCommands } : {}),
       ...(memory ? { projectMemory: memory } : {}),
+      ...(history ? { projectHistory: history } : {}),
+      readHistory: query => historyLookup(store, project, query),
       ...(ask ? { askUser: ask, confirmPlan: async plan => (await ask({ question: language === 'ko' ? `계획:\n${planText(plan)}\n\n이 계획으로 구현을 시작할까요?` : `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(previousBrief ? { previousBrief } : {}),

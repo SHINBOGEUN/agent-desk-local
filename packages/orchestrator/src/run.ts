@@ -140,6 +140,11 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
       }
       return result;
     },
+    async readHistory(query) {
+      const read = ctx.config.readHistory;
+      ctx.emit({ type: 'runtime', step, role, event: { type: 'tool', name: `read_history:${query.runId !== undefined ? `#${query.runId}` : query.search ?? ''}` } });
+      return read ? await read(query) : 'No history is available for this run.';
+    },
     async approve(request: ApprovalRequest): Promise<ApprovalDecision> {
       const decision = decideApproval(request, { cwd: ctx.config.cwd, canWrite: accessFor(ctx, role) === 'workspace-write', ...(ctx.config.allowCommands ? { allowCommands: ctx.config.allowCommands } : {}) });
       ctx.emit({ type: 'runtime', step, role, event: { type: 'approval_request', id: request.toolUseId ?? request.toolName, kind: request.toolName, detail: { input: request.input, decision: decision.behavior, ...(decision.behavior === 'deny' ? { message: decision.message } : {}) } } });
@@ -195,7 +200,9 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
   const skills = config.skills?.[role] ?? [];
   return ctx.runtimeFor(role).startSession({
     role, cwd: config.cwd, access: accessFor(ctx, role), skills, tools: toolsFor(ctx, step, role, holder),
-    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills, config.language),
+    // The history goes to the lead (to read follow-ups) and the builder (to build on earlier work); the verifier
+    // judges the change on its own and the researcher only its angle.
+    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills, config.language, role === 'lead' || role === 'builder' ? config.projectHistory : undefined),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });

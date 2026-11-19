@@ -186,3 +186,26 @@ test('feedback: a rating sits next to what the harness measured, and goes with t
   assert.ok(store.qualityRows(cwd).every(row => row.runId !== other.runId));
   store.close();
 });
+
+import { historyLookup } from '#service';
+
+test('history lookup: by run id (same project only) or by words, with what the report adds', async () => {
+  const store = new RunStore(':memory:');
+  const cwd = tmp();
+  const login = await storedRun(store, cwd, 'make a.txt for the login page');
+  await storedRun(store, tmp(), 'make a.txt somewhere else');
+  const other = store.listRuns().find(run => run.project !== cwd)!;
+  assert.deepEqual(store.recentBriefs(cwd).map(run => run.id), [login.runId]);
+  assert.deepEqual(store.searchRuns(cwd, ['LOGIN', 'page']), [login.runId]);
+  assert.deepEqual(store.searchRuns(cwd, ['login', 'nothing']), []);
+  assert.deepEqual(store.searchRuns(cwd, ['100%']), []);
+  const detail = historyLookup(store, cwd, { runId: login.runId });
+  assert.match(detail, new RegExp(`^#${login.runId} `));
+  assert.match(detail, /요청: make a\.txt for the login page/);
+  assert.match(detail, /작업 요약: s/);
+  assert.match(detail, /요구사항 결과: R1 done/);
+  assert.match(historyLookup(store, cwd, { runId: other.id }), /not a finished run of this project/);
+  assert.match(historyLookup(store, cwd, { search: 'login' }), /login page/);
+  assert.match(historyLookup(store, cwd, { search: 'payment' }), /No earlier run matches "payment"\. Recent runs:\n- #/);
+  store.close();
+});

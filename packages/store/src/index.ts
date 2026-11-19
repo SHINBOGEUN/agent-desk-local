@@ -330,6 +330,21 @@ export class RunStore {
   }
 
   /** The Run Brief of the project's most recent finished run, for the next run's classify step. */
+  /** Finished runs of a project with a brief, newest first. */
+  recentBriefs(project: string, limit = 30): { id: number; startedAt: string; brief: string }[] {
+    return (this.#db.prepare("SELECT id, started_at, brief FROM runs WHERE project = ? AND status != 'running' AND brief IS NOT NULL ORDER BY id DESC LIMIT ?").all(project, limit) as { id: number; started_at: string; brief: string }[])
+      .map(row => ({ id: Number(row.id), startedAt: String(row.started_at), brief: String(row.brief) }));
+  }
+
+  /** Finished runs of a project whose request or brief contains every word (case-insensitive), newest first. */
+  searchRuns(project: string, words: readonly string[], limit = 5): number[] {
+    const terms = words.map(word => word.trim().toLowerCase()).filter(Boolean).slice(0, 6);
+    if (!terms.length) return [];
+    const where = terms.map(() => "(lower(request) LIKE ? ESCAPE '\\' OR lower(COALESCE(brief, '')) LIKE ? ESCAPE '\\')").join(' AND ');
+    const params = terms.flatMap(term => { const like = `%${term.replace(/[\\%_]/g, char => `\\${char}`)}%`; return [like, like]; });
+    return (this.#db.prepare(`SELECT id FROM runs WHERE project = ? AND status != 'running' AND ${where} ORDER BY id DESC LIMIT ?`).all(project, ...params, limit) as { id: number }[]).map(row => Number(row.id));
+  }
+
   latestBrief(project: string): string | null {
     const row = this.#db.prepare("SELECT brief FROM runs WHERE project = ? AND status != 'running' AND brief IS NOT NULL ORDER BY id DESC LIMIT 1").get(project) as { brief: string } | undefined;
     return row?.brief ?? null;

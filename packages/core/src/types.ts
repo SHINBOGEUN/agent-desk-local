@@ -146,9 +146,16 @@ export type ApprovalDecision =
  * Harness tools a session may call. Real runtimes reach these through the
  * local MCP server (tools-mcp); the fake runtime calls them directly.
  */
+export interface HistoryQuery {
+  runId?: number;
+  search?: string;
+}
+
 export interface HarnessTools {
   submitReport(report: unknown): Promise<ToolResult>;
   requestUserInput(question: UserQuestion): Promise<string>;
+  /** Optional: details of this project's earlier runs. Missing means the tool answers that no history is available. */
+  readHistory?(query: HistoryQuery): Promise<string>;
   /** Optional: runtimes that delegate permission prompts call this. Missing means deny. */
   approve?(request: ApprovalRequest): Promise<ApprovalDecision>;
 }

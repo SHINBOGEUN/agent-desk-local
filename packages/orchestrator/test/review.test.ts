@@ -241,3 +241,33 @@ test('a rejected report does not end the turn, so the model can fix it in the sa
   assert.equal(result.status, 'completed', result.reason);
   assert.deepEqual(runtime.turns.find(turn => turn.role === 'verifier')?.toolResults.map(item => item.ok), [false, true]);
 });
+
+// ---------- project history ----------
+
+import { projectHistory } from '#orchestrator';
+
+test('project history: latest runs in full, older ones one line each, under the cap', () => {
+  const brief = (n: number) => `요청: 요청 ${n}\n결과: completed — 완료 ${n}\n처리: build\n변경 파일: src/f${n}.js`;
+  const runs = Array.from({ length: 40 }, (_, i) => ({ id: 40 - i, startedAt: `2026-11-${String(10 + (i % 9)).padStart(2, '0')}T00:00:00Z`, brief: brief(40 - i) }));
+  const text = projectHistory(runs);
+  assert.ok(text.length <= 2000 + 80, String(text.length));
+  assert.match(text, /^#40 2026-11-10\n요청: 요청 40\n결과: completed — 완료 40\n처리: build\n변경 파일: src\/f40\.js/);
+  assert.match(text, /\n- #38 \S+ 요청 38 → completed \(변경: src\/f38\.js\)/);
+  assert.match(text, /older run\(s\) not shown; use read_history/);
+  assert.equal(projectHistory([]), '');
+  assert.doesNotMatch(projectHistory(runs.slice(0, 3)), /not shown/);
+});
+
+test('the lead and the builder get the history, the verifier does not; read_history reaches the harness', async () => {
+  const queries: unknown[] = [];
+  const runtime = setup([script([{ history: { search: 'login' } }, write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], [script([{ report: pass }])]);
+  const result = await run(runtime, { projectHistory: '#3 2026-11-18\n요청: 로그인 버튼 추가', readHistory: query => { queries.push(query); return 'run #3 details'; } });
+  assert.equal(result.status, 'completed', result.reason);
+  const instructions = (role: string) => runtime.turns.find(turn => turn.role === role)?.options.instructions ?? '';
+  assert.match(instructions('lead'), /Earlier runs in this project[\s\S]*로그인 버튼 추가/);
+  assert.match(instructions('builder'), /로그인 버튼 추가/);
+  assert.doesNotMatch(instructions('verifier'), /로그인 버튼 추가/);
+  assert.deepEqual(queries, [{ search: 'login' }]);
+  assert.deepEqual(runtime.turns.find(turn => turn.role === 'builder')?.answers, ['run #3 details']);
+  assert.ok(result.events.some(event => event.type === 'runtime' && event.event.type === 'tool' && event.event.name === 'read_history:login'));
+});

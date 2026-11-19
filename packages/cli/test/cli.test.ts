@@ -56,7 +56,7 @@ test('run answers a question, stores the run and exits 0', async () => {
   } finally { store.close(); }
 });
 
-test('second run receives the previous run brief', async () => {
+test('later runs receive the project history (lead and builder instructions)', async () => {
   const project = tmp();
   const home = tmp();
   const make = () => new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])], builder: [] } });
@@ -64,7 +64,8 @@ test('second run receives the previous run brief', async () => {
   await main(['run', 'Which port?', '--runtime', 'fake'], { env: { AGENT_DESK_HOME: home }, platform: 'linux', cwd: project, out: () => {}, err: () => {}, createRuntime: () => first });
   const second = make();
   await main(['run', 'And the host?', '--runtime', 'fake'], { env: { AGENT_DESK_HOME: home }, platform: 'linux', cwd: project, out: () => {}, err: () => {}, createRuntime: () => second });
-  assert.match(second.turns[0]?.input.text ?? '', /Which port\?/);
+  assert.match(second.turns[0]?.options.instructions ?? '', /Earlier runs in this project[\s\S]*#1 [\s\S]*요청: Which port\?/);
+  assert.doesNotMatch(second.turns[0]?.input.text ?? '', /Which port\?/);
 });
 
 test('--unattended turns an agent question into needs_user (exit 3) and never prompts', async () => {

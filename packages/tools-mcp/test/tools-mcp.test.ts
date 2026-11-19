@@ -44,7 +44,7 @@ test('mcp handler: initialize, list, call, notification, errors', async () => {
   assert.deepEqual(init.result.capabilities, { tools: {} });
   assert.equal(await handleMcpLine(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }), options), null);
   const list = JSON.parse((await handleMcpLine(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }), options))!);
-  assert.deepEqual(list.result.tools.map((tool: { name: string }) => tool.name), ['submit_report', 'request_user_input', 'approve']);
+  assert.deepEqual(list.result.tools.map((tool: { name: string }) => tool.name), ['submit_report', 'request_user_input', 'read_history', 'approve']);
   const call = JSON.parse((await handleMcpLine(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'submit_report', arguments: { a: 1 } } }), options))!);
   assert.equal(call.result.isError, false);
   assert.equal(call.result.content[0].text, 'submit_report:{"a":1}');
@@ -119,7 +119,7 @@ test('end to end: real stdio MCP process reaches the harness', async () => {
   };
   try {
     assert.equal((await rpc(1, 'initialize', { protocolVersion: '2025-06-18' })).result.serverInfo.name, 'agent-desk-tools');
-    assert.equal((await rpc(2, 'tools/list')).result.tools.length, 3);
+    assert.equal((await rpc(2, 'tools/list')).result.tools.length, 4);
     const rejected = await rpc(3, 'tools/call', { name: 'submit_report', arguments: { workflow: 'zzz' } });
     assert.equal(rejected.result.isError, true);
     assert.match(rejected.result.content[0].text, /rejected/);

@@ -70,9 +70,14 @@ const LANGUAGE_NOTE: Record<'ko', string> = {
   ko: 'Language: write everything the user will read (answers, summaries, plans, findings, evidence, reasons, questions) in Korean. Keep code, identifiers, file paths, shell commands, error messages and the fixed values of report fields (workflow ids, statuses, verdicts) exactly as they are.',
 };
 
-export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en'): string {
+/** Earlier runs of the project, for the roles that need to understand follow-up requests (lead, builder). */
+export function historyText(history: string): string {
+  return `Earlier runs in this project (newest first; written by the harness from their reports). Use them to understand requests that refer to earlier work ("the button from before", "also do it for..."). For details of an earlier run call \`read_history\` with a run id or a search word; do not call it when this summary is enough.\n${history}`;
+}
+
+export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en', history?: string): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
-  return [COMMON, body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
+  return [COMMON, body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', history ? historyText(history) : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
 export function classifyPrompt(request: string, previousBrief?: string): string {

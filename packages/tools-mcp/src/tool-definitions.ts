@@ -8,7 +8,7 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>;
 }
 
-export const TOOL_NAMES = ['submit_report', 'request_user_input', 'approve'] as const;
+export const TOOL_NAMES = ['submit_report', 'request_user_input', 'read_history', 'approve'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
@@ -53,6 +53,20 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         options: { type: 'array', items: { type: 'string' }, description: 'Optional answers to choose from.' },
       },
       required: ['question'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_history',
+    description:
+      'Read details of an earlier run in this project (its request, result, changed files, requirements and review). '
+      + 'Give "runId" from the history in your instructions, or "search" with a word from the earlier request. Use it only when the summary is not enough.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'number', description: 'Run number, as shown in the history (#12 -> 12).' },
+        search: { type: 'string', description: 'Words to find in earlier requests and results.' },
+      },
       additionalProperties: false,
     },
   },

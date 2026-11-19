@@ -271,4 +271,5 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 - (28차, 2026-11-17) ADR 0012 구현 완료(리뷰 지적 위치 검사, 재검토 축소, 스킬 점검 보강, `--adapter bare`, 품질 기록 탭). PC에서 확인할 것: `npm run web:build` 후 품질 기록 탭·👎 → 파일 열기, `node bench/run.mjs --adapter bare --label bare-std` 실행(codex exec JSON 이벤트 형태가 맞는지 첫 실행 로그 확인), `--set hard`에서 재검토 토큰. 남은 순서: PC 실측 → 3D 장면 → README·UI 매뉴얼.
 - (29차, 2026-11-18) ADR 0013: 보고 접수 후 턴 종료. PC 확인: 인사 같은 짧은 요청을 다시 실행해 역할별 표의 "모델 호출"이 3 → 2로 줄었는지, REDO 1회차(같은 세션)와 `--review self`가 정상인지, Claude 역할에서도 턴이 바로 끝나는지.
 - (30차, 2026-11-18) 인사 요청 40k → 13k 확인(ADR 0013 최종 결과). 다음 확인: 파일 수정 요청에서 builder·verifier 호출 수. 진단할 때만 `AGENT_DESK_CODEX_KEEP_SESSIONS=1`로 Codex 세션 저장(평소에는 끔).
+- (31차, 2026-11-19) ADR 0014 프로젝트 기억 구현. PC 확인: 같은 프로젝트에서 이어지는 요청을 몇 번 보내 lead·builder가 이전 작업을 알아듣는지, `read_history`가 필요할 때만 쓰이는지(과정 보기의 도구 기록), 토큰 증가 폭.
 

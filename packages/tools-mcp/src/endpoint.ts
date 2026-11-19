@@ -53,6 +53,14 @@ export async function dispatchTool(tools: HarnessTools, name: string, args: unkn
     const answer = await tools.requestUserInput({ question: args.question, ...(options?.length ? { options } : {}) });
     return { text: answer, isError: false };
   }
+  if (name === 'read_history') {
+    const record = isRecord(args) ? args : {};
+    const runId = typeof record.runId === 'number' && Number.isInteger(record.runId) ? record.runId : undefined;
+    const search = typeof record.search === 'string' && record.search.trim() ? record.search.trim() : undefined;
+    if (runId === undefined && !search) return { text: 'read_history needs "runId" (a number) or "search" (words).', isError: true };
+    if (!tools.readHistory) return { text: 'No history is available for this run.', isError: false };
+    return { text: await tools.readHistory({ ...(runId !== undefined ? { runId } : {}), ...(search ? { search } : {}) }), isError: false };
+  }
   if (name === 'approve') {
     const record = isRecord(args) ? args : {};
     const request: ApprovalRequest = { toolName: typeof record.tool_name === 'string' ? record.tool_name : '', input: record.input ?? {}, ...(typeof record.tool_use_id === 'string' ? { toolUseId: record.tool_use_id } : {}) };
