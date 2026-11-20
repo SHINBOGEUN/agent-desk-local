@@ -178,3 +178,21 @@ test('listModels asks a short-lived app-server for the account models', async ()
   assert.deepEqual(await runtime.listModels(), [{ id: 'gpt-fake', label: 'GPT Fake', isDefault: true }, { id: 'gpt-fake-mini', label: 'GPT Fake Mini', isDefault: false }]);
   await runtime.close();
 });
+
+test('an older Codex that rejects omit_tools_from still starts, without it', async () => {
+  process.env.FAKE_CODEX_REJECT_OMIT = '1';
+  const collector = new ReportCollector('classify');
+  const runtime = runtimeWithFake();
+  try {
+    const session = await runtime.startSession(options({ submitReport: collector.submit, requestUserInput: async () => '' }));
+    try {
+      await collect(session.runTurn({ text: 'send report' }, new AbortController().signal));
+      assert.equal(collector.report?.workflow, 'answer');
+    } finally {
+      await session.close();
+    }
+  } finally {
+    delete process.env.FAKE_CODEX_REJECT_OMIT;
+    await runtime.close();
+  }
+});

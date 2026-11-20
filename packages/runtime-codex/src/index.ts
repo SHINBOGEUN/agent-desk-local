@@ -267,8 +267,11 @@ export class CodexRuntime implements Runtime {
         'mcp_servers.agentdesk.args': tools.args,
         'mcp_servers.agentdesk.env': tools.env,
         'mcp_servers.agentdesk.default_tools_approval_mode': 'approve',
+        // Our four tools go to the model directly. Behind tool search or code mode the model
+        // spends one or two extra calls (about 13k tokens each) finding submit_report first (run #54).
+        'mcp_servers.agentdesk.omit_tools_from': ['deferred', 'code_mode'],
       };
-      const started = await peer.request<{ thread?: { id?: string } }>('thread/start', {
+      const start = (config: Record<string, unknown>) => peer.request<{ thread?: { id?: string } }>('thread/start', {
         cwd: options.cwd,
         ...(options.model ? { model: options.model } : {}),
         // Sessions are not saved by default. AGENT_DESK_CODEX_KEEP_SESSIONS=1 keeps them in ~/.codex/sessions,
@@ -279,6 +282,15 @@ export class CodexRuntime implements Runtime {
         developerInstructions: options.instructions,
         config,
       });
+      let started;
+      try {
+        started = await start(config);
+      } catch (error) {
+        // An older Codex that does not know omit_tools_from: start without it.
+        if (!/omit_tools_from/.test(String(error instanceof Error ? error.message : error))) throw error;
+        const { 'mcp_servers.agentdesk.omit_tools_from': _omit, ...rest } = config;
+        started = await start(rest);
+      }
       const threadId = str(started?.thread?.id);
       if (!threadId) throw new Error('thread/start returned no thread id');
       return new CodexSession(peer, registration, options, threadId);

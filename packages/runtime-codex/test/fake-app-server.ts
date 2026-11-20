@@ -69,6 +69,10 @@ createInterface({ input: process.stdin }).on('line', line => {
   else if (message.method === 'model/list') send({ id: message.id, result: { data: [{ id: 'a', model: 'gpt-fake', displayName: 'GPT Fake', isDefault: true }, { id: 'b', model: 'gpt-fake-mini', displayName: 'GPT Fake Mini', isDefault: false }] } });
   else if (message.method === 'account/rateLimits/read') send({ id: message.id, result: { rateLimitsByLimitId: { codex: { primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1800000000 } } } } });
   else if (message.method === 'thread/start') {
+    if (process.env.FAKE_CODEX_REJECT_OMIT === '1' && 'mcp_servers.agentdesk.omit_tools_from' in message.params.config) {
+      send({ id: message.id, error: { code: -32600, message: 'unknown field `omit_tools_from`' } });
+      return;
+    }
     config = message.params.config;
     send({ id: message.id, result: { thread: { id: 't1' }, echo: { sandbox: message.params.sandbox, approvalPolicy: message.params.approvalPolicy, developerInstructions: message.params.developerInstructions, model: message.params.model } } });
     notify('fake/threadStarted', message.params);
