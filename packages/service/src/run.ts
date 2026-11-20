@@ -121,7 +121,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     if (typeof made === 'string') return { ok: false, code: 1, message: made };
   }
   // Runtime fallback: when the team was not forced (--runtime / --mode / dashboard choice) and Codex's
-  // 5-hour window is nearly used up, Claude takes over Codex's roles for this run.
+  // 5-hour or weekly window is nearly used up, Claude takes over Codex's roles for this run.
   let fallback: string | null = null;
   const switchAt = config.limits?.switchAtCodexPercent ?? DEFAULT_SWITCH_AT_PERCENT;
   if (!options.runtime && !options.mode && switchAt > 0 && Object.values(assignment).includes('codex') && locate('claude', options.env, options.platform, readMachineSettings(dir))) {
@@ -129,12 +129,13 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     const read = options.readRateLimits ?? (codexRuntime?.readRateLimits ? () => codexRuntime.readRateLimits!() : undefined);
     if (read) {
       try {
-        const window = normalizeRateLimits(await read()).windows.find(entry => entry.kind === 'primary');
-        if (window && window.usedPercent >= switchAt) {
+        // Either window counts: an empty weekly window stops Codex as surely as the 5-hour one.
+        const window = normalizeRateLimits(await read()).windows.filter(entry => entry.usedPercent >= switchAt).sort((a, b) => b.usedPercent - a.usedPercent)[0];
+        if (window) {
           const made = instance('claude');
           if (typeof made !== 'string') {
             assignment = Object.fromEntries(Object.entries(assignment).map(([role, kind]) => [role, kind === 'codex' ? 'claude' : kind])) as typeof assignment;
-            fallback = `Codex 5-hour usage is ${Math.round(window.usedPercent)}% (switch at ${switchAt}%), so Claude does Codex's roles in this run.`;
+            fallback = `Codex ${window.kind === 'primary' ? '5-hour' : 'weekly'} usage is ${Math.round(window.usedPercent)}% (switch at ${switchAt}%), so Claude does Codex's roles in this run.`;
             note(fallback);
           }
         }

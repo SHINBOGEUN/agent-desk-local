@@ -53,6 +53,18 @@ test('fallback: Codex nearly out of its 5-hour window hands Codex roles to Claud
   if (off.ok) assert.equal(settingsOf(m.home, off.runId)!.fallback, undefined);
 });
 
+test('fallback also happens when the weekly window is the one used up', async () => {
+  const m = machine();
+  const project = tmp('svc-p-');
+  const weekly = { rateLimitsByLimitId: { codex: { primary: { usedPercent: 3, windowDurationMins: 300, resetsAt: 1_800_000_000 }, secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: 1_800_000_000 } } } };
+  const outcome = await executeRun({ project, request: 'Which port?', env: m.env, platform: 'linux', createRuntime: m.createRuntime, readRateLimits: async () => weekly });
+  assert.ok(outcome.ok);
+  if (!outcome.ok) return;
+  const settings = settingsOf(m.home, outcome.runId)!;
+  assert.deepEqual(Object.values(settings.runtimes as object), ['claude', 'claude', 'claude', 'claude']);
+  assert.match(String(settings.fallback), /weekly usage is 100%/);
+});
+
 test('resume: the new run is told where the old one stopped and what is left', async () => {
   const brief = resumeBrief({ id: 7, status: 'interrupted', reason: 'token budget', brief: 'did R1' }, {
     requirements: [{ id: 'R1', text: 'add field' }, { id: 'R2', text: 'show it' }],
