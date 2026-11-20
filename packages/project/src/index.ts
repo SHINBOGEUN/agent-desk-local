@@ -7,6 +7,8 @@ import { checkSkills } from './skills.ts';
 
 export * from './config.ts';
 export * from './roles.ts';
+export * from './vault.ts';
+export * from './vault-memory.ts';
 
 export interface LoadedProject {
   config: ProjectConfig;

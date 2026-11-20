@@ -33,7 +33,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-const MCP_TOOLS = ['mcp__agentdesk__submit_report', 'mcp__agentdesk__request_user_input', 'mcp__agentdesk__read_history'];
+const MCP_TOOLS = ['mcp__agentdesk__submit_report', 'mcp__agentdesk__request_user_input', 'mcp__agentdesk__read_history', 'mcp__agentdesk__read_notes'];
 const APPROVE_TOOL = 'mcp__agentdesk__approve';
 export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'];
 export const WRITE_TOOLS = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'];

@@ -37,6 +37,8 @@ export interface Requirement {
   text: string;
   /** The words of the user's request this requirement comes from (checked by the harness). */
   quote?: string;
+  /** A project note (e.g. "specs/Login.md") the quote comes from, when the request points at a spec instead of spelling it out. */
+  source?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,11 +155,19 @@ export interface HistoryQuery {
   search?: string;
 }
 
+/** read_notes: one note by path, or notes found by words, from the project's notes vault. */
+export interface NotesQuery {
+  path?: string;
+  search?: string;
+}
+
 export interface HarnessTools {
   submitReport(report: unknown): Promise<ToolResult>;
   requestUserInput(question: UserQuestion): Promise<string>;
   /** Optional: details of this project's earlier runs. Missing means the tool answers that no history is available. */
   readHistory?(query: HistoryQuery): Promise<string>;
+  /** Optional: the project's notes (specs and approved decisions). Missing means the tool answers that there are none. */
+  readNotes?(query: NotesQuery): Promise<string>;
   /** Optional: runtimes that delegate permission prompts call this. Missing means deny. */
   approve?(request: ApprovalRequest): Promise<ApprovalDecision>;
 }

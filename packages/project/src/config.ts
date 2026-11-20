@@ -52,6 +52,8 @@ export interface ProjectConfig {
   /** Extra shell command prefixes Claude sessions may run without asking. */
   allowCommands?: string[];
   /** switchAtCodexPercent: Claude takes Codex's roles when Codex's 5-hour window is at least this full (default 95, 0 = off). */
+  /** Notes folder (an Obsidian vault, or a folder inside one): absolute, or relative to the project. Default .agent-desk/notes. */
+  vault?: string;
   limits?: { redo?: number; tokens?: number; minutes?: number; codexUsagePercent?: number; switchAtCodexPercent?: number };
 }
 
@@ -66,7 +68,7 @@ const KINDS = ['codex', 'claude', 'fake'];
 export function validateConfig(raw: unknown): ConfigResult {
   const errors: string[] = [];
   if (!isRecord(raw)) return { ok: false, errors: ['config: expected a JSON object'] };
-  for (const key of Object.keys(raw)) if (!['mode', 'runtimes', 'roles', 'skills', 'verify', 'review', 'language', 'ignore', 'allowCommands', 'limits'].includes(key)) errors.push(`config.${key}: unknown key`);
+  for (const key of Object.keys(raw)) if (!['mode', 'runtimes', 'roles', 'skills', 'verify', 'review', 'language', 'ignore', 'allowCommands', 'limits', 'vault'].includes(key)) errors.push(`config.${key}: unknown key`);
   if (raw.mode !== undefined) {
     if (!(RUNTIME_MODES as readonly unknown[]).includes(raw.mode)) errors.push(`config.mode: expected one of ${RUNTIME_MODES.map(mode => `"${mode}"`).join(', ')}`);
     if (raw.runtimes !== undefined) errors.push('config.mode and config.runtimes both set; keep one');
@@ -95,6 +97,7 @@ export function validateConfig(raw: unknown): ConfigResult {
   if (raw.allowCommands !== undefined && !stringList(raw.allowCommands)) errors.push('config.allowCommands: expected a list of command prefixes');
   if (raw.review !== undefined && !['always', 'auto', 'never', 'self'].includes(raw.review as string)) errors.push('config.review: expected "always", "auto", "never" or "self"');
   if (raw.language !== undefined && !['en', 'ko'].includes(raw.language as string)) errors.push('config.language: expected "en" or "ko"');
+  if (raw.vault !== undefined && (typeof raw.vault !== 'string' || !raw.vault.trim())) errors.push('config.vault: expected a folder path');
   if (raw.limits !== undefined) {
     if (!isRecord(raw.limits)) errors.push('config.limits: expected an object');
     else for (const [key, value] of Object.entries(raw.limits)) {

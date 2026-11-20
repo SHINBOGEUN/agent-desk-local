@@ -148,6 +148,11 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
       ctx.emit({ type: 'runtime', step, role, event: { type: 'tool', name: `read_history:${query.runId !== undefined ? `#${query.runId}` : query.search ?? ''}` } });
       return read ? await read(query) : 'No history is available for this run.';
     },
+    async readNotes(query) {
+      const read = ctx.config.readNotes;
+      ctx.emit({ type: 'runtime', step, role, event: { type: 'tool', name: `read_notes:${query.path ?? query.search ?? ''}` } });
+      return read ? await read(query) : 'This project has no notes.';
+    },
     async approve(request: ApprovalRequest): Promise<ApprovalDecision> {
       const decision = decideApproval(request, { cwd: ctx.config.cwd, canWrite: accessFor(ctx, role) === 'workspace-write', ...(ctx.config.allowCommands ? { allowCommands: ctx.config.allowCommands } : {}) });
       ctx.emit({ type: 'runtime', step, role, event: { type: 'approval_request', id: request.toolUseId ?? request.toolName, kind: request.toolName, detail: { input: request.input, decision: decision.behavior, ...(decision.behavior === 'deny' ? { message: decision.message } : {}) } } });
@@ -206,7 +211,7 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
     role, cwd: config.cwd, access: accessFor(ctx, role), skills, tools: toolsFor(ctx, step, role, holder),
     // The history goes to the lead (to read follow-ups) and the builder (to build on earlier work); the verifier
     // judges the change on its own and the researcher only its angle.
-    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills, config.language, role === 'lead' || role === 'builder' ? config.projectHistory : undefined),
+    instructions: instructionsFor(role, config.roleNotes?.[role], step, config.projectMemory, skills, config.language, role === 'lead' || role === 'builder' ? config.projectHistory : undefined, role === 'lead' || role === 'builder' ? config.vaultIndex : undefined),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
@@ -566,7 +571,7 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
   const runtimes = Object.fromEntries((['lead', 'builder', 'verifier', 'researcher'] as RoleId[]).map(role => [role, (single ?? (config.runtime as Partial<Record<RoleId, Runtime>>)[role])?.id]).filter(([, id]) => id)) as Partial<Record<RoleId, string>>;
   ctx.emit({ type: 'run_started', request, ...(Object.keys(runtimes).length ? { runtimes } : {}) });
   try {
-    const lead = new LeadCollector({ request, cwd: config.cwd });
+    const lead = new LeadCollector({ request, cwd: config.cwd, ...(config.noteText ? { noteText: config.noteText } : {}) });
     const stopped = await runClassify(ctx, request, lead);
     if (stopped) return stopped;
     const classify = lead.classify!;

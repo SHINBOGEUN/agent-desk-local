@@ -5,7 +5,7 @@
 import type { FailureType } from './failure.ts';
 import type { Budget, GateResult } from './gates.ts';
 import type { ReviewPolicy } from './review.ts';
-import type { Access, AnswerReport, HistoryQuery, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, SkillRef, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
+import type { Access, AnswerReport, HistoryQuery, NotesQuery, BuilderReport, ClassifyReport, PlanReport, ResearchReport, Effort, RoleId, SkillRef, Requirement, Runtime, RunStatus, RuntimeEvent, StepKind, TokenUsage, UsageEntry, UserQuestion, VerifierReport, WorkflowId } from '#core';
 
 export interface RunConfig {
   /** Project folder the run works in. */
@@ -41,6 +41,12 @@ export interface RunConfig {
   projectHistory?: string;
   /** Looks up earlier runs for the read_history tool: by run id, or by words in their request or brief. */
   readHistory?: (query: HistoryQuery) => Promise<string> | string;
+  /** Titles of the project's notes (specs, decisions), given to the lead and the builder so they know what read_notes can open. */
+  vaultIndex?: string;
+  /** Answers the read_notes tool. */
+  readNotes?: (query: NotesQuery) => Promise<string> | string;
+  /** A note's text by its vault path, or null: lets requirements quote a spec note (Requirement.source) and answers cite notes. */
+  noteText?: (path: string) => string | null;
   /** Extra shell command prefixes sessions may run without asking (runtimes that use the approval broker). */
   allowCommands?: string[];
   /** plan-build: called with the plan before the build starts; returning false stops the run (needs_user). Omitted means the plan is accepted. */

@@ -8,7 +8,7 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>;
 }
 
-export const TOOL_NAMES = ['submit_report', 'request_user_input', 'read_history', 'approve'] as const;
+export const TOOL_NAMES = ['submit_report', 'request_user_input', 'read_history', 'read_notes', 'approve'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
@@ -66,6 +66,20 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         runId: { type: 'number', description: 'Run number, as shown in the history (#12 -> 12).' },
         search: { type: 'string', description: 'Words to find in earlier requests, results and reviews (plain text match). Give Korean and English forms together, e.g. "로그인 login", or a file name.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_notes',
+    description:
+      'Read the project notes the user keeps (specs of what to build, approved decisions with their reasons). '
+      + 'Give "path" from the notes list in your instructions to read one note, or "search" with words to find notes. Use it when the request refers to a spec or a rule you have not seen.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Note path as listed, e.g. "specs/Login.md".' },
+        search: { type: 'string', description: 'Words to find in note titles and text. Give Korean and English forms together, e.g. "마감일 due date".' },
       },
       additionalProperties: false,
     },

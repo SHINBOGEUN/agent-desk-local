@@ -291,3 +291,13 @@ test('gate messages follow the run language', () => {
   assert.match(korean.problems[0]!, /changedFiles에 없습니다/);
   assert.match(checkBudget({ attempt: 0, budget: undefined, usage: { totalTokens: 0 } as never, elapsedMs: 0, language: 'ko' }).detail, /예산/);
 });
+
+test('a requirement may quote a project note named in "source"', async () => {
+  const { requirementQuoteErrors } = await import('../src/evidence.ts');
+  const notes: Record<string, string> = { 'specs/Login.md': 'Lock the account after 5 failed attempts.' };
+  const noteText = (rel: string) => notes[rel] ?? null;
+  assert.deepEqual(requirementQuoteErrors('build specs/Login', [{ id: 'R1', text: 'lock after 5 failures', quote: 'after 5 failed attempts', source: 'specs/Login.md' }], noteText), []);
+  assert.match(requirementQuoteErrors('build specs/Login', [{ id: 'R1', text: 'x', quote: 'after 3 failed attempts', source: 'specs/Login.md' }], noteText)[0]!, /is not in specs\/Login\.md/);
+  assert.match(requirementQuoteErrors('build it', [{ id: 'R1', text: 'x', quote: 'q', source: 'specs/None.md' }], noteText)[0]!, /is not a project note/);
+  assert.match(requirementQuoteErrors('build it', [{ id: 'R1', text: 'x', quote: 'q', source: 'specs/Login.md' }])[0]!, /is not a project note/);
+});

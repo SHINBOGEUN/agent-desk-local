@@ -9,7 +9,8 @@ import type { RoleId, Runtime, UserQuestion } from '#core';
 import { planText, projectHistory, runRequest } from '#orchestrator';
 import { historyLookup } from './history.ts';
 import type { ReviewPolicy, RunConfig, RunEvent, RunResult } from '#orchestrator';
-import { loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
+import { initVault, syncApprovals, vaultRoot, loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
+import { findRunNote, notesLookup, noteTextOf, vaultIndexText, writeRunNotes } from './vault-notes.ts';
 import type { RuntimeKind, RuntimeMode } from '#project';
 import { RunStore } from '#store';
 import { locate } from './discover.ts';
@@ -164,7 +165,24 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     const review = options.review ?? config.review;
     const language = options.language ?? config.language;
     const ask = options.ask;
+    // The notes vault: approvals the user made in Obsidian reach memory.md before this run reads it.
+    const vault = vaultRoot(project, config.vault);
+    let vaultReady = true;
+    try {
+      initVault(vault);
+      const synced = syncApprovals(project, vault);
+      if (synced.approved.length) options.onNote?.(`added to memory from approved notes: ${synced.approved.join('; ')}`);
+      for (const problem of synced.errors) options.onNote?.(`notes: ${problem}`);
+    } catch (error) {
+      vaultReady = false;
+      options.onNote?.(`notes folder unavailable (${vault}): ${error instanceof Error ? error.message : String(error)}`);
+    }
+    // A vault inside the project is the user's (edited in Obsidian at any time): not a change of this run, not protected.
+    const vaultRel = path.relative(project, vault).split(path.sep).join('/');
+    const vaultInside = vaultRel !== '' && !vaultRel.startsWith('..') && !path.isAbsolute(vaultRel);
+    const ignore = [...(config.ignore ?? []), ...(vaultInside ? [vaultRel] : [])];
     const memory = loadMemory(project);
+    const vaultIndex = vaultReady ? vaultIndexText(vault) : '';
     const started = Date.now();
     store.setSettings(runId, {
       mode: options.mode ?? config.mode ?? (config.runtimes ? null : 'default'),
@@ -191,10 +209,12 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       ...(memory ? { projectMemory: memory } : {}),
       ...(history ? { projectHistory: history } : {}),
       readHistory: query => historyLookup(store, project, query),
+      ...(vaultReady ? { readNotes: query => notesLookup(vault, query), noteText: (rel: string) => noteTextOf(vault, rel) } : {}),
+      ...(vaultIndex ? { vaultIndex } : {}),
       ...(ask ? { askUser: ask, confirmPlan: async plan => !['stop', '중지'].includes((await ask(language === 'ko' ? { question: `계획:\n${planText(plan, 'ko')}\n\n이 계획으로 구현을 시작할까요?`, options: ['진행', '중지'] } : { question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase()) } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(previousBrief ? { previousBrief } : {}),
-      ...(config.ignore ? { ignore: config.ignore } : {}),
+      ...(ignore.length ? { ignore } : {}),
       ...(maxTokens || maxMinutes ? { budget: { ...(maxTokens ? { maxTokens } : {}), ...(maxMinutes ? { maxMillis: maxMinutes * 60000 } : {}) } } : {}),
       ...(review ? { review } : {}),
       ...(language ? { language } : {}),
@@ -222,6 +242,10 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     guard?.stop();
     if (usageStop) result = { ...result, status: 'interrupted', reason: usageStop };
     store.finishRun(runId, options.request, result);
+    if (vaultReady) {
+      const notes = writeRunNotes(project, vault, { id: runId, request: options.request, result, lang: language === 'ko' ? 'ko' : 'en', resumedNote: resumed ? findRunNote(vault, resumed.id) : null });
+      if (notes.error) options.onNote?.(`run note not written: ${notes.error}`);
+    }
     pruneRestorePoints(path.join(dir, 'restore'), 10);
     return { ok: true, runId, result, suggestions: newSuggestions(project, result.memorySuggestions ?? []), durationMs: Date.now() - started, dataDir: dir };
   } finally {
