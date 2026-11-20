@@ -35,12 +35,13 @@ async function callMcp(report: unknown): Promise<string> {
 
 async function playTurn(turnId: string, text: string) {
   notify('turn/started', { threadId: 't1', turn: { id: turnId } });
-  const done = (status: string, error?: string) => notify('turn/completed', { threadId: 't1', turn: { id: turnId, status, ...(error ? { error: { message: error } } : {}) } });
+  const done = (status: string, error?: string, info?: unknown) => notify('turn/completed', { threadId: 't1', turn: { id: turnId, status, ...(error ? { error: { message: error, ...(info ? { codexErrorInfo: info } : {}) } } : {}) } });
   if (text.includes('hang')) {
     await new Promise<void>(resolve => { interruptTurn = resolve; });
     return done('interrupted');
   }
   if (text.includes('crash')) process.exit(3);
+  if (text.includes('limit')) return done('failed', "You've hit your usage limit.", 'usageLimitExceeded');
   if (text.includes('fail')) return done('failed', 'model refused');
   if (text.includes('report')) {
     const bad = await callMcp({ workflow: 'nope' });

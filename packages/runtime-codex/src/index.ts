@@ -190,7 +190,10 @@ class CodexSession implements Session {
             const turn = isRecord(notification.params.turn) ? notification.params.turn : {};
             if (turnId && str(turn.id) && str(turn.id) !== turnId) continue;
             const status = str(turn.status);
-            const error = isRecord(turn.error) ? str(turn.error.message) : '';
+            // codexErrorInfo names the kind ("usageLimitExceeded", or an object keyed by it); keep it with the message.
+            const info = isRecord(turn.error) ? turn.error.codexErrorInfo : undefined;
+            const kind = typeof info === 'string' ? info : isRecord(info) ? Object.keys(info)[0] ?? '' : '';
+            const error = isRecord(turn.error) ? `${str(turn.error.message)}${kind ? ` [${kind}]` : ''}`.trim() : '';
             yield status === 'completed' ? { type: 'turn_end', status: 'completed' }
               : status === 'interrupted' ? { type: 'turn_end', status: 'interrupted' }
               : { type: 'turn_end', status: 'failed', error: error || `turn ended with status "${status || 'unknown'}"` };

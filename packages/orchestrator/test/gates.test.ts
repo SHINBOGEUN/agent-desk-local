@@ -224,6 +224,12 @@ test('failure types are classified', () => {
   assert.equal(classifyFailure('read ECONNRESET'), 'transient');
   assert.equal(classifyFailure('Codex app-server exited (1)'), 'transient');
   assert.equal(classifyFailure('model refused'), 'other');
+  assert.equal(classifyFailure("You've hit your usage limit. To get more access now, send a request to your admin or try again at Mar 20th, 2027 3:36 PM."), 'limit');
+  assert.equal(classifyFailure('turn ended [usageLimitExceeded]'), 'limit');
+  assert.equal(classifyFailure("You've hit your session limit · resets 3:45pm"), 'limit');
+  assert.equal(classifyFailure("You've hit your weekly limit · resets Mon 12:00am"), 'limit');
+  assert.equal(classifyFailure('API Error: Server is temporarily limiting requests (not your usage limit)'), 'transient');
+  assert.equal(classifyFailure('API Error: Rate limit reached'), 'transient');
 });
 
 test('a transient runtime error is retried once per step in a fresh session', async () => {

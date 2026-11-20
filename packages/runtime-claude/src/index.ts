@@ -111,8 +111,16 @@ export class TurnTranslator {
     for (const field of FIELDS) this.#emitted[field] += delta[field];
   }
 
+  /** The last rate_limit_event that said the allowance is used up ("rejected"). */
+  #rejected: { window: string; resetsAt: number | null } | null = null;
+
   handle(message: Record<string, unknown>): RuntimeEvent[] {
     const out: RuntimeEvent[] = [];
+    if (message.type === 'rate_limit_event' && isRecord(message.rate_limit_info)) {
+      const info = message.rate_limit_info;
+      const resetsAt = typeof info.resetsAt === 'number' ? info.resetsAt : null;
+      this.#rejected = str(info.status) === 'rejected' ? { window: str(info.rateLimitType) || 'usage', resetsAt } : null;
+    }
     if (message.type === 'system' && str(message.subtype) === 'init' && str(message.model) && !this.#modelReported) {
       this.#modelReported = true;
       out.push({ type: 'session_info', model: str(message.model) });
@@ -160,7 +168,10 @@ export class TurnTranslator {
     this.#flush(false, out);
     if (interrupted) { out.push({ type: 'turn_end', status: 'interrupted' }); return out; }
     const errors = Array.isArray(result.errors) ? result.errors.map(item => str(item)).filter(Boolean).join('; ') : '';
-    out.push({ type: 'turn_end', status: 'failed', error: str(result.result) || errors || `turn ended with "${str(result.subtype) || 'error'}"` });
+    const text = str(result.result) || errors || `turn ended with "${str(result.subtype) || 'error'}"`;
+    // rate_limit_event "rejected" is the reliable sign; the result text alone can read like an ordinary error.
+    const limit = this.#rejected ? ` [usage limit exceeded: ${this.#rejected.window}${this.#rejected.resetsAt ? `, resets ${new Date((this.#rejected.resetsAt > 1e12 ? this.#rejected.resetsAt : this.#rejected.resetsAt * 1000)).toISOString()}` : ''}]` : '';
+    out.push({ type: 'turn_end', status: 'failed', error: `${text}${limit}` });
     return out;
   }
 }

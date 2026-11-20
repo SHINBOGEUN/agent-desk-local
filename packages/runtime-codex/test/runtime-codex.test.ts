@@ -196,3 +196,15 @@ test('an older Codex that rejects omit_tools_from still starts, without it', asy
     await runtime.close();
   }
 });
+
+test('a usage-limit turn keeps the error kind with the message', async () => {
+  const runtime = runtimeWithFake();
+  const session = await runtime.startSession(options(noTools()));
+  try {
+    const events = await collect(session.runTurn({ text: 'limit' }, new AbortController().signal));
+    assert.deepEqual(events.at(-1), { type: 'turn_end', status: 'failed', error: "You've hit your usage limit. [usageLimitExceeded]" });
+  } finally {
+    await session.close();
+    await runtime.close();
+  }
+});

@@ -42,7 +42,7 @@ interface TurnOutcome {
 type StepFailure =
   | { kind: 'interrupted' }
   | { kind: 'budget'; reason: string; step: StepKind }
-  | { kind: 'failed'; reason: string; type: FailureType }
+  | { kind: 'failed'; reason: string; type: FailureType; step?: StepKind }
   | { kind: 'needs_user'; question: string };
 
 const DEFAULT_REDO_LIMIT = 2;
@@ -195,7 +195,7 @@ async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: 
   return outcome;
 }
 
-const failedStep = (reason: string, type: FailureType = classifyFailure(reason)): StepFailure => ({ kind: 'failed', reason, type });
+const failedStep = (reason: string, type: FailureType = classifyFailure(reason), step?: StepKind): StepFailure => ({ kind: 'failed', reason, type, ...(step ? { step } : {}) });
 
 async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder): Promise<Session> {
   const { config } = ctx;
@@ -222,7 +222,7 @@ async function playUntilReport(ctx: RunContext, step: StepKind, role: RoleId, se
     const outcome = await playTurn(ctx, step, role, session, text, text === prompt && step !== 'review' ? ctx.config.images : undefined);
     if (ctx.budgetHit) return { kind: 'budget', reason: ctx.budgetHit, step };
     if (outcome.status === 'interrupted' || ctx.config.signal?.aborted) return { kind: 'interrupted' };
-    if (outcome.status === 'failed') return failedStep(outcome.error ?? 'turn failed');
+    if (outcome.status === 'failed') return failedStep(outcome.error ?? 'turn failed', undefined, step);
     if (holder.current.done()) return null;
     if (ctx.pendingQuestion) return { kind: 'needs_user', question: ctx.pendingQuestion };
   }
@@ -250,6 +250,10 @@ function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<Run
   if (failure.kind === 'interrupted') return finish(ctx, 'interrupted', ctx.say('The run was stopped before it finished.', '실행이 끝나기 전에 중지되었습니다.'), extra);
   if (failure.kind === 'budget') return finish(ctx, 'interrupted', ctx.say(`Stopped by the budget. ${failure.reason}`, `예산 한도에 도달해 중단되었습니다. ${failure.reason}`), { ...extra, resume: { step: failure.step, redo: ctx.redo, note: ctx.say('Start a new run with the remaining requirements; earlier changes stay in the folder.', '남은 요구사항으로 새 실행을 시작하세요. 이전 변경은 폴더에 그대로 남아 있습니다.') } });
   if (failure.kind === 'needs_user') return finish(ctx, 'needs_user', ctx.say(`The agent needs an answer from you: ${failure.question}`, `에이전트가 답변을 기다립니다: ${failure.question}`), extra);
+  if (failure.type === 'limit') return finish(ctx, 'interrupted', ctx.say(
+    `Stopped: the usage limit was reached (${failure.reason}). Resume after the limit resets, or pick the other runtime in the team choice and resume now; earlier changes stay in the folder.`,
+    `사용량 한도에 도달해 중단되었습니다 (${failure.reason}). 한도가 풀린 뒤 이어하거나, 팀 선택에서 다른 런타임을 골라 지금 이어하세요. 이전 변경은 폴더에 그대로 남아 있습니다.`,
+  ), { ...extra, failureType: 'limit', resume: { step: failure.step ?? 'build', redo: ctx.redo, note: ctx.say('Resume with the remaining requirements once a runtime has allowance left.', '사용량이 남은 런타임으로 남은 요구사항을 이어서 진행하세요.') } });
   if (failure.type === 'environment') return finish(ctx, 'failed', ctx.say(`Environment problem: ${failure.reason} Fix it (run \`agent-desk doctor\`), then start the run again.`, `환경 문제: ${failure.reason} \`agent-desk doctor\`로 확인해 고친 뒤 다시 실행하세요.`), { ...extra, failureType: 'environment' });
   return finish(ctx, 'failed', failure.reason, { ...extra, failureType: failure.type });
 }
@@ -525,7 +529,7 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
   if (touched.all.length) { ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: 'read-only step changed files' }); return { kind: 'stop', status: 'needs_review', reason: `The review step is read-only but these files changed: ${touched.all.join(', ')}` }; }
   if (failure) {
     ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: failure.kind });
-    if (failure.kind === 'failed' && failure.type !== 'environment') return { kind: 'stop', status: 'needs_review', reason: `The review did not produce a verdict: ${failure.reason}` };
+    if (failure.kind === 'failed' && failure.type !== 'environment' && failure.type !== 'limit') return { kind: 'stop', status: 'needs_review', reason: `The review did not produce a verdict: ${failure.reason}` };
     return { kind: 'stop', status: 'failed', reason: '', failure };
   }
   const verdict = collector.report!;

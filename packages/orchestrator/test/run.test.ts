@@ -110,6 +110,17 @@ test('runtime failure and a missing runtime script end as failed', async () => {
   assert.match(none.reason, /no script left/);
 });
 
+test('a usage limit mid-run stops as resumable, without a retry', async () => {
+  const builder = new FakeRuntime({ scripts: { lead: [script([{ report: buildClassify }])], builder: [script([write('ping.js'), { fail: "You've hit your usage limit. Try again at Mar 20th, 2027 3:36 PM. [usageLimitExceeded]" }])] } });
+  const events: RunEvent[] = [];
+  const result = await runRequest('add ping endpoint with a test', { cwd: tmp(), runtime: builder, onEvent: event => events.push(event), language: 'ko' });
+  assert.equal(result.status, 'interrupted');
+  assert.equal(result.failureType, 'limit');
+  assert.match(result.reason, /사용량 한도에 도달해 중단되었습니다/);
+  assert.equal(result.resume?.step, 'build');
+  assert.equal(events.filter(event => event.type === 'retry').length, 0);
+});
+
 test('abort ends the run as interrupted', async () => {
   const runtime = new FakeRuntime({ scripts: { lead: [script([{ hang: true }])], builder: [] } });
   const controller = new AbortController();

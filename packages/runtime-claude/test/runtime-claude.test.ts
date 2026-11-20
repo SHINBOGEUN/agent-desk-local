@@ -136,3 +136,13 @@ test('doctor reports the executable version or a fix', async () => {
   assert.equal(missing.ok, false);
   assert.match(missing.checks[0]?.fix ?? '', /AGENT_DESK_CLAUDE/);
 });
+
+test('a rejected rate_limit_event marks the failed turn as a usage limit', () => {
+  const t = new TurnTranslator();
+  t.handle({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: 1790578200, rateLimitType: 'five_hour' } });
+  const out = t.finish({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your session limit · resets 3:45pm" }, false);
+  assert.deepEqual(out.at(-1), { type: 'turn_end', status: 'failed', error: "You've hit your session limit · resets 3:45pm [usage limit exceeded: five_hour, resets 2026-09-28T06:50:00.000Z]" });
+  const fine = new TurnTranslator();
+  fine.handle({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', resetsAt: 1790578200, rateLimitType: 'five_hour' } });
+  assert.deepEqual(fine.finish({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'boom' }, false).at(-1), { type: 'turn_end', status: 'failed', error: 'boom' });
+});

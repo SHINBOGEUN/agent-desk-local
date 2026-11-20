@@ -212,3 +212,9 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 메모 탭(프로젝트 설정): 항목 보기·고치기·삭제·추가, 글자 수(2,000자 한도) 표시. 틀린 규칙이 매 실행 지침에 남는 것을 막기 위함. 서버 `POST /api/project/memory`에 `facts`(전체 목록)를 보내면 항목마다 기존 검사(빈 값, 240자, 비밀값 모양, 중복)를 하고 하나라도 실패하면 아무것도 쓰지 않음(`replaceMemory`). 조회 `GET /api/project/memory`. 쓰기는 POST로 둬서 기존 CSRF 토큰 검사를 그대로 받음.
 - 리뷰 제안 체크 → "선택한 N개로 다음 요청 쓰기": 입력창에 "실행 #N의 리뷰 제안 중 아래를 반영해줘." 초안을 채움(실행 번호를 넣어 lead가 read_history로 찾을 수 있게). 바로 실행하지 않고 사용자가 보냄.
 - 미리보기로 화면 확인. 테스트 227개.
+
+## 37차 — 실행 도중 사용량 한도
+- 실행 시작 전에만 사용량을 봐서, 도중에 한도에 걸리면 영어 오류로 실패하고 "rate limit" 문구 때문에 일시 오류로 보고 한 번 더 재시도(같은 벽에 다시 부딪힘)했다.
+- 실패 유형 `limit` 추가: Codex "You've hit your usage limit" / `codexErrorInfo: usageLimitExceeded`(런타임이 메시지 뒤에 붙임), Claude "You've hit your session/weekly/Opus/Sonnet limit · resets …" + stream-json `rate_limit_event`의 `status: "rejected"`(런타임이 창 이름과 재설정 시각을 붙임). "not your usage limit"(서버 일시 제한)은 일시 오류로 유지.
+- `limit`이면 재시도 없이 `interrupted`로 끝나고 이어하기 정보(`resume.step`)를 남김. 안내: 한도가 풀린 뒤 이어하거나, 팀 선택에서 다른 런타임을 골라 지금 이어하기. Codex 한도면 이어하기 시작 때 자동 전환(35차)도 작동.
+- 실제 한도 오류 모양은 공식 문서·공개 사례 기준이며 PC에서 아직 보지 못함. 처음 걸리면 이벤트 기록으로 확인. 테스트 231개.
