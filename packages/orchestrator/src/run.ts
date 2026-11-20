@@ -57,6 +57,7 @@ class RunContext {
   readonly warnings: string[] = [];
   restorePoint?: RestorePointInfo;
   memorySuggestions: string[] = [];
+  leadMemory: string[] = [];
   /** Commands the runtime really ran, per step (checked against builder.commandsRun). */
   readonly commands = new Map<StepKind, ObservedCommand[]>();
   /** Skills whose SKILL.md a session opened: "role:skill" once per step. */
@@ -242,7 +243,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...(ctx.attempts.length > 1 ? { attempts: ctx.attempts } : {}), ...(Object.keys(ctx.modelsUsed).length ? { modelsUsed: ctx.modelsUsed } : {}), ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...((memory => (memory.length ? { memorySuggestions: memory } : {}))([...new Set([...ctx.leadMemory, ...ctx.memorySuggestions])].slice(0, 5))), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...(ctx.attempts.length > 1 ? { attempts: ctx.attempts } : {}), ...(Object.keys(ctx.modelsUsed).length ? { modelsUsed: ctx.modelsUsed } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {
@@ -566,11 +567,12 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
     if (stopped) return stopped;
     const classify = lead.classify!;
     const base = { workflow: classify.workflow, classify, requirements: classify.requirements };
+    // A rule the user stated is offered for the project memory whatever the workflow.
+    ctx.leadMemory = lead.memorySuggestions;
 
     if (classify.workflow === 'answer') {
       ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
       ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'answered without changing files' });
-      ctx.memorySuggestions = lead.memorySuggestions;
       return finish(ctx, 'completed', ctx.say('Answered from the project files. No files were changed.', '프로젝트 파일을 바탕으로 답했습니다. 변경된 파일은 없습니다.'), { ...base, answer: lead.answer! });
     }
     if (classify.workflow === 'build') return await runBuild(ctx, request, classify.requirements, base);

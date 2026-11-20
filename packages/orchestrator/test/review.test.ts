@@ -316,3 +316,14 @@ test('text lost to a wrong encoding is sent back before the review; "??" in code
   assert.match(results[0]?.message ?? '', /page\.html:1: a line you wrote contains "\?\?\?"/);
   assert.doesNotMatch(results[0]?.message ?? '', /code\.js/);
 });
+
+test('a rule stated together with a change is still offered for memory, merged with the builder\'s suggestions', async () => {
+  const runtime = new FakeRuntime({ scripts: {
+    lead: [script([{ report: { ...classify, memorySuggestions: ['Dates are written as YYYY-MM-DD (the user asked)'] } }])],
+    builder: [script([write('feature.txt', 'a'), { report: builderReport(['feature.txt'], { memorySuggestions: ['Tests run with node --test'] }) }])],
+    verifier: [script([{ report: pass }])],
+  } });
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.deepEqual(result.memorySuggestions, ['Dates are written as YYYY-MM-DD (the user asked)', 'Tests run with node --test']);
+});
