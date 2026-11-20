@@ -333,3 +333,21 @@ test('quality log: rate a finished run, read the summary, export CSV and JSON', 
     assert.equal(after.summary.rated, 1);
   } finally { await server.close(); }
 });
+
+test('models: the Codex list from the account, Claude aliases, defaults; a failure is reported, not cached', async () => {
+  let calls = 0;
+  const home = tmp();
+  const server = createServer({ env: { AGENT_DESK_HOME: home }, platform: 'linux', createRuntime: () => new FakeRuntime({ scripts: {} }), port: 0, listCodexModels: async () => { calls++; if (calls === 1) throw new Error('codex offline'); return [{ id: 'gpt-a', label: 'GPT A', isDefault: true }, { id: 'gpt-b', label: 'GPT B', isDefault: false }]; } });
+  const { port } = await server.listen();
+  try {
+    const failed = JSON.parse((await call(port, 'GET', '/api/models')).body) as { codex: { models: unknown[]; reason?: string; default: string | null }; claude: { models: { id: string }[] } };
+    assert.deepEqual(failed.codex.models, []);
+    assert.equal(failed.codex.reason, 'codex offline');
+    assert.deepEqual(failed.claude.models.map(model => model.id), ['opus', 'sonnet', 'haiku']);
+    const ok = JSON.parse((await call(port, 'GET', '/api/models')).body) as { codex: { models: { id: string }[]; default: string | null } };
+    assert.deepEqual(ok.codex.models.map(model => model.id), ['gpt-a', 'gpt-b']);
+    assert.equal(ok.codex.default, 'gpt-a');
+    await call(port, 'GET', '/api/models');
+    assert.equal(calls, 2);
+  } finally { await server.close(); }
+});

@@ -17,6 +17,7 @@ export type FakeAction =
   | { report: unknown }                       // calls tools.submitReport
   | { ask: UserQuestion }                     // calls tools.requestUserInput
   | { history: HistoryQuery }                 // calls tools.readHistory; the answer goes to record.answers
+  | { model: string }                         // the runtime reports the model it runs on
   | { usage: Partial<TokenUsage> }
   | { approval: { kind: string; detail?: unknown } }
   | { fail: string }                          // ends the turn as failed
@@ -110,6 +111,7 @@ export class FakeRuntime implements Runtime {
           yield { type: 'file_change', path: action.deleteFile, kind: 'delete' };
         } else if ('report' in action) record.toolResults.push(await tools.submitReport(action.report));
         else if ('ask' in action) record.answers.push(await tools.requestUserInput(action.ask));
+        else if ('model' in action) yield { type: 'session_info', model: action.model };
         else if ('history' in action) record.answers.push(tools.readHistory ? await tools.readHistory(action.history) : '(no readHistory)');
         else if ('usage' in action) yield { type: 'usage', delta: usageOf(action.usage) };
         else if ('approval' in action) yield { type: 'approval_request', id: `${sessionId}-approval-${record.toolResults.length}`, kind: action.approval.kind, detail: action.approval.detail ?? null };

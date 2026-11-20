@@ -38,7 +38,13 @@ export interface ServerOptions {
   benchDir?: string;
   /** Reads the Codex account rate limits (tests replace it). Default: a short-lived Codex app-server. */
   readRateLimits?: () => Promise<unknown>;
+  /** Lists the models the Codex account can use (tests replace it). Default: "model/list" on a short-lived Codex app-server. */
+  listCodexModels?: () => Promise<ModelChoice[]>;
 }
+
+interface ModelChoice { id: string; label: string; isDefault: boolean }
+// Claude Code takes these aliases for its current models; the default depends on the account, so it is shown as the model last seen running.
+const CLAUDE_MODELS: ModelChoice[] = [{ id: 'opus', label: 'Opus', isDefault: false }, { id: 'sonnet', label: 'Sonnet', isDefault: false }, { id: 'haiku', label: 'Haiku', isDefault: false }];
 
 interface ActiveRun {
   runId: number;
@@ -369,6 +375,7 @@ export function createServer(options: ServerOptions): LocalServer {
       return send(res, 200, result);
     }
     if (method === 'GET' && p === '/api/bench') return send(res, 200, { summaries: options.benchDir ? summarizeBench(options.benchDir) : [] });
+    if (method === 'GET' && p === '/api/models') return send(res, 200, await modelChoices());
     if (method === 'GET' && p === '/api/usage') return send(res, 200, { ...await codexLimits(), claude: claudeUsage() });
     if (method === 'GET' && p === '/api/fs') return send(res, 200, listFolder(url.searchParams.get('path') ?? ''));
     if (method === 'GET' && !p.startsWith('/api/') && options.staticDir) return serveStatic(res, p);
@@ -393,6 +400,34 @@ export function createServer(options: ServerOptions): LocalServer {
       value = limits.status === 'available' ? { limits } : { limits: null, reason: 'Codex did not report usage' };
     } catch (error) { value = { limits: null, reason: error instanceof Error ? error.message : String(error) }; }
     limitsCache = { at: Date.now(), value };
+    return value;
+  }
+
+  let modelsCache: { at: number; value: unknown } | null = null;
+  /** Models to choose per role and runtime. The Codex list comes from the account (cached 10 minutes); the default shown
+   *  is the account default, or else the model last seen running. */
+  async function modelChoices(): Promise<{ codex: { models: ModelChoice[]; default: string | null; reason?: string }; claude: { models: ModelChoice[]; default: string | null } }> {
+    if (modelsCache && Date.now() - modelsCache.at < 600_000) return modelsCache.value as Awaited<ReturnType<typeof modelChoices>>;
+    const last = withStore(store => store.lastModels());
+    let codex: ModelChoice[] = [];
+    let reason: string | undefined;
+    try {
+      let list = options.listCodexModels;
+      if (!list) {
+        const found = locate('codex', options.env, options.platform, readMachineSettings(dir));
+        if (!found) throw new Error('Codex was not found');
+        const runtime = options.createRuntime('codex', found.path) as Runtime & { listModels?: () => Promise<ModelChoice[]> };
+        if (!runtime.listModels) throw new Error('this runtime cannot list models');
+        list = () => runtime.listModels!();
+      }
+      codex = await list();
+      if (!codex.length) reason = 'Codex returned no models';
+    } catch (error) { reason = error instanceof Error ? error.message : String(error); }
+    const value = {
+      codex: { models: codex, default: codex.find(model => model.isDefault)?.id ?? last.codex ?? null, ...(reason ? { reason } : {}) },
+      claude: { models: CLAUDE_MODELS, default: last.claude ?? null },
+    };
+    if (!reason) modelsCache = { at: Date.now(), value };
     return value;
   }
 

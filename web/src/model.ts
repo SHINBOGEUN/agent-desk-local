@@ -346,3 +346,22 @@ export function targetLocation(target: string): { tab: 'config' | 'roles' | 'ski
   if (skill) return { tab: 'skills', id: skill[1]! };
   return null;
 }
+
+/**
+ * Sets one frontmatter key of a role or skill file (value null removes it). The rest of the file, including the
+ * body and the other keys, is kept as written; a file without frontmatter gets one.
+ */
+export function setFrontmatterValue(text: string, key: string, value: string | null): string {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const line = value === null ? null : `${key}: ${value}`;
+  if (!normalized.startsWith('---\n')) return line ? `---\n${line}\n---\n\n${normalized}` : normalized;
+  const end = normalized.indexOf('\n---', 4);
+  if (end < 0) return normalized;
+  const head = normalized.slice(4, end).split('\n');
+  const rest = normalized.slice(end);
+  const index = head.findIndex(entry => entry.replace(/\s+$/, '').startsWith(`${key}:`));
+  if (index >= 0) { if (line) head[index] = line; else head.splice(index, 1); }
+  else if (line) head.push(line);
+  return `---\n${head.filter((entry, i) => entry !== '' || i < head.length - 1).join('\n')}${rest}`;
+}
+

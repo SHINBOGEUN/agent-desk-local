@@ -32,6 +32,12 @@ test('read-only sessions get only read tools; the permission prompt tool is alwa
   assert.ok(!read.includes('--model') || !write.includes('--model'));
 });
 
+test('translator: the init message reports the model once', () => {
+  const translator = new TurnTranslator();
+  assert.deepEqual(translator.handle({ type: 'system', subtype: 'init', model: 'claude-sonnet-x' }), [{ type: 'session_info', model: 'claude-sonnet-x' }]);
+  assert.deepEqual(translator.handle({ type: 'system', subtype: 'init', model: 'claude-sonnet-x' }), []);
+});
+
 test('translator: usage is not double counted and sums to the result total', () => {
   const t = new TurnTranslator();
   const u = (output: number) => ({ input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: output });

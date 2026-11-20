@@ -98,6 +98,7 @@ export class TurnTranslator {
   #emitted: TokenUsage = { ...ZERO };
   #pendingText: string | null = null;
   #toolUses = new Map<string, { name: string; input: Record<string, unknown> }>();
+  #modelReported = false;
 
   #flush(final: boolean, out: RuntimeEvent[]): void {
     if (this.#pendingText !== null && this.#pendingText.trim()) out.push({ type: 'message', text: this.#pendingText, final });
@@ -112,6 +113,10 @@ export class TurnTranslator {
 
   handle(message: Record<string, unknown>): RuntimeEvent[] {
     const out: RuntimeEvent[] = [];
+    if (message.type === 'system' && str(message.subtype) === 'init' && str(message.model) && !this.#modelReported) {
+      this.#modelReported = true;
+      out.push({ type: 'session_info', model: str(message.model) });
+    }
     if (message.type === 'assistant' && isRecord(message.message)) {
       const body = message.message;
       const id = str(body.id);

@@ -118,6 +118,8 @@ export type RuntimeEvent =
   | { type: 'approval_request'; id: string; kind: string; detail: unknown }
   /** Any other tool the model used (a harness tool, a search, a plan update): recorded so every model call can be accounted for. */
   | { type: 'tool'; name: string }
+  /** The model the runtime actually runs this session on (reported once when known). */
+  | { type: 'session_info'; model: string }
   | { type: 'usage'; delta: TokenUsage }
   | { type: 'turn_end'; status: 'completed' | 'interrupted' | 'failed'; error?: string };
 

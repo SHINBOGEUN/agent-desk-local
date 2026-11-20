@@ -295,3 +295,9 @@ test('a decision stated in a question is offered for the project memory by the l
   assert.equal(fixed.status, 'completed');
   assert.match(bad.turns[0]?.toolResults[0]?.message ?? '', /memorySuggestions: up to 5/);
 });
+
+test('the model each role ran on is recorded', async () => {
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ model: 'gpt-lead' }, { report: classify }])], builder: [script([{ model: 'gpt-build' }, write('feature.txt', 'a'), { report: builderReport(['feature.txt']) }])], verifier: [script([{ model: 'claude-review' }, { report: pass }])] } });
+  const result = await run(runtime);
+  assert.deepEqual(result.modelsUsed, { lead: 'gpt-lead', builder: 'gpt-build', verifier: 'claude-review' });
+});

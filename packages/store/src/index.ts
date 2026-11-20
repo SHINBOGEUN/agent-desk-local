@@ -121,8 +121,8 @@ export interface QualityRow {
 
 /** What the dashboard shows as the run's report: the reports the agents submitted, not the raw event log. */
 export function reportOf(result: RunResult): Record<string, unknown> {
-  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint, memorySuggestions, resume, skillsRead, attempts } = result;
-  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined, memorySuggestions, resume, skillsRead, attempts };
+  const { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint, memorySuggestions, resume, skillsRead, attempts, modelsUsed } = result;
+  return { answer, builder, plan, research, review, reviewSkipped, requirements, warnings, unverified, failureType, redo, restorePoint: restorePoint ? { files: restorePoint.files, bytes: restorePoint.bytes } : undefined, memorySuggestions, resume, skillsRead, attempts, modelsUsed };
 }
 
 export class RunStore {
@@ -350,6 +350,24 @@ export class RunStore {
       : `SELECT id FROM (SELECT id, (${terms.map(() => `CASE WHEN ${hit} THEN 1 ELSE 0 END`).join(' + ')}) AS score FROM runs WHERE project = ? AND status != 'running') WHERE score > 0 ORDER BY score DESC, id DESC LIMIT ?`;
     const rows = (mode === 'all' ? this.#db.prepare(sql).all(project, ...params, limit) : this.#db.prepare(sql).all(...params, project, limit)) as { id: number }[];
     return rows.map(row => Number(row.id));
+  }
+
+  /** The model each runtime last reported running on, from recent runs (role -> runtime from the run settings). */
+  lastModels(): Partial<Record<'codex' | 'claude', string>> {
+    const out: Partial<Record<'codex' | 'claude', string>> = {};
+    const rows = this.#db.prepare("SELECT report, settings FROM runs WHERE report LIKE '%modelsUsed%' ORDER BY id DESC LIMIT 50").all() as { report: string; settings: string | null }[];
+    for (const row of rows) {
+      try {
+        const used = (JSON.parse(row.report) as { modelsUsed?: Record<string, string> }).modelsUsed ?? {};
+        const runtimes = (JSON.parse(row.settings ?? '{}') as { runtimes?: Record<string, string> }).runtimes ?? {};
+        for (const [role, model] of Object.entries(used)) {
+          const runtime = runtimes[role];
+          if ((runtime === 'codex' || runtime === 'claude') && !out[runtime]) out[runtime] = model;
+        }
+      } catch { /* old rows */ }
+      if (out.codex && out.claude) break;
+    }
+    return out;
   }
 
   latestBrief(project: string): string | null {

@@ -54,7 +54,25 @@ export function usageTotalOf(notification: RpcNotification): number | null {
 
 // Notifications this runtime understands or that carry nothing to account for. Any other method is recorded
 // once per turn as a "notice:" tool event, so a model call that left no item can still be traced.
-const KNOWN_NOTIFICATIONS = new Set(['thread/tokenUsage/updated', 'item/started', 'item/completed', 'turn/started', 'turn/completed', 'thread/started', 'thread/status/changed', 'account/rateLimits/updated']);
+const KNOWN_NOTIFICATIONS = new Set(['thread/tokenUsage/updated', 'item/started', 'item/completed', 'turn/started', 'turn/completed', 'thread/started', 'thread/status/changed', 'account/rateLimits/updated', 'thread/settings/updated']);
+
+/** The first string under a "model" key, looked up a few levels deep (Codex nests thread settings). */
+export function findModel(value: unknown, depth = 0): string | null {
+  if (!isRecord(value) || depth > 3) return null;
+  if (typeof value.model === 'string' && value.model) return value.model;
+  for (const child of Object.values(value)) { const found = findModel(child, depth + 1); if (found) return found; }
+  return null;
+}
+
+/** Models from Codex "model/list": id, label and which one is the default. Unknown shapes give an empty list. */
+export function modelsFromList(raw: unknown): { id: string; label: string; isDefault: boolean }[] {
+  const record = isRecord(raw) ? raw : {};
+  const list = Array.isArray(record.data) ? record.data : Array.isArray(record.models) ? record.models : [];
+  return list.filter(isRecord).map(item => {
+    const id = str(item.model) || str(item.id);
+    return { id, label: str(item.displayName) || id, isDefault: item.isDefault === true };
+  }).filter(item => item.id);
+}
 
 /** Translates one app-server notification into runtime events. */
 export function eventsFromNotification(notification: RpcNotification): RuntimeEvent[] {
@@ -62,6 +80,10 @@ export function eventsFromNotification(notification: RpcNotification): RuntimeEv
   if (method === 'thread/tokenUsage/updated') {
     const tokenUsage = isRecord(params.tokenUsage) ? params.tokenUsage : {};
     return isRecord(tokenUsage.last) ? [{ type: 'usage', delta: usageFromCodex(tokenUsage.last) }] : [];
+  }
+  if (method === 'thread/settings/updated') {
+    const model = findModel(params);
+    return model ? [{ type: 'session_info', model }] : [];
   }
   if (method === 'item/started' && isRecord(params.item)) {
     // Recorded when it starts: a turn the harness ends right after the report may never send its completion.
@@ -275,6 +297,19 @@ export class CodexRuntime implements Runtime {
       await peer.request('initialize', { clientInfo: { name: 'agent_desk', title: 'Agent Desk', version: '0.2.0' }, capabilities: { experimentalApi: true } }, timeoutMs);
       peer.notify('initialized', {});
       return await peer.request('account/rateLimits/read', {}, timeoutMs);
+    } finally {
+      await peer.close(500);
+    }
+  }
+
+  /** Models this Codex account can use ("model/list" on a short-lived app-server). */
+  async listModels(timeoutMs = 15_000): Promise<{ id: string; label: string; isDefault: boolean }[]> {
+    const child = spawn(this.command, this.#options.serverArgs ?? ['app-server', '--stdio', '-c', 'agents.enabled=false'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const peer = new RpcPeer(child);
+    try {
+      await peer.request('initialize', { clientInfo: { name: 'agent_desk', title: 'Agent Desk', version: '0.2.0' }, capabilities: { experimentalApi: true } }, timeoutMs);
+      peer.notify('initialized', {});
+      return modelsFromList(await peer.request('model/list', {}, timeoutMs));
     } finally {
       await peer.close(500);
     }

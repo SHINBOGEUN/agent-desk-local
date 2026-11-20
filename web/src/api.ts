@@ -46,6 +46,9 @@ export interface RunDetail {
   feedback?: Feedback | null;
 }
 
+export interface ModelChoice { id: string; label: string; isDefault: boolean }
+export interface ModelChoices { codex: { models: ModelChoice[]; default: string | null; reason?: string }; claude: { models: ModelChoice[]; default: string | null } }
+
 export interface Feedback { runId: number; rating: 1 | -1; cause: FeedbackCause | null; target: string | null; note: string | null; at: string }
 export interface QualityRow { runId: number; project: string; request: string; workflow: string | null; status: string; startedAt: string; tokens: number; redo: number; rejectedReports: number; rating: 1 | -1 | null; cause: FeedbackCause | null; target: string | null; note: string | null }
 export interface QualitySummary { runs: number; rated: number; up: number; down: number; approval: number | null; byCause: Record<string, number>; targets: { target: string; count: number }[]; byWorkflow: { workflow: string; runs: number; up: number; down: number }[]; meanTokensUp: number | null; meanTokensDown: number | null; rejectedReports: number; redoRuns: number }
@@ -103,6 +106,7 @@ export const api = {
   addMemory: (project: string, fact: string): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact }),
   deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),
   feedback: (body: { runId: number; rating: 1 | -1 | 0; cause?: FeedbackCause | null; target?: string | null; note?: string | null }): Promise<{ feedback: Feedback | null }> => request('POST', '/api/feedback', body),
+  models: (): Promise<ModelChoices> => request('GET', '/api/models'),
   quality: (project?: string): Promise<{ rows: QualityRow[]; summary: QualitySummary }> => request('GET', `/api/quality${project ? `?project=${encodeURIComponent(project)}` : ''}`),
   qualityExportUrl: (format: 'csv' | 'json', project?: string): string => `/api/quality/export?format=${format}${project ? `&project=${encodeURIComponent(project)}` : ''}`,
   revert: (id: number, yes: boolean): Promise<RevertPlan> => request('POST', `/api/runs/${id}/revert`, { yes }),

@@ -213,3 +213,15 @@ test('history lookup: by run id (same project only) or by words, with what the r
   assert.deepEqual(store.searchRuns(cwd, ['로그인', 'login', 'page'], 5, 'any'), [login.runId]);
   store.close();
 });
+
+test('last models: the model each runtime last ran on, through the role to runtime mapping', async () => {
+  const store = new RunStore(':memory:');
+  const cwd = tmp();
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ model: 'gpt-lead' }, { report: { ...classify, requirements: [{ id: 'R1', text: 'make a.txt', quote: 'make a.txt' }] } }])], builder: [script([{ model: 'gpt-build' }, write('a.txt'), { report: builder }])] } });
+  const runId = store.startRun(cwd, 'make a.txt');
+  const result = await runRequest('make a.txt', { cwd, runtime, review: 'never', onEvent: store.recorder(runId) });
+  store.finishRun(runId, 'make a.txt', result);
+  store.setSettings(runId, { runtimes: { lead: 'codex', builder: 'claude' } });
+  assert.deepEqual(store.lastModels(), { codex: 'gpt-lead', claude: 'gpt-build' });
+  store.close();
+});

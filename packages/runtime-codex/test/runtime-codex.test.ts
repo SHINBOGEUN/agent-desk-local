@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import type { HarnessTools, RuntimeEvent, SessionOptions } from '#core';
-import { CodexRuntime, eventsFromNotification, usageFromCodex, usageTotalOf } from '#runtime-codex';
+import { CodexRuntime, eventsFromNotification, findModel, modelsFromList, usageFromCodex, usageTotalOf } from '#runtime-codex';
 import { ReportCollector } from '#tools-mcp';
 
 const fakeServer = fileURLToPath(new URL('./fake-app-server.ts', import.meta.url));
@@ -30,6 +30,12 @@ test('usage and notification translation', () => {
   assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'agentMessage' } } }), []);
   const update = (total: number) => ({ method: 'thread/tokenUsage/updated', params: { tokenUsage: { last: { inputTokens: 10, outputTokens: 1 }, total: { totalTokens: total } } } });
   assert.equal(usageTotalOf(update(13106)), 13106);
+  // The model a thread runs on is reported once Codex applies the thread settings.
+  assert.deepEqual(eventsFromNotification({ method: 'thread/settings/updated', params: { threadId: 't', threadSettings: { model: 'gpt-x', cwd: 'D:/p' } } }), [{ type: 'session_info', model: 'gpt-x' }]);
+  assert.deepEqual(eventsFromNotification({ method: 'thread/settings/updated', params: { threadId: 't' } }), []);
+  assert.equal(findModel({ a: { b: { model: 'deep' } } }), 'deep');
+  assert.deepEqual(modelsFromList({ data: [{ id: 'm1', model: 'gpt-a', displayName: 'GPT A', isDefault: true }, { id: 'm2', model: 'gpt-b' }, { nothing: 1 }] }), [{ id: 'gpt-a', label: 'GPT A', isDefault: true }, { id: 'gpt-b', label: 'gpt-b', isDefault: false }]);
+  assert.deepEqual(modelsFromList(null), []);
   // Every other item is recorded by name, so each model call can be accounted for.
   assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'mcpToolCall', server: 'agentdesk', tool: 'submit_report' } } }), [{ type: 'tool', name: 'mcpToolCall:agentdesk/submit_report' }]);
   assert.deepEqual(eventsFromNotification({ method: 'item/started', params: { item: { type: 'reasoning' } } }), [{ type: 'tool', name: 'reasoning' }]);
@@ -164,5 +170,11 @@ test('readRateLimits asks a short-lived app-server for the account limits', asyn
   const runtime = runtimeWithFake();
   const raw = await runtime.readRateLimits() as { rateLimitsByLimitId: { codex: { primary: { usedPercent: number } } } };
   assert.equal(raw.rateLimitsByLimitId.codex.primary.usedPercent, 12);
+  await runtime.close();
+});
+
+test('listModels asks a short-lived app-server for the account models', async () => {
+  const runtime = runtimeWithFake();
+  assert.deepEqual(await runtime.listModels(), [{ id: 'gpt-fake', label: 'GPT Fake', isDefault: true }, { id: 'gpt-fake-mini', label: 'GPT Fake Mini', isDefault: false }]);
   await runtime.close();
 });

@@ -62,6 +62,7 @@ class RunContext {
   /** Skills whose SKILL.md a session opened: "role:skill" once per step. */
   readonly skillsRead: { step: StepKind; role: RoleId; skill: string }[] = [];
   readonly attempts: { attempt: number; summary: string; changedFiles: string[]; sentBackFor: string[] }[] = [];
+  readonly modelsUsed: Partial<Record<RoleId, string>> = {};
   readonly ledger = new UsageLedger();
   readonly startedAt = Date.now();
   readonly #turns = new Map<string, number>();
@@ -182,6 +183,7 @@ async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: 
       }
     }
     if (event.type === 'usage') { ctx.ledger.record(step, turn, event.delta); ctx.enforceBudget(ctx.redo, true); }
+    if (event.type === 'session_info') ctx.modelsUsed[role] ??= event.model;
     if (event.type === 'turn_end') outcome = { status: event.status, ...(event.error ? { error: event.error } : {}) };
   }
   if (ctx.currentTurn === current) ctx.currentTurn = null;
@@ -240,7 +242,7 @@ async function withTransientRetry(ctx: RunContext, step: StepKind, attempt: () =
 function finish(ctx: RunContext, status: RunStatus, reason: string, extra: Partial<RunResult> = {}): RunResult {
   ctx.emit({ type: 'run_finished', status, reason });
   const usage: TokenUsage = ctx.ledger.total();
-  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...(ctx.attempts.length > 1 ? { attempts: ctx.attempts } : {}), ...extra };
+  return { status, reason, requirements: [], gates: ctx.gates, redo: ctx.redo, warnings: ctx.warnings, unverified: [], usage, usageEntries: ctx.ledger.entries(), events: ctx.events, ...(ctx.restorePoint ? { restorePoint: ctx.restorePoint } : {}), ...(ctx.memorySuggestions.length ? { memorySuggestions: ctx.memorySuggestions } : {}), ...(ctx.skillsRead.length ? { skillsRead: ctx.skillsRead } : {}), ...(ctx.attempts.length > 1 ? { attempts: ctx.attempts } : {}), ...(Object.keys(ctx.modelsUsed).length ? { modelsUsed: ctx.modelsUsed } : {}), ...extra };
 }
 
 function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<RunResult> = {}): RunResult {

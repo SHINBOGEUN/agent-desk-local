@@ -66,6 +66,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   const message = JSON.parse(line);
   if (message.method === undefined && message.id !== undefined) { serverRequests.get(message.id)?.(message.result); return; }
   if (message.method === 'initialize') send({ id: message.id, result: { userAgent: 'fake-codex/0' } });
+  else if (message.method === 'model/list') send({ id: message.id, result: { data: [{ id: 'a', model: 'gpt-fake', displayName: 'GPT Fake', isDefault: true }, { id: 'b', model: 'gpt-fake-mini', displayName: 'GPT Fake Mini', isDefault: false }] } });
   else if (message.method === 'account/rateLimits/read') send({ id: message.id, result: { rateLimitsByLimitId: { codex: { primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1800000000 } } } } });
   else if (message.method === 'thread/start') {
     config = message.params.config;

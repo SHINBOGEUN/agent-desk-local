@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { benchSets, changePercent, minutesUntil, roleSummary, applyEvents, buildTimeline, emptyTimeline, formatDuration, formatTokens, gateLabel, gateSummary, statusTone, stepDurationMs } from '../src/model.ts';
-import { acceptImage, asList, readFrontmatter, benchSetOf, modeNeeds, projectList, projectName, sameProject, feedbackTargets, targetLocation } from '../src/model.ts';
+import { acceptImage, asList, readFrontmatter, benchSetOf, modeNeeds, projectList, projectName, sameProject, feedbackTargets, targetLocation, setFrontmatterValue } from '../src/model.ts';
 import type { StoredEvent } from '../src/model.ts';
 
 const at = (second: number) => `2026-11-16T09:00:${String(second).padStart(2, '0')}.000Z`;
@@ -152,4 +152,15 @@ test('a 👎 offers the files that fit its cause, the ones this run touched firs
   assert.deepEqual(targetLocation('.agent-desk/skills/html-output/SKILL.md'), { tab: 'skills', id: 'html-output' });
   assert.equal(targetLocation('.agent-desk/agents/hacker.md'), null);
   assert.equal(targetLocation('src/app.js'), null);
+});
+
+test('role settings change one frontmatter key and keep the rest of the file', () => {
+  const file = '---\ndescription: Builds.\naccess: workspace-write\neffort: high\nskills: [a]\n---\n\n- Use pnpm.\n';
+  assert.equal(setFrontmatterValue(file, 'effort', 'low'), '---\ndescription: Builds.\naccess: workspace-write\neffort: low\nskills: [a]\n---\n\n- Use pnpm.\n');
+  assert.equal(setFrontmatterValue(file, 'model-codex', 'gpt-a'), '---\ndescription: Builds.\naccess: workspace-write\neffort: high\nskills: [a]\nmodel-codex: gpt-a\n---\n\n- Use pnpm.\n');
+  assert.equal(setFrontmatterValue(setFrontmatterValue(file, 'model-codex', 'gpt-a'), 'model-codex', null), file);
+  assert.equal(setFrontmatterValue(file, 'effort', null), '---\ndescription: Builds.\naccess: workspace-write\nskills: [a]\n---\n\n- Use pnpm.\n');
+  assert.equal(setFrontmatterValue('just rules', 'effort', 'low'), '---\neffort: low\n---\n\njust rules');
+  assert.equal(setFrontmatterValue('---\r\neffort: high\r\n---\r\nbody', 'effort', 'medium'), '---\neffort: medium\n---\nbody');
+  assert.equal(setFrontmatterValue('---\nunclosed', 'effort', 'low'), '---\nunclosed');
 });

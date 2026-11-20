@@ -89,6 +89,8 @@ export interface RunResult {
   skillsRead?: { step: StepKind; role: RoleId; skill: string }[];
   /** Build attempts when there was a REDO: what each attempt reported and why it was sent back. The final report alone can read as if nothing was done. */
   attempts?: { attempt: number; summary: string; changedFiles: string[]; sentBackFor: string[] }[];
+  /** The model each role's runtime reported it ran on. */
+  modelsUsed?: Partial<Record<RoleId, string>>;
   plan?: PlanReport;
   research?: ResearchReport[];
   review?: VerifierReport;

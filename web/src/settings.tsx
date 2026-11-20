@@ -4,10 +4,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from './api.ts';
-import type { ProjectFiles } from './api.ts';
+import type { ModelChoice, ModelChoices, ProjectFiles } from './api.ts';
 import { useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
-import { asList, projectName, readFrontmatter } from './model.ts';
+import { asList, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
 import { errorText } from './util.ts';
 
 const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
@@ -44,22 +44,58 @@ function Editor({ label, file, initial, exists, busy, onSave, extra }: { label: 
   );
 }
 
-function RoleSummary({ text, skills, runtime }: { text: string; skills: ProjectFiles['skills']; runtime: string | undefined }) {
+function ModelSelect({ value, choices, fallback, busy, onPick, label }: { value: string; choices: ModelChoice[]; fallback: string; busy: boolean; onPick: (value: string | null) => void; label: string }) {
   const { t } = useI18n();
+  const ids = choices.map(choice => choice.id);
+  return (
+    <select aria-label={label} value={value} disabled={busy} onChange={event => onPick(event.target.value || null)}>
+      <option value="">{fallback}</option>
+      {value && !ids.includes(value) ? <option value={value}>{t('currentValue', { value })}</option> : null}
+      {choices.map(choice => <option key={choice.id} value={choice.id}>{choice.label !== choice.id ? `${choice.label} (${choice.id})` : choice.id}</option>)}
+    </select>
+  );
+}
+
+const EFFORTS = ['low', 'medium', 'high'];
+
+function RoleSummary({ text, skills, runtime, models, busy, onSet }: { text: string; skills: ProjectFiles['skills']; runtime: string | undefined; models: ModelChoices | null; busy: boolean; onSet: (key: string, value: string | null) => Promise<Status> }) {
+  const { t } = useI18n();
+  const [note, setNote] = useState<Status>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setNote(null); }, [text]);
   const { data } = readFrontmatter(text);
   const linked = asList(data.skills);
-  const value = (key: string): string => (typeof data[key] === 'string' ? data[key] as string : t('defaultValue'));
+  const value = (key: string): string => (typeof data[key] === 'string' ? data[key] as string : '');
+  const set = async (key: string, next: string | null): Promise<void> => { setSaving(true); try { setNote(await onSet(key, next)); } finally { setSaving(false); } };
+  const fallback = (name: string | null | undefined): string => (name ? t('defaultModel', { name }) : t('defaultModelUnknown'));
+  const disabled = busy || saving;
   return (
     <div className="role-summary">
       {typeof data.description === 'string' ? <p>{data.description}</p> : null}
       <dl>
         <dt>{t('roleRuntime')}</dt><dd>{runtime ? <span className={`rt rt-${runtime}`}>{runtime === 'codex' ? 'Codex' : runtime === 'claude' ? 'Claude' : runtime}</span> : t('defaultValue')}</dd>
-        <dt>{t('roleAccess')}</dt><dd>{value('access')}</dd>
-        <dt>{t('roleEffort')}</dt><dd>{value('effort')}</dd>
-        <dt>{t('roleModel')}</dt><dd>{[data['model-codex'] ? `Codex: ${String(data['model-codex'])}` : '', data['model-claude'] ? `Claude: ${String(data['model-claude'])}` : '', typeof data.model === 'string' ? data.model : ''].filter(Boolean).join(' · ') || t('defaultValue')}</dd>
+        <dt>{t('roleAccess')}</dt><dd>{value('access') || t('defaultValue')}</dd>
+        <dt>{t('roleEffort')}</dt>
+        <dd>
+          <select aria-label={t('roleEffort')} value={value('effort')} disabled={disabled} onChange={event => { void set('effort', event.target.value || null); }}>
+            <option value="">{t('defaultValue')}</option>
+            {EFFORTS.map(effort => <option key={effort} value={effort}>{effort}</option>)}
+          </select>
+        </dd>
+        <dt className={runtime === 'codex' ? 'active-runtime' : ''}>{t('roleModelCodex')}</dt>
+        <dd className={runtime === 'codex' ? 'active-runtime' : ''}>
+          <ModelSelect label={t('roleModelCodex')} value={value('model-codex')} choices={models?.codex.models ?? []} fallback={fallback(models?.codex.default)} busy={disabled} onPick={next => { void set('model-codex', next); }} />
+          {models?.codex.reason ? <div className="editor-note warn">{t('modelsUnavailable', { reason: models.codex.reason })}</div> : null}
+        </dd>
+        <dt className={runtime === 'claude' ? 'active-runtime' : ''}>{t('roleModelClaude')}</dt>
+        <dd className={runtime === 'claude' ? 'active-runtime' : ''}>
+          <ModelSelect label={t('roleModelClaude')} value={value('model-claude')} choices={models?.claude.models ?? []} fallback={fallback(models?.claude.default)} busy={disabled} onPick={next => { void set('model-claude', next); }} />
+        </dd>
+        {value('model') ? <><dt>{t('roleModel')}</dt><dd className="editor-note">{t('roleGenericModel', { value: value('model') })}</dd></> : null}
         <dt>{t('roleSkills')}</dt>
         <dd>{linked.length ? <ul className="skill-refs">{linked.map(id => { const skill = skills.find(entry => entry.id === id); const description = skill ? readFrontmatter(skill.text).data.description : undefined; return <li key={id}><strong>{id}</strong>{typeof description === 'string' ? <span>{description}</span> : <span className="error">{t('skillMissing')}</span>}</li>; })}</ul> : t('noRoleSkills')}</dd>
       </dl>
+      {note ? <p className={`editor-note ${note.kind === 'error' ? 'error' : note.kind === 'warn' ? 'warn' : ''}`} role="status">{note.kind === 'error' ? note.lines.join(' ') : note.kind === 'warn' ? note.lines.join(' ') : t('roleSettingSaved')}</p> : null}
     </div>
   );
 }
@@ -73,6 +109,8 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
   const [skill, setSkill] = useState<string | null>(initialSkill ?? null);
   const [newId, setNewId] = useState('');
   const [draftNote, setDraftNote] = useState('');
+  const [models, setModels] = useState<ModelChoices | null>(null);
+  useEffect(() => { api.models().then(setModels).catch(() => setModels(null)); }, []);
 
   const load = useCallback(async (): Promise<void> => {
     try { const loaded = await api.files(project); setFiles(loaded); setError(''); setSkill(current => current ?? loaded.skills[0]?.id ?? null); } catch (caught) { setError(errorText(caught)); }
@@ -126,7 +164,8 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
           <div className="split">
             <nav className="split-list">{ROLES.map(name => <button key={name} className={role === name ? 'on' : ''} onClick={() => setRole(name)}><span className={`avatar avatar-${name}`} aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>{name}{runtimes?.[name] ? <span className={`rt rt-${runtimes[name]}`}>{runtimes[name] === 'codex' ? 'Codex' : 'Claude'}</span> : null}</button>)}</nav>
             <div className="split-main">
-              <RoleSummary text={files.roles[role]?.text ?? ''} skills={files.skills} runtime={runtimes?.[role]} />
+              <RoleSummary text={files.roles[role]?.text ?? ''} skills={files.skills} runtime={runtimes?.[role]} models={models} busy={busy}
+                onSet={(key, next) => save('role', role)(setFrontmatterValue(files.roles[role]?.text ?? '', key, next))} />
               <Editor label={role} file={`.agent-desk/agents/${role}.md`} initial={files.roles[role]?.text ?? ''} exists={files.roles[role]?.exists ?? false} busy={busy} onSave={save('role', role)} />
             </div>
           </div>
