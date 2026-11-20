@@ -327,3 +327,17 @@ test('init drafts a boundary-check skill only for projects with both a UI and an
   put(project, '.agent-desk/skills/boundary-check/triggers.json', JSON.stringify(skill.triggers));
   assert.deepEqual(checkSkills(project, {}).findings.filter(finding => finding.level !== 'info' || !/not listed/.test(finding.message)), []);
 });
+
+test('replaceMemory rewrites the list, and writes nothing when one entry is bad', async () => {
+  const { replaceMemory, loadMemory, memoryFacts, addMemory } = await import('#project');
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'mem-'));
+  assert.ok(addMemory(project, 'first').ok);
+  assert.deepEqual(replaceMemory(project, ['  first  edited ', '', 'second']), { ok: true, chars: '# Project memory\n\n- first edited\n- second'.length });
+  assert.deepEqual(memoryFacts(loadMemory(project)), ['first edited', 'second']);
+  const bad = replaceMemory(project, ['ok', 'OK', 'x'.repeat(241)]);
+  assert.equal(bad.ok, false);
+  if (!bad.ok) { assert.match(bad.errors[0]!, /entry 2: same as entry 1/); assert.match(bad.errors[1]!, /entry 3: .*240/); }
+  assert.deepEqual(memoryFacts(loadMemory(project)), ['first edited', 'second']);
+  assert.ok(replaceMemory(project, []).ok);
+  assert.deepEqual(memoryFacts(loadMemory(project)), []);
+});

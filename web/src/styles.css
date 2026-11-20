@@ -409,3 +409,20 @@ select { padding-right: 28px; }
 /* role settings: the model row for the runtime this role runs on stands out */
 .role-summary select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--panel); color: var(--ink); max-width: 100%; }
 .role-summary dt.active-runtime { color: var(--accent); font-weight: 600; }
+
+/* Memory tab: one editable line per entry. */
+.settings > .memory-editor { overflow: auto; }
+.memory-list { margin: 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 6px; }
+.memory-list li { padding-left: 4px; }
+.memory-list li::marker { color: var(--muted); font-size: 12px; }
+
+.memory-list li > input { width: calc(100% - 64px); margin-right: 8px; background: var(--paper); }
+.memory-add { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.memory-add input { flex: 1; }
+
+/* Review suggestions picked into the next request. */
+.follow-up { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.pick-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pick-list label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.pick-list input { margin-top: 3px; padding: 0; }
+.follow-up > button { align-self: flex-start; }

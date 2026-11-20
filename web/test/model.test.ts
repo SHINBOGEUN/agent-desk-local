@@ -179,3 +179,11 @@ test('review nested in a build closes only itself, and build time leaves out the
   assert.equal(summary.find(entry => entry.role === 'builder')!.durationMs, 11_000);
   assert.equal(summary.find(entry => entry.role === 'verifier')!.durationMs, 5_000);
 });
+
+test('memory size and follow-up drafts', async () => {
+  const { memoryChars, followUpRequest } = await import('../src/model.ts');
+  assert.equal(memoryChars([]), '# Project memory'.length);
+  assert.equal(memoryChars(['  a  b ', '']), '# Project memory\n\n- a b'.length);
+  assert.equal(followUpRequest(56, ['add novalidate', 'test  blank titles'], 'ko'), '실행 #56의 리뷰 제안 중 아래를 반영해줘.\n- add novalidate\n- test blank titles');
+  assert.match(followUpRequest(3, ['x'], 'en'), /^Apply these review suggestions from run #3:\n- x$/);
+});

@@ -7,11 +7,11 @@ import { api, ApiError } from './api.ts';
 import type { ModelChoice, ModelChoices, ProjectFiles } from './api.ts';
 import { useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
-import { asList, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
+import { asList, memoryChars, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
 import { errorText } from './util.ts';
 
 const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
-type Tab = 'config' | 'roles' | 'skills';
+type Tab = 'config' | 'roles' | 'skills' | 'memory';
 type Status = { kind: 'ok' | 'warn' | 'error'; lines: string[] } | null;
 
 function Editor({ label, file, initial, exists, busy, onSave, extra }: { label: string; file: string; initial: string; exists: boolean; busy: boolean; onSave: (text: string) => Promise<Status>; extra?: React.ReactNode }) {
@@ -100,6 +100,63 @@ function RoleSummary({ text, skills, runtime, models, busy, onSet }: { text: str
   );
 }
 
+/** The project memory as a list: every entry goes into lead and builder instructions, so wrong ones are fixed here. */
+function MemoryTab({ project, busy, onSaved }: { project: string; busy: boolean; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [saved, setSaved] = useState<string[] | null>(null);
+  const [facts, setFacts] = useState<string[]>([]);
+  const [max, setMax] = useState(2000);
+  const [fresh, setFresh] = useState('');
+  const [status, setStatus] = useState<Status>(null);
+  const [saving, setSaving] = useState(false);
+  const load = useCallback(async (): Promise<void> => {
+    try { const loaded = await api.memory(project); setSaved(loaded.facts); setFacts(loaded.facts); setMax(loaded.maxChars); } catch (caught) { setStatus({ kind: 'error', lines: [errorText(caught)] }); }
+  }, [project]);
+  useEffect(() => { void load(); }, [load]);
+  if (!saved) return status ? <p className="error">{status.lines[0]}</p> : null;
+  const dirty = JSON.stringify(facts) !== JSON.stringify(saved);
+  const used = memoryChars(facts);
+  const save = async (): Promise<void> => {
+    setSaving(true);
+    try { await api.saveMemory(project, facts); await load(); onSaved(); setStatus({ kind: 'ok', lines: [] }); }
+    catch (caught) { setStatus({ kind: 'error', lines: caught instanceof ApiError && caught.details.length ? caught.details : [errorText(caught)] }); }
+    finally { setSaving(false); }
+  };
+  const add = (): void => { const fact = fresh.trim(); if (!fact) return; setFacts(list => [...list, fact]); setFresh(''); setStatus(null); };
+  return (
+    <div className="editor memory-editor">
+      <div className="editor-head">
+        <strong>{t('tabMemory')}</strong>
+        <span className="mono editor-file">.agent-desk/memory.md</span>
+        <span className={`badge ${used > max ? 'tone-danger' : used > max * 0.8 ? 'tone-warning' : 'tone-neutral'}`}>{t('memoryUsed', { used, max })}</span>
+        {dirty ? <span className="badge tone-warning">{t('unsaved')}</span> : null}
+        <button className="send push" disabled={busy || saving || !dirty} onClick={() => { void save(); }}>{t('save')}</button>
+      </div>
+      <p className="editor-note">{t('memoryHint')}</p>
+      {facts.length ? (
+        <ol className="memory-list">
+          {facts.map((fact, index) => (
+            <li key={index}>
+              <input value={fact} maxLength={240} aria-label={t('memoryEntry', { n: index + 1 })} onChange={event => { const next = event.target.value; setFacts(list => list.map((item, at) => (at === index ? next : item))); setStatus(null); }} />
+              <button className="ghost danger" onClick={() => { setFacts(list => list.filter((_, at) => at !== index)); setStatus(null); }}>{t('memoryDelete')}</button>
+            </li>
+          ))}
+        </ol>
+      ) : <p className="editor-note">{t('memoryEmpty')}</p>}
+      <div className="memory-add">
+        <input value={fresh} maxLength={240} placeholder={t('memoryPlaceholder')} aria-label={t('memoryAdd')} onChange={event => setFresh(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') add(); }} />
+        <button disabled={!fresh.trim()} onClick={add}>{t('memoryAdd')}</button>
+      </div>
+      {status ? (
+        <div className={`editor-status ${status.kind}`} role="status">
+          <strong>{status.kind === 'error' ? t('saveFailed') : t('saved')}</strong>
+          {status.lines.length ? <ul>{status.lines.map((line, index) => <li key={index}>{line}</li>)}</ul> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function SettingsPanel({ project, runtimes, busy, initialRole, initialSkill, onClose, onSaved }: { project: string; runtimes: Record<string, string> | null; busy: boolean; initialRole?: string | undefined; initialSkill?: string | undefined; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
   const [files, setFiles] = useState<ProjectFiles | null>(null);
@@ -149,7 +206,7 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
         <header className="settings-head">
           <h2>{t('settingsTitle', { name: projectName(project) })}</h2>
           <nav className="settings-tabs" role="tablist">
-            {(['config', 'roles', 'skills'] as const).map(name => <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'on' : ''} onClick={() => setTab(name)}>{t(name === 'config' ? 'tabConfig' : name === 'roles' ? 'tabRoles' : 'tabSkills')}</button>)}
+            {(['config', 'roles', 'skills', 'memory'] as const).map(name => <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'on' : ''} onClick={() => setTab(name)}>{t(name === 'config' ? 'tabConfig' : name === 'roles' ? 'tabRoles' : name === 'skills' ? 'tabSkills' : 'tabMemory')}</button>)}
           </nav>
           <button className="ghost push" onClick={onClose}>{t('close')}</button>
         </header>
@@ -158,7 +215,9 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
         {files && (!files.config.exists || missingRoles.length) ? (
           <div className="drafts"><p>{t('draftsHint')}</p><button disabled={busy} onClick={() => { void drafts(); }}>{t('createDrafts')}</button>{draftNote ? <span className="editor-note">{draftNote}</span> : null}</div>
         ) : null}
-        {!files ? null : tab === 'config' ? (
+        {tab === 'memory' ? (
+          <MemoryTab project={project} busy={busy} onSaved={onSaved} />
+        ) : !files ? null : tab === 'config' ? (
           <Editor label={t('tabConfig')} file=".agent-desk/config.json" initial={files.config.text} exists={files.config.exists} busy={busy} onSave={save('config')} />
         ) : tab === 'roles' ? (
           <div className="split">

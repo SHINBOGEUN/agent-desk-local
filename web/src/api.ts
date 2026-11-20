@@ -104,6 +104,8 @@ export const api = {
   saveFile: (body: { project: string; kind: 'config' | 'role' | 'skill'; id?: string; text?: string; remove?: boolean }): Promise<SaveReply> => request('POST', '/api/project/files', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact }),
+  memory: (project: string): Promise<{ facts: string[]; maxChars: number }> => request('GET', `/api/project/memory?path=${encodeURIComponent(project)}`),
+  saveMemory: (project: string, facts: string[]): Promise<{ ok: boolean; chars: number }> => request('POST', '/api/project/memory', { project, facts }),
   deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),
   feedback: (body: { runId: number; rating: 1 | -1 | 0; cause?: FeedbackCause | null; target?: string | null; note?: string | null }): Promise<{ feedback: Feedback | null }> => request('POST', '/api/feedback', body),
   models: (): Promise<ModelChoices> => request('GET', '/api/models'),

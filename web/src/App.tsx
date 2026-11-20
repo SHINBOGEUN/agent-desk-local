@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { api, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
-import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, feedbackTargets, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs, targetLocation } from './model.ts';
+import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, feedbackTargets, followUpRequest, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs, targetLocation } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Key, Lang } from './i18n.ts';
@@ -125,7 +125,25 @@ function List({ title, items }: { title: string; items: string[] }) {
   return <div className="section"><div className="label">{title}</div><ul>{items.map((item, index) => <li key={index}>{item}</li>)}</ul></div>;
 }
 
-function ReportCard({ report, workflow }: { report: RunReport | null; workflow: string | null }) {
+/** Review suggestions with checkboxes: the picked ones become a draft of the next request (sent only when the user sends it). */
+function Suggestions({ items, onFollowUp }: { items: string[]; onFollowUp?: ((items: string[]) => void) | undefined }) {
+  const { t } = useI18n();
+  const [picked, setPicked] = useState<boolean[]>(() => items.map(() => true));
+  if (!items.length) return null;
+  if (!onFollowUp) return <List title={t('suggestions')} items={items} />;
+  const chosen = items.filter((_, index) => picked[index]);
+  return (
+    <div className="follow-up">
+      <div className="label">{t('suggestions')}</div>
+      <ul className="pick-list">{items.map((item, index) => (
+        <li key={index}><label><input type="checkbox" checked={picked[index] ?? false} onChange={event => { const on = event.target.checked; setPicked(list => list.map((value, at) => (at === index ? on : value))); }} /><span>{item}</span></label></li>
+      ))}</ul>
+      <button disabled={!chosen.length} onClick={() => onFollowUp(chosen)}>{t('followUpDraft', { n: chosen.length })}</button>
+    </div>
+  );
+}
+
+function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null; workflow: string | null; onFollowUp?: ((items: string[]) => void) | undefined }) {
   const { t } = useI18n();
   if (!report) return <p className="msg-meta">{t('reportMissing')}</p>;
   const { answer, builder, plan, research, review } = report;
@@ -160,7 +178,7 @@ function ReportCard({ report, workflow }: { report: RunReport | null; workflow: 
       {research?.length ? <div className="section"><div className="label">{t('researchTitle')}</div>{research.map((entry, index) => <div key={index}><strong>{entry.angle}</strong><p className="prose">{entry.summary}</p><List title={t('sources')} items={entry.sources} /></div>)}</div> : null}
       {review ? <div className="section"><div className="label">{t('reviewTitle')} <span className={`badge tone-${review.verdict === 'PASS' ? 'success' : 'danger'}`}>{['PASS', 'REDO', 'BLOCKED'].includes(review.verdict) ? t(`verdict_${review.verdict}` as 'verdict_PASS') : review.verdict}</span></div>
         {review.blocking.length ? <ul>{review.blocking.map((finding, index) => <li key={index}>{finding.file ? <span className="mono">{finding.file}{finding.line ? `:${finding.line}` : ''} </span> : null}{finding.reason}<div className="muted">{finding.evidence}</div></li>)}</ul> : null}
-        <List title={t('suggestions')} items={review.optional} /></div> : null}
+        <Suggestions items={review.optional} onFollowUp={onFollowUp} /></div> : null}
       {report.reviewSkipped ? <p className="muted">{t('reviewSkipped', { reason: report.reviewSkipped })}</p> : null}
       <List title={t('unverifiedTitle')} items={report.unverified ?? []} />
       <List title={t('warningsTitle')} items={report.warnings ?? []} />
@@ -416,9 +434,9 @@ function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, o
 }
 
 /** One request and the team's reply. Live runs follow the event stream; finished runs load their saved report. */
-function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished, projectSkills, onOpenTarget }: {
+function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished, projectSkills, onOpenTarget, onFollowUp }: {
   run: RunRow; live: boolean; canResume: boolean; onResume: (run: RunRow) => void; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
-  projectSkills: string[]; onOpenTarget: (target: string) => void;
+  projectSkills: string[]; onOpenTarget: (target: string) => void; onFollowUp: (runId: number, items: string[]) => void;
 }) {
   const { t, lang } = useI18n();
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -491,7 +509,7 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
           ))}
           {pending && live ? <QuestionBlock pending={pending} /> : null}
           {!running && detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
-          {!running ? <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} /> : null}
+          {!running ? <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} /> : null}
           {!running && summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
           {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
           {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
@@ -587,6 +605,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
     setSettingsFor(where.tab === 'roles' ? { role: where.id! } : where.tab === 'skills' ? { skill: where.id! } : {});
   };
   const fileInput = useRef<HTMLInputElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
   const mode = modes[project] ?? '';
   const setMode = (next: RuntimeMode | ''): void => { const all = { ...modes, [project]: next }; setModes(all); write(MODES_KEY, JSON.stringify(all)); };
@@ -681,7 +700,8 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
           ) : shown.map(run => (
             <Exchange key={run.id} run={run} live={active?.runId === run.id} canResume={active === null} onResume={run => { void resume(run); }}
               onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }}
-              projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} />
+              projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget}
+              onFollowUp={(runId, items) => { const draft = followUpRequest(runId, items, lang); setText(current => (current.trim() ? `${current.trimEnd()}\n\n${draft}` : draft)); requestAnimationFrame(() => { composer.current?.focus(); composer.current?.scrollIntoView({ block: 'nearest' }); }); }} />
           ))}
           <div ref={threadEnd} />
         </div>
@@ -700,7 +720,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
             <button className="attach" disabled={blocked || answering} aria-label={t('attachImage')} title={t('attachImage')} onClick={() => fileInput.current?.click()}>
               <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M13.5 6.5 7.8 12.2a1.6 1.6 0 0 0 2.3 2.3l6-6a3.2 3.2 0 0 0-4.5-4.5l-6 6a4.8 4.8 0 0 0 6.8 6.8l5.1-5.1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </button>
-            <textarea value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} onPaste={onPaste} rows={2} disabled={blocked}
+            <textarea ref={composer} value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} onPaste={onPaste} rows={2} disabled={blocked}
               placeholder={answering ? t('composerAnswer') : t('composerPlaceholder')} aria-label={answering ? t('composerAnswer') : t('composerPlaceholder')} />
             <button className="send" disabled={blocked || busy || !text.trim()} onClick={() => { void submit(); }}>{answering ? t('sendAnswer') : t('sendRequest')}</button>
           </div>

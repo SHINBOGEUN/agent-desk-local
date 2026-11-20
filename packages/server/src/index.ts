@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { addMemory, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
+import { addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
 import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
@@ -362,9 +362,19 @@ export function createServer(options: ServerOptions): LocalServer {
     if (method === 'POST' && p === '/api/project/memory') {
       const body = await readBody(req);
       const project = projectDir(body.project);
+      // "facts": the whole edited list (dashboard memory tab). "fact": one entry added from a run.
+      if (body.facts !== undefined) {
+        if (!Array.isArray(body.facts) || !body.facts.every((fact: unknown) => typeof fact === 'string')) throw new HttpError(400, 'facts must be a list of strings');
+        const replaced = replaceMemory(project, body.facts as string[]);
+        return send(res, replaced.ok ? 200 : 422, replaced.ok ? { ok: true, chars: replaced.chars } : { ok: false, errors: replaced.errors, error: replaced.errors[0] });
+      }
       const result = addMemory(project, typeof body.fact === 'string' ? body.fact : '');
       if (!result.ok) throw new HttpError(400, result.error);
       return send(res, 200, { ok: true });
+    }
+    if (method === 'GET' && p === '/api/project/memory') {
+      const project = projectDir(url.searchParams.get('path'));
+      return send(res, 200, { facts: memoryFacts(loadMemory(project)), maxChars: MEMORY_MAX_CHARS });
     }
     if (method === 'POST' && p === '/api/pick-folder') {
       const body = await readBody(req);

@@ -289,6 +289,15 @@ test('runs carry images, record their settings, can be resumed; project files an
     assert.equal(JSON.parse(fs.readFileSync(path.join(project, '.agent-desk', 'config.json'), 'utf8')).mode, 'codex');
     assert.equal((await call(port, 'POST', '/api/project/memory', { token, body: { project, fact: 'Port is 3000' } })).status, 200);
     assert.match(fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8'), /Port is 3000/);
+    const listed = JSON.parse((await call(port, 'GET', `/api/project/memory?path=${encodeURIComponent(project)}`)).body) as { facts: string[]; maxChars: number };
+    assert.deepEqual(listed.facts, ['Port is 3000']);
+    assert.equal(listed.maxChars, 2000);
+    assert.equal((await call(port, 'POST', '/api/project/memory', { token, body: { project, facts: ['Port is 4000', 'Dates are YYYY-MM-DD'] } })).status, 200);
+    assert.deepEqual(JSON.parse((await call(port, 'GET', `/api/project/memory?path=${encodeURIComponent(project)}`)).body).facts, ['Port is 4000', 'Dates are YYYY-MM-DD']);
+    const refused = await call(port, 'POST', '/api/project/memory', { token, body: { project, facts: ['api_key = abc123'] } });
+    assert.equal(refused.status, 422);
+    assert.match(refused.body, /entry 1: this looks like a secret/);
+    assert.equal((await call(port, 'POST', '/api/project/memory', { body: { project, facts: [] } })).status, 403);
     const init = JSON.parse((await call(port, 'POST', '/api/project/init', { token, body: { project } })).body) as { written: string[] };
     assert.ok(init.written.includes('.agent-desk/agents/builder.md'));
     const usage = JSON.parse((await call(port, 'GET', '/api/usage')).body) as { claude: { last5h: number } };

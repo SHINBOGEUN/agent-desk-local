@@ -368,3 +368,15 @@ export function setFrontmatterValue(text: string, key: string, value: string | n
   return `---\n${head.filter((entry, i) => entry !== '' || i < head.length - 1).join('\n')}${rest}`;
 }
 
+
+/** Characters memory.md would hold for these entries; the server's limit counts the same text. */
+export function memoryChars(facts: readonly string[]): number {
+  const kept = facts.map(fact => fact.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  return `# Project memory\n\n${kept.map(fact => `- ${fact}\n`).join('')}`.trim().length;
+}
+
+/** A follow-up request built from review suggestions the user picked; it names the run so the lead can look it up. */
+export function followUpRequest(runId: number, items: readonly string[], lang: 'en' | 'ko'): string {
+  const lines = items.map(item => `- ${item.replace(/\s+/g, ' ').trim()}`).join('\n');
+  return lang === 'ko' ? `실행 #${runId}의 리뷰 제안 중 아래를 반영해줘.\n${lines}` : `Apply these review suggestions from run #${runId}:\n${lines}`;
+}
