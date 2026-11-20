@@ -187,3 +187,12 @@ test('memory size and follow-up drafts', async () => {
   assert.equal(followUpRequest(56, ['add novalidate', 'test  blank titles'], 'ko'), '실행 #56의 리뷰 제안 중 아래를 반영해줘.\n- add novalidate\n- test blank titles');
   assert.match(followUpRequest(3, ['x'], 'en'), /^Apply these review suggestions from run #3:\n- x$/);
 });
+
+test('memory save errors map to dashboard messages', async () => {
+  const { memoryError } = await import('../src/model.ts');
+  assert.deepEqual(memoryError('entry 2: same as entry 1'), { key: 'memErrSame', values: { n: '2', other: '1' } });
+  assert.deepEqual(memoryError('entry 3: a memory entry is at most 240 characters; this one has 241'), { key: 'memErrLong', values: { n: '3', max: '240', has: '241' } });
+  assert.equal(memoryError('entry 1: this looks like a secret; memory is committed to git, so do not store secrets in it')?.key, 'memErrSecret');
+  assert.deepEqual(memoryError('memory would be 2100 characters; the limit is 2000'), { key: 'memErrTotal', values: { has: '2100', max: '2000' } });
+  assert.equal(memoryError('something else'), null);
+});
