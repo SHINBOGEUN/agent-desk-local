@@ -164,3 +164,18 @@ test('role settings change one frontmatter key and keep the rest of the file', (
   assert.equal(setFrontmatterValue('---\r\neffort: high\r\n---\r\nbody', 'effort', 'medium'), '---\neffort: medium\n---\nbody');
   assert.equal(setFrontmatterValue('---\nunclosed', 'effort', 'low'), '---\nunclosed');
 });
+
+test('review nested in a build closes only itself, and build time leaves out the review', () => {
+  const nested: StoredEvent[] = [
+    { seq: 1, at: at(0), type: 'step_started', data: { type: 'step_started', step: 'build', role: 'builder' } },
+    { seq: 2, at: at(10), type: 'step_started', data: { type: 'step_started', step: 'review', role: 'verifier' } },
+    { seq: 3, at: at(15), type: 'step_finished', data: { type: 'step_finished', step: 'review', ok: true, detail: 'verdict PASS' } },
+    { seq: 4, at: at(16), type: 'step_finished', data: { type: 'step_finished', step: 'build', ok: true, detail: 'gates passed' } },
+  ];
+  const timeline = buildTimeline(nested);
+  assert.equal(timeline.steps[0]!.detail, 'gates passed');
+  assert.equal(timeline.steps[1]!.detail, 'verdict PASS');
+  const summary = roleSummary(timeline, []);
+  assert.equal(summary.find(entry => entry.role === 'builder')!.durationMs, 11_000);
+  assert.equal(summary.find(entry => entry.role === 'verifier')!.durationMs, 5_000);
+});

@@ -80,7 +80,8 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
     const event = stored.data;
     switch (event.type) {
       case 'step_started': copy().push(emptyStep(event.step, event.role, stored.at)); break;
-      case 'step_finished': { const step = current(); if (step) { step.finishedAt = stored.at; step.ok = event.ok; step.detail = event.detail; } break; }
+      // Review runs inside the build step, so "build finished" comes after "review finished": close the open step of that name.
+      case 'step_finished': { const list = copy(); const step = list.findLast(item => item.step === event.step && !item.finishedAt) ?? current(); if (step) { step.finishedAt = stored.at; step.ok = event.ok; step.detail = event.detail; } break; }
       case 'gate': current()?.gates.push(event.result); break;
       case 'redo': current()?.redo.push({ attempt: event.attempt, mode: event.mode, reasons: event.reasons }); break;
       case 'retry': current()?.retries.push(event.reason); break;
@@ -186,7 +187,9 @@ export function roleSummary(timeline: Timeline, usage: UsageRowView[]): RoleStat
   for (const step of timeline.steps) {
     const entry = stat(step.role);
     entry.steps++;
-    entry.durationMs += stepDurationMs(step) ?? 0;
+    // A step that ran inside another (review inside build) counts only for its own role.
+    const inner = timeline.steps.filter(other => other !== step && other.finishedAt && step.finishedAt && other.startedAt >= step.startedAt && other.finishedAt <= step.finishedAt);
+    entry.durationMs += Math.max(0, (stepDurationMs(step) ?? 0) - inner.reduce((sum, other) => sum + (stepDurationMs(other) ?? 0), 0));
     if (!roleOf.has(step.step)) roleOf.set(step.step, step.role);
   }
   for (const row of usage) {
