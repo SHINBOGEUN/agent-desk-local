@@ -47,6 +47,15 @@ export interface RunDetail {
 }
 
 export interface ModelChoice { id: string; label: string; isDefault: boolean }
+export interface NoteLinkView { target: string; resolved: string | null }
+export interface NoteRow { path: string; title: string; folder: string; tags: string[]; links: NoteLinkView[]; status: string | null; type: string | null; mtimeMs: number }
+export interface NotesInfo {
+  root: string;
+  /** The vault's path inside the project, or null when it lives elsewhere (a central Obsidian vault). */
+  inProject: string | null;
+  notes: NoteRow[];
+  graph: { nodes: { id: string; title: string; folder: string; kind: 'note' | 'missing'; links: number }[]; edges: { from: string; to: string }[] };
+}
 export interface ModelChoices { codex: { models: ModelChoice[]; default: string | null; reason?: string }; claude: { models: ModelChoice[]; default: string | null } }
 
 export interface Feedback { runId: number; rating: 1 | -1; cause: FeedbackCause | null; target: string | null; note: string | null; at: string }
@@ -103,7 +112,13 @@ export const api = {
   files: (project: string): Promise<ProjectFiles> => request('GET', `/api/project/files?path=${encodeURIComponent(project)}`),
   saveFile: (body: { project: string; kind: 'config' | 'role' | 'skill'; id?: string; text?: string; remove?: boolean }): Promise<SaveReply> => request('POST', '/api/project/files', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
-  addMemory: (project: string, fact: string): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact }),
+  addMemory: (project: string, fact: string, runId?: number, lang?: 'en' | 'ko'): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact, ...(runId !== undefined ? { runId } : {}), ...(lang ? { lang } : {}) }),
+  notes: (project: string): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}`),
+  readNote: (project: string, path: string): Promise<{ path: string; text: string; mtimeMs: number; backlinks: string[] }> => request('GET', `/api/notes/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`),
+  writeNote: (body: { project: string; path: string; text: string; create?: boolean; expectedMtimeMs?: number }): Promise<{ path: string; mtimeMs: number }> => request('POST', '/api/notes/write', body),
+  moveNote: (project: string, path: string, to: string): Promise<{ path: string }> => request('POST', '/api/notes/move', { project, path, to }),
+  trashNote: (project: string, path: string): Promise<{ ok: boolean }> => request('POST', '/api/notes/trash', { project, path }),
+  approveNote: (project: string, path: string): Promise<{ decision: string; fact: string }> => request('POST', '/api/notes/approve', { project, path }),
   memory: (project: string): Promise<{ facts: string[]; maxChars: number }> => request('GET', `/api/project/memory?path=${encodeURIComponent(project)}`),
   saveMemory: (project: string, facts: string[]): Promise<{ ok: boolean; chars: number }> => request('POST', '/api/project/memory', { project, facts }),
   deleteHistory: (body: { project: string } | { benchWorkspaces: true }): Promise<{ deleted: number }> => request('POST', '/api/history/delete', body),

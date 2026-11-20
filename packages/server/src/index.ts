@@ -11,9 +11,9 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
+import { approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
-import { dataDirectory, executeRun, locate, normalizeRateLimits, readMachineSettings } from '#service';
+import { dataDirectory, executeRun, findRunNote, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
@@ -212,6 +212,7 @@ export function createServer(options: ServerOptions): LocalServer {
     if (!path.isAbsolute(project) || !fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new HttpError(400, 'path must be an existing absolute folder');
     return project;
   };
+  const vaultOf = (project: string): string => vaultRoot(project, loadProject(project).config.vault);
   const notWhileRunning = (project: string): void => { if (active && active.project === project) throw new HttpError(409, 'another run is active; wait for it to finish'); };
 
   function streamEvents(req: http.IncomingMessage, res: http.ServerResponse, runId: number, url: URL): void {
@@ -368,9 +369,56 @@ export function createServer(options: ServerOptions): LocalServer {
         const replaced = replaceMemory(project, body.facts as string[]);
         return send(res, replaced.ok ? 200 : 422, replaced.ok ? { ok: true, chars: replaced.chars } : { ok: false, errors: replaced.errors, error: replaced.errors[0] });
       }
-      const result = addMemory(project, typeof body.fact === 'string' ? body.fact : '');
-      if (!result.ok) throw new HttpError(400, result.error);
+      notWhileRunning(project);
+      const fact = typeof body.fact === 'string' ? body.fact : '';
+      const runId = typeof body.runId === 'number' && Number.isInteger(body.runId) ? body.runId : undefined;
+      // With a vault, the fact is added through its inbox note (or a new decision note), so it keeps its source.
+      const vault = vaultOf(project);
+      const recorded = recordDecision(project, vault, fact, { ...(runId !== undefined ? { run: runId } : {}), ...(runId !== undefined && findRunNote(vault, runId) ? { runNote: findRunNote(vault, runId)! } : {}), lang: body.lang === 'ko' ? 'ko' : 'en' });
+      if (!recorded.ok) { const result = addMemory(project, fact); if (!result.ok) throw new HttpError(400, result.error); }
       return send(res, 200, { ok: true });
+    }
+    if (method === 'GET' && p === '/api/notes') {
+      const project = projectDir(url.searchParams.get('path'));
+      const vault = vaultOf(project);
+      initVault(vault);
+      const notes = listNotes(vault);
+      const rel = path.relative(project, vault).split(path.sep).join('/');
+      return send(res, 200, { root: vault, inProject: rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : null, notes: notes.map(note => ({ path: note.path, title: note.title, folder: note.folder, tags: note.tags, links: note.links, status: typeof note.frontmatter.status === 'string' ? note.frontmatter.status : null, type: typeof note.frontmatter.type === 'string' ? note.frontmatter.type : null, mtimeMs: note.mtimeMs })), graph: buildGraph(notes) });
+    }
+    if (method === 'GET' && p === '/api/notes/read') {
+      const project = projectDir(url.searchParams.get('project'));
+      const vault = vaultOf(project);
+      const read = readNote(vault, url.searchParams.get('path') ?? '');
+      if ('error' in read) throw new HttpError(read.error === 'note not found' ? 404 : 400, read.error);
+      const backlinks = listNotes(vault).filter(note => note.links.some(link => link.resolved === read.path)).map(note => note.path);
+      return send(res, 200, { ...read, backlinks });
+    }
+    if (method === 'POST' && (p === '/api/notes/write' || p === '/api/notes/move' || p === '/api/notes/trash' || p === '/api/notes/approve')) {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      const vault = vaultOf(project);
+      const notePath = typeof body.path === 'string' ? body.path : '';
+      if (p === '/api/notes/write') {
+        if (typeof body.text !== 'string') throw new HttpError(400, 'text must be a string');
+        const written = writeNote(vault, notePath, body.text, { ...(body.create === true ? { create: true } : {}), ...(typeof body.expectedMtimeMs === 'number' ? { expectedMtimeMs: body.expectedMtimeMs } : {}) });
+        if (!written.ok) throw new HttpError(written.conflict ? 409 : 400, written.error);
+        return send(res, 200, written);
+      }
+      if (p === '/api/notes/move') {
+        const moved = moveNote(vault, notePath, typeof body.to === 'string' ? body.to : '');
+        if (!moved.ok) throw new HttpError(400, moved.error);
+        return send(res, 200, moved);
+      }
+      if (p === '/api/notes/trash') {
+        const gone = trashNote(vault, notePath);
+        if (!gone.ok) throw new HttpError(400, gone.error);
+        return send(res, 200, { ok: true });
+      }
+      notWhileRunning(project);
+      const approved = approveProposal(project, vault, notePath);
+      if (!approved.ok) throw new HttpError(400, approved.error);
+      return send(res, 200, approved);
     }
     if (method === 'GET' && p === '/api/project/memory') {
       const project = projectDir(url.searchParams.get('path'));

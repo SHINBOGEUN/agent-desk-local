@@ -360,3 +360,34 @@ test('models: the Codex list from the account, Claude aliases, defaults; a failu
     assert.equal(calls, 2);
   } finally { await server.close(); }
 });
+
+test('notes: list with graph, read with backlinks, write with conflict check, move, trash, approve', async () => {
+  const project = tmp();
+  const { server, port, token } = await start(new FakeRuntime({ scripts: {} }));
+  const enc = encodeURIComponent(project);
+  try {
+    const empty = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { inProject: string; notes: unknown[] };
+    assert.equal(empty.inProject, '.agent-desk/notes');
+    assert.deepEqual(empty.notes, []);
+    assert.equal((await call(port, 'POST', '/api/notes/write', { body: { project, path: 'specs/A.md', text: 'x' } })).status, 403);
+    assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'specs/Login.md', text: '# Login\nSee [[Polite]] and [[src/app.mjs]]', create: true } })).status, 200);
+    assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'decisions/Polite.md', text: 'Polite errors', create: true } })).status, 200);
+    assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: '../escape.md', text: 'x' } })).status, 400);
+    const listed = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { notes: { path: string }[]; graph: { nodes: { id: string }[]; edges: unknown[] } };
+    assert.equal(listed.notes.length, 2);
+    assert.equal(listed.graph.edges.length, 2);
+    const read = JSON.parse((await call(port, 'GET', `/api/notes/read?project=${enc}&path=${encodeURIComponent('decisions/Polite.md')}`)).body) as { text: string; mtimeMs: number; backlinks: string[] };
+    assert.deepEqual(read.backlinks, ['specs/Login.md']);
+    const file = path.join(project, '.agent-desk', 'notes', 'decisions', 'Polite.md');
+    fs.utimesSync(file, new Date(), new Date(Date.now() + 5000));
+    assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'decisions/Polite.md', text: 'changed', expectedMtimeMs: read.mtimeMs } })).status, 409);
+    assert.equal((await call(port, 'POST', '/api/notes/move', { token, body: { project, path: 'specs/Login.md', to: 'specs/Sign in.md' } })).status, 200);
+    assert.equal((await call(port, 'POST', '/api/notes/trash', { token, body: { project, path: 'specs/Sign in.md' } })).status, 200);
+    assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'inbox/Dates.md', text: '---\ntype: memory\nstatus: proposed\nfact: "Dates are YYYY-MM-DD"\n---\n# Dates', create: true } })).status, 200);
+    const approved = JSON.parse((await call(port, 'POST', '/api/notes/approve', { token, body: { project, path: 'inbox/Dates.md' } })).body) as { decision: string };
+    assert.equal(approved.decision, 'decisions/Dates.md');
+    assert.match(fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8'), /Dates are YYYY-MM-DD/);
+    assert.equal((await call(port, 'POST', '/api/project/memory', { token, body: { project, fact: 'Port is 3000', runId: 1, lang: 'ko' } })).status, 200);
+    assert.ok(fs.existsSync(path.join(project, '.agent-desk', 'notes', 'decisions', 'Port is 3000.md')));
+  } finally { await server.close(); }
+});

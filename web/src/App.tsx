@@ -8,6 +8,7 @@ import { detectLanguage, durationText, I18nContext, remainingText, serverLines, 
 import type { I18n, Key, Lang } from './i18n.ts';
 import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
+import { NotesView } from './notes.tsx';
 import { errorText } from './util.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
@@ -381,7 +382,7 @@ function ProjectButton({ project, on, live, onSelect, onForget }: { project: Pro
   );
 }
 
-type Tab = 'chat' | 'bench' | 'quality';
+type Tab = 'chat' | 'bench' | 'quality' | 'notes';
 
 function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
   projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void;
@@ -422,6 +423,7 @@ function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, o
       <button className="open-project" disabled={opening} onClick={onOpen}>+ {t('openProject')}</button>
       {opening ? <p className="side-empty">{t('dialogOpen')}</p> : null}
       <div className="side-foot">
+        <button className={`side-link${tab === 'notes' ? ' on' : ''}`} onClick={() => onTab('notes')}>{t('tabNotes')}</button>
         <button className={`side-link${tab === 'quality' ? ' on' : ''}`} onClick={() => onTab('quality')}>{t('tabQuality')}</button>
         <button className={`side-link${tab === 'bench' ? ' on' : ''}`} onClick={() => onTab('bench')}>{t('tabBench')}</button>
         <span className="lang" role="group" aria-label={t('language')}>
@@ -514,7 +516,7 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
           {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
           {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
           {!running && (status === 'needs_review' || status === 'failed') ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
-          {!running && detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} /> : null}
+          {!running && detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
           {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
           {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
           {!running && detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
@@ -526,11 +528,11 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
   );
 }
 
-function MemorySuggestions({ project, facts }: { project: string; facts: string[] }) {
-  const { t } = useI18n();
+function MemorySuggestions({ project, facts, runId }: { project: string; facts: string[]; runId: number }) {
+  const { t, lang } = useI18n();
   const [added, setAdded] = useState<Record<number, boolean>>({});
   const [error, setError] = useState('');
-  const add = async (index: number, fact: string): Promise<void> => { try { await api.addMemory(project, fact); setAdded(current => ({ ...current, [index]: true })); setError(''); } catch (caught) { setError(errorText(caught)); } };
+  const add = async (index: number, fact: string): Promise<void> => { try { await api.addMemory(project, fact, runId, lang); setAdded(current => ({ ...current, [index]: true })); setError(''); } catch (caught) { setError(errorText(caught)); } };
   return (
     <div className="memory-box">
       <strong>{t('memoryTitle')}</strong>
@@ -830,6 +832,7 @@ export function App() {
           {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
           {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>
             : tab === 'quality' ? <div className="bench-page"><QualityView project={project} /></div>
+            : tab === 'notes' ? <NotesView key={project ?? ''} project={project || null} busy={active !== null && project !== '' && sameProject(active.project, project)} />
             : project ? <ChatView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
               : <Welcome onOpen={() => { void open(); }} opening={opening} />}
         </main>

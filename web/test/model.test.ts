@@ -198,3 +198,20 @@ test('server messages read in Korean, keeping where the problem is', async () =>
   assert.equal(koServerText('config.limits.redo: expected a non-negative number'), 'config.limits.redo: 0 이상의 숫자여야 합니다.');
   assert.equal(koServerText('something new'), 'something new');
 });
+
+test('graph layout is deterministic, stays inside the box and pulls linked notes together', async () => {
+  const { layoutGraph, neighbours, insertLink, hashUnit } = await import('../src/graph.ts');
+  const nodes = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id, links: 1 }));
+  const edges = [{ from: 'a', to: 'b' }, { from: 'c', to: 'd' }];
+  const first = layoutGraph(nodes, edges, { width: 400, height: 300 });
+  const again = layoutGraph(nodes, edges, { width: 400, height: 300 });
+  assert.deepEqual([...first.entries()], [...again.entries()]);
+  for (const point of first.values()) { assert.ok(point.x >= 24 && point.x <= 376); assert.ok(point.y >= 24 && point.y <= 276); }
+  const gap = (x: string, y: string) => Math.hypot(first.get(x)!.x - first.get(y)!.x, first.get(x)!.y - first.get(y)!.y);
+  assert.ok(gap('a', 'b') < gap('a', 'e'));
+  assert.deepEqual([...neighbours('a', edges)], ['b']);
+  assert.deepEqual(insertLink('see  here', 4, 4, 'Login'), { text: 'see [[Login]] here', cursor: 13 });
+  assert.deepEqual(insertLink('replace me', 0, 7, 'X'), { text: '[[X]] me', cursor: 5 });
+  assert.ok(hashUnit('x') >= 0 && hashUnit('x') < 1);
+  assert.equal(layoutGraph([], [], { width: 10, height: 10 }).size, 0);
+});
