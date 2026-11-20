@@ -190,7 +190,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       ...(memory ? { projectMemory: memory } : {}),
       ...(history ? { projectHistory: history } : {}),
       readHistory: query => historyLookup(store, project, query),
-      ...(ask ? { askUser: ask, confirmPlan: async plan => (await ask({ question: language === 'ko' ? `계획:\n${planText(plan)}\n\n이 계획으로 구현을 시작할까요?` : `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase() !== 'stop' } : {}),
+      ...(ask ? { askUser: ask, confirmPlan: async plan => !['stop', '중지'].includes((await ask(language === 'ko' ? { question: `계획:\n${planText(plan, 'ko')}\n\n이 계획으로 구현을 시작할까요?`, options: ['진행', '중지'] } : { question: `Plan:\n${planText(plan)}\n\nStart building with this plan?`, options: ['proceed', 'stop'] })).trim().toLowerCase()) } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(previousBrief ? { previousBrief } : {}),
       ...(config.ignore ? { ignore: config.ignore } : {}),

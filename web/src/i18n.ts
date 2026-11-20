@@ -1,4 +1,5 @@
-// English and Korean UI text. Product and technical names (Agent Desk, Codex, Claude, G1-G5, lead/builder/...) stay in English.
+// English and Korean UI text. Product and technical names (Agent Desk, Codex, Claude, lead/builder/...) stay in English.
+// Gates are shown by what they check (gate_G1...), with the G number only in the tooltip.
 
 import { createContext, useContext } from 'react';
 
@@ -41,6 +42,17 @@ const en = {
   gateFailed: 'failed',
   gateSkipped: 'skipped',
   gateFailedTimes: 'failed x{n}',
+  gateAttempt: 'try {n}',
+  gate_G1: 'Report format',
+  gate_G2: 'Changed files',
+  gate_G3: 'Tests',
+  gate_G4: 'Independent review',
+  gate_G5: 'Budget',
+  gateHelp_G1: 'The agent report follows the required shape and rules (evidence, quotes).',
+  gateHelp_G2: 'The files that really changed match the files the report lists; read-only steps changed nothing.',
+  gateHelp_G3: 'The harness ran the project checks (tests) itself.',
+  gateHelp_G4: 'A reviewer in a separate session judged the change against the requirements.',
+  gateHelp_G5: 'The run stayed within the token and time limits.',
   needsAnswer: 'The team is waiting for your answer',
   yourAnswer: 'Your answer',
   send: 'Send',
@@ -337,6 +349,17 @@ const ko: Record<Key, string> = {
   gateFailed: '실패',
   gateSkipped: '건너뜀',
   gateFailedTimes: '실패 {n}회',
+  gateAttempt: '{n}차',
+  gate_G1: '보고서 형식',
+  gate_G2: '변경 파일 확인',
+  gate_G3: '테스트',
+  gate_G4: '독립 리뷰',
+  gate_G5: '예산',
+  gateHelp_G1: '에이전트 보고서가 정해진 형식과 규칙(근거, 인용)을 지켰는지 확인합니다.',
+  gateHelp_G2: '실제로 바뀐 파일과 보고서에 적은 파일이 같은지, 읽기 전용 단계에서는 아무것도 바뀌지 않았는지 확인합니다.',
+  gateHelp_G3: '하네스가 프로젝트의 검증 명령(테스트)을 직접 실행한 결과입니다.',
+  gateHelp_G4: '다른 세션의 검토자가 요구사항과 대조해 판정한 결과입니다.',
+  gateHelp_G5: '토큰과 시간 한도 안에서 끝났는지 확인합니다.',
   needsAnswer: '팀이 답을 기다리고 있습니다',
   yourAnswer: '답변 입력',
   send: '보내기',

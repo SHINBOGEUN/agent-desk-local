@@ -38,9 +38,17 @@ function Badge({ status }: { status: string }) {
   return <span className={`badge tone-${statusTone(status)}`}>{known ? t(`status_${status}` as 'status_running') : status}</span>;
 }
 
+/** A gate by what it checks ("테스트"), with its G number and a one-line explanation for the tooltip. */
+function useGateName(): { name: (gate: string) => string; help: (gate: string) => string } {
+  const { t } = useI18n();
+  const known = (gate: string): boolean => /^G[1-5]$/.test(gate);
+  return { name: gate => (known(gate) ? t(`gate_${gate}` as Key) : gate), help: gate => (known(gate) ? `${gate}: ${t(`gateHelp_${gate}` as Key)}` : gate) };
+}
+
 function useGateLabel(): (gate: GateResult) => string {
   const { t } = useI18n();
-  return gate => `${gate.attempt ? `${gate.gate}#${gate.attempt}` : gate.gate} ${gate.skipped ? t('gateSkipped') : gate.ok ? t('gateOk') : t('gateFailed')}`;
+  const { name } = useGateName();
+  return gate => `${name(gate.gate)}${gate.attempt ? ` (${t('gateAttempt', { n: gate.attempt + 1 })})` : ''} ${gate.skipped ? t('gateSkipped') : gate.ok ? t('gateOk') : t('gateFailed')}`;
 }
 
 function FolderPicker({ start, onPick, onClose }: { start: string; onPick: (path: string) => void; onClose: () => void }) {
@@ -91,6 +99,7 @@ function FolderPicker({ start, onPick, onClose }: { start: string; onPick: (path
 function TimelineView({ timeline }: { timeline: Timeline }) {
   const { t, lang } = useI18n();
   const gateLabel = useGateLabel();
+  const gateName = useGateName();
   if (!timeline.steps.length) return <p className="muted">{t('waitingStep')}</p>;
   return (
     <ol className="timeline">
@@ -99,7 +108,7 @@ function TimelineView({ timeline }: { timeline: Timeline }) {
           <div className="step-head"><strong>{step.step}</strong><span className="muted">{step.role}{stepDurationMs(step) !== null ? `, ${durationText(lang, stepDurationMs(step)!)}` : ''}</span>
             {step.ok === false ? <span className="badge tone-danger">{t('failedTag')}</span> : null}</div>
           <div className="chips">
-            {step.gates.map((gate, gateIndex) => <span key={gateIndex} className={`badge tone-${gate.skipped ? 'neutral' : gate.ok ? 'success' : 'danger'}`}>{gateLabel(gate)}</span>)}
+            {step.gates.map((gate, gateIndex) => <span key={gateIndex} title={gateName.help(gate.gate)} className={`badge tone-${gate.skipped ? 'neutral' : gate.ok ? 'success' : 'danger'}`}>{gateLabel(gate)}</span>)}
             {step.commands ? <span className="badge tone-neutral">{t('commands', { n: step.commands })}</span> : null}
             {step.fileChanges ? <span className="badge tone-neutral">{t('fileChanges', { n: step.fileChanges })}</span> : null}
           </div>
@@ -441,6 +450,7 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
   const resumable = !running && (status === 'interrupted' || ((status === 'needs_review' || status === 'failed') && detail?.report?.resume !== undefined));
   const current = timeline.steps.at(-1);
   const summary = gateSummary(timeline);
+  const gateName = useGateName();
   const time = new Date(run.startedAt).toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   const revert = async (yes: boolean): Promise<void> => {
     try {
@@ -482,7 +492,7 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
           {pending && live ? <QuestionBlock pending={pending} /> : null}
           {!running && detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
           {!running ? <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} /> : null}
-          {!running && summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{entry.gate} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
+          {!running && summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
           {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
           {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
           {!running && (status === 'needs_review' || status === 'failed') ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}

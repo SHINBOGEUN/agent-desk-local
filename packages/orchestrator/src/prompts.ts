@@ -90,8 +90,9 @@ export function reportReminder(what: string): string {
   return `You ended the turn without an accepted report. Submit ${what} now with \`submit_report\`. If you could not finish, say so in the report instead of leaving it out.`;
 }
 
-export function planText(plan: PlanReport): string {
-  return [`Approach: ${plan.approach}`, `Steps:\n${plan.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}`, plan.files.length ? `Expected files: ${plan.files.join(', ')}` : '', plan.risks.length ? `Risks: ${plan.risks.join('; ')}` : ''].filter(Boolean).join('\n');
+export function planText(plan: PlanReport, language: 'en' | 'ko' = 'en'): string {
+  const label = language === 'ko' ? { approach: '접근', steps: '단계', files: '바뀔 파일', risks: '위험' } : { approach: 'Approach', steps: 'Steps', files: 'Expected files', risks: 'Risks' };
+  return [`${label.approach}: ${plan.approach}`, `${label.steps}:\n${plan.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}`, plan.files.length ? `${label.files}: ${plan.files.join(', ')}` : '', plan.risks.length ? `${label.risks}:\n${plan.risks.map(risk => `- ${risk}`).join('\n')}` : ''].filter(Boolean).join('\n');
 }
 
 export function planPrompt(request: string, requirements: Requirement[]): string {
