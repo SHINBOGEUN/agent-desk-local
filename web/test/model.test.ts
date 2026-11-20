@@ -188,11 +188,13 @@ test('memory size and follow-up drafts', async () => {
   assert.match(followUpRequest(3, ['x'], 'en'), /^Apply these review suggestions from run #3:\n- x$/);
 });
 
-test('memory save errors map to dashboard messages', async () => {
-  const { memoryError } = await import('../src/model.ts');
-  assert.deepEqual(memoryError('entry 2: same as entry 1'), { key: 'memErrSame', values: { n: '2', other: '1' } });
-  assert.deepEqual(memoryError('entry 3: a memory entry is at most 240 characters; this one has 241'), { key: 'memErrLong', values: { n: '3', max: '240', has: '241' } });
-  assert.equal(memoryError('entry 1: this looks like a secret; memory is committed to git, so do not store secrets in it')?.key, 'memErrSecret');
-  assert.deepEqual(memoryError('memory would be 2100 characters; the limit is 2000'), { key: 'memErrTotal', values: { has: '2100', max: '2000' } });
-  assert.equal(memoryError('something else'), null);
+test('server messages read in Korean, keeping where the problem is', async () => {
+  const { koServerText } = await import('../src/server-text.ts');
+  assert.equal(koServerText('entry 2: same as entry 1'), '2번 항목: 1번 항목과 같습니다.');
+  assert.equal(koServerText('entry 1: this looks like a secret; memory is committed to git, so do not store secrets in it'), '1번 항목: 비밀번호나 키처럼 보입니다. 메모는 git에 올라가므로 비밀값을 넣지 마세요.');
+  assert.equal(koServerText('review-checklist: description does not say when NOT to use it; models skip or over-use skills without an exclusion'), 'review-checklist: description에 쓰지 말아야 할 때가 없습니다. 제외 조건이 없으면 모델이 스킬을 건너뛰거나 과하게 씁니다.');
+  assert.equal(koServerText('role:builder: absolute rules without a reason; say why so the model can judge edge cases'), 'role:builder: 이유 없는 절대 규칙이 있습니다. 이유를 적어야 모델이 예외 상황을 판단할 수 있습니다.');
+  assert.equal(koServerText('.agent-desk/agents/lead.md: effort must be "low", "medium" or "high"'), '.agent-desk/agents/lead.md: effort는 "low", "medium", "high" 중 하나여야 합니다.');
+  assert.equal(koServerText('config.limits.redo: expected a non-negative number'), 'config.limits.redo: 0 이상의 숫자여야 합니다.');
+  assert.equal(koServerText('something new'), 'something new');
 });

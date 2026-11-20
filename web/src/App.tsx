@@ -4,7 +4,7 @@ import { api, followRun } from './api.ts';
 import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
 import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, feedbackTargets, followUpRequest, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs, targetLocation } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
-import { detectLanguage, durationText, I18nContext, remainingText, setActiveLang, translate, useI18n } from './i18n.ts';
+import { detectLanguage, durationText, I18nContext, remainingText, serverLines, setActiveLang, translate, useI18n } from './i18n.ts';
 import type { I18n, Key, Lang } from './i18n.ts';
 import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
@@ -243,8 +243,8 @@ function ProjectPanel({ project }: { project: string }) {
   return (
     <details className="project-info">
       <summary>{t('projectInfo')}</summary>
-      {info.errors.map((message, index) => <p key={`e${index}`} className="error">{message}</p>)}
-      {info.warnings.map((message, index) => <p key={`w${index}`} className="muted">{message}</p>)}
+      {serverLines(info.errors).map((message, index) => <p key={`e${index}`} className="error">{message}</p>)}
+      {serverLines(info.warnings).map((message, index) => <p key={`w${index}`} className="muted">{message}</p>)}
       <dl>
         <dt>{t('cfgRuntime')}</dt><dd>{info.mode ? t(`mode_${info.mode}` as Key) : t('cfgPrimaryReview', { primary: config.runtimes?.primary ?? t('cfgDefault'), review: config.runtimes?.review ?? config.runtimes?.primary ?? t('cfgDefault') })}</dd>
         <dt>{t('cfgReview')}</dt><dd>{config.review ?? t('cfgDefault')}</dd>

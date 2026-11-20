@@ -380,18 +380,3 @@ export function followUpRequest(runId: number, items: readonly string[], lang: '
   const lines = items.map(item => `- ${item.replace(/\s+/g, ' ').trim()}`).join('\n');
   return lang === 'ko' ? `실행 #${runId}의 리뷰 제안 중 아래를 반영해줘.\n${lines}` : `Apply these review suggestions from run #${runId}:\n${lines}`;
 }
-
-/** Memory save errors from the server, as keys and values the dashboard can show in its language; null when unknown. */
-export function memoryError(line: string): { key: 'memErrSame' | 'memErrLong' | 'memErrSecret' | 'memErrEmpty' | 'memErrTotal'; values: Record<string, string> } | null {
-  let m = /^entry (\d+): same as entry (\d+)$/.exec(line);
-  if (m) return { key: 'memErrSame', values: { n: m[1]!, other: m[2]! } };
-  m = /^entry (\d+): a memory entry is at most (\d+) characters; this one has (\d+)$/.exec(line);
-  if (m) return { key: 'memErrLong', values: { n: m[1]!, max: m[2]!, has: m[3]! } };
-  m = /^entry (\d+): this looks like a secret/.exec(line);
-  if (m) return { key: 'memErrSecret', values: { n: m[1]! } };
-  m = /^entry (\d+): the fact is empty$/.exec(line);
-  if (m) return { key: 'memErrEmpty', values: { n: m[1]! } };
-  m = /^memory would be (\d+) characters; the limit is (\d+)$/.exec(line);
-  if (m) return { key: 'memErrTotal', values: { has: m[1]!, max: m[2]! } };
-  return null;
-}

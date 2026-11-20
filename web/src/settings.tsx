@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from './api.ts';
 import type { ModelChoice, ModelChoices, ProjectFiles } from './api.ts';
-import { useI18n } from './i18n.ts';
+import { serverLines, useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
-import { asList, memoryChars, memoryError, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
+import { asList, memoryChars, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
 import { errorText } from './util.ts';
 
 const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
@@ -119,7 +119,7 @@ function MemoryTab({ project, busy, onSaved }: { project: string; busy: boolean;
   const save = async (): Promise<void> => {
     setSaving(true);
     try { await api.saveMemory(project, facts); await load(); onSaved(); setStatus({ kind: 'ok', lines: [] }); }
-    catch (caught) { setStatus({ kind: 'error', lines: (caught instanceof ApiError && caught.details.length ? caught.details : [errorText(caught)]).map(line => { const known = memoryError(line); return known ? t(known.key, known.values) : line; }) }); }
+    catch (caught) { setStatus({ kind: 'error', lines: caught instanceof ApiError && caught.details.length ? serverLines(caught.details) : [errorText(caught)] }); }
     finally { setSaving(false); }
   };
   const add = (): void => { const fact = fresh.trim(); if (!fact) return; setFacts(list => [...list, fact]); setFresh(''); setStatus(null); };
@@ -179,9 +179,9 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
     try {
       const reply = await api.saveFile({ project, kind, ...(id ? { id } : {}), text });
       await load(); onSaved();
-      return reply.warnings?.length ? { kind: 'warn', lines: reply.warnings } : { kind: 'ok', lines: [] };
+      return reply.warnings?.length ? { kind: 'warn', lines: serverLines(reply.warnings) } : { kind: 'ok', lines: [] };
     } catch (caught) {
-      return { kind: 'error', lines: caught instanceof ApiError && caught.details.length ? caught.details : [errorText(caught)] };
+      return { kind: 'error', lines: caught instanceof ApiError && caught.details.length ? serverLines(caught.details) : [errorText(caught)] };
     }
   };
   const createSkill = async (): Promise<void> => {
@@ -192,7 +192,7 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
   };
   const removeSkill = async (id: string): Promise<void> => {
     if (!window.confirm(t('confirmDeleteSkill', { id }))) return;
-    try { await api.saveFile({ project, kind: 'skill', id, remove: true }); setSkill(null); await load(); onSaved(); } catch (caught) { setDraftNote(caught instanceof ApiError && caught.details.length ? caught.details.join(' ') : errorText(caught)); }
+    try { await api.saveFile({ project, kind: 'skill', id, remove: true }); setSkill(null); await load(); onSaved(); } catch (caught) { setDraftNote(caught instanceof ApiError && caught.details.length ? serverLines(caught.details).join(' ') : errorText(caught)); }
   };
   const drafts = async (): Promise<void> => {
     try { const result = await api.initProject(project); setDraftNote(result.written.length ? t('draftsDone', { n: result.written.length }) : t('draftsNone')); await load(); onSaved(); } catch (caught) { setDraftNote(errorText(caught)); }

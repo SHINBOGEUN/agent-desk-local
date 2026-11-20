@@ -218,3 +218,7 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 실패 유형 `limit` 추가: Codex "You've hit your usage limit" / `codexErrorInfo: usageLimitExceeded`(런타임이 메시지 뒤에 붙임), Claude "You've hit your session/weekly/Opus/Sonnet limit · resets …" + stream-json `rate_limit_event`의 `status: "rejected"`(런타임이 창 이름과 재설정 시각을 붙임). "not your usage limit"(서버 일시 제한)은 일시 오류로 유지.
 - `limit`이면 재시도 없이 `interrupted`로 끝나고 이어하기 정보(`resume.step`)를 남김. 안내: 한도가 풀린 뒤 이어하거나, 팀 선택에서 다른 런타임을 골라 지금 이어하기. Codex 한도면 이어하기 시작 때 자동 전환(35차)도 작동.
 - 실제 한도 오류 모양은 공식 문서·공개 사례 기준이며 PC에서 아직 보지 못함. 처음 걸리면 이벤트 기록으로 확인. 테스트 231개.
+
+## 38차 — 화면의 영어 서버 문구 한국어화
+- 서버가 보내는 설정 파일 검사(config·역할 파일), 스킬 점검, 메모 검사 문구 약 70개를 대시보드에서 한국어로 표시(`web/src/server-text.ts`). "builder-skill: …", ".agent-desk/agents/lead.md: …", "2번 항목: …"처럼 앞의 위치는 그대로 두고 뒤 문장만 바꿈. 모르는 문구는 영어 그대로. 기존 HTTP 오류 표(`koApiErrors`)에 이어 붙여 `errorText`·저장 결과·프로젝트 경고 모두 같은 경로로.
+- 메모 탭 전용 오류 변환(36차 직후 추가)은 이 경로로 합쳐 제거. 서버(에이전트용) 문구는 영어 유지. 테스트 231개.

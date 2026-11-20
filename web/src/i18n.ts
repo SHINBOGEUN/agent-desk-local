@@ -2,6 +2,7 @@
 // Gates are shown by what they check (gate_G1...), with the G number only in the tooltip.
 
 import { createContext, useContext } from 'react';
+import { koServerText } from './server-text.ts';
 
 export type Lang = 'en' | 'ko';
 
@@ -210,11 +211,6 @@ const en = {
   tabRoles: 'Roles',
   tabSkills: 'Skills',
   tabMemory: 'Memory',
-  memErrSame: 'Entry {n} is the same as entry {other}.',
-  memErrLong: 'Entry {n} has {has} characters; an entry can have at most {max}.',
-  memErrSecret: 'Entry {n} looks like a password or key. Memory is committed to git, so do not store secrets in it.',
-  memErrEmpty: 'Entry {n} is empty.',
-  memErrTotal: 'Memory would be {has} characters; the limit is {max}. Shorten or delete entries.',
   followUpDraft: 'Write the next request with {n} picked',
   memoryUsed: '{used} / {max} characters',
   memoryHint: 'Every entry goes into the lead and builder instructions at the start of each run. Keep entries short and correct; fix or delete wrong ones here.',
@@ -542,11 +538,6 @@ const ko: Record<Key, string> = {
   tabRoles: '역할',
   tabSkills: '스킬',
   tabMemory: '메모',
-  memErrSame: '{n}번 항목이 {other}번과 같습니다.',
-  memErrLong: '{n}번 항목이 {has}자입니다. 한 항목은 {max}자까지 쓸 수 있습니다.',
-  memErrSecret: '{n}번 항목이 비밀번호나 키처럼 보입니다. 메모는 git에 올라가므로 비밀값을 넣지 마세요.',
-  memErrEmpty: '{n}번 항목이 비어 있습니다.',
-  memErrTotal: '메모가 {has}자가 됩니다. 한도는 {max}자이니 항목을 줄이거나 지우세요.',
   followUpDraft: '선택한 {n}개로 다음 요청 쓰기',
   memoryUsed: '{used} / {max}자',
   memoryHint: '메모의 모든 항목은 실행할 때마다 lead와 builder 지침에 들어갑니다. 짧고 정확하게 두고, 틀린 항목은 여기서 고치거나 지우세요.',
@@ -727,8 +718,11 @@ export function apiErrorText(lang: Lang, message: string): string {
     const match = message.match(pattern);
     if (match) return build(match);
   }
-  return message;
+  return koServerText(message);
 }
+
+/** Message lists from the server (file checks, skill findings) in the dashboard language. */
+export const serverLines = (lines: readonly string[]): string[] => lines.map(line => apiErrorText(activeLang, line));
 
 export function durationText(lang: Lang, ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '-';
