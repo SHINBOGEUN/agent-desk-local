@@ -119,3 +119,32 @@ export function staleFindingErrors(blocking: { file?: string }[], context: { cha
   });
   return errors;
 }
+
+const DAMAGE = /�|\?{3,}/;
+
+/**
+ * Lines a step added that look like text written in the wrong encoding: the Unicode replacement character, or
+ * three or more question marks where non-ASCII text (Korean, for example) was lost. Seen on Windows when a file is
+ * written through a shell with the wrong code page; tests often still pass, so it is caught here instead of by a
+ * review round. "??" (JavaScript's nullish operator) is not matched, and a pattern already in the file before is not
+ * counted.
+ */
+export function encodingDamageErrors(cwd: string, before: { contents: Map<string, string>; files: Map<string, unknown> }, changed: readonly string[]): string[] {
+  const errors: string[] = [];
+  for (const rel of changed) {
+    let after: string;
+    try { const buffer = fs.readFileSync(path.join(cwd, rel)); if (buffer.includes(0) || buffer.length > 512 * 1024) continue; after = buffer.toString('utf8'); } catch { continue; }
+    const existed = before.files.has(rel);
+    const old = before.contents.get(rel);
+    if (existed && old === undefined) continue; // too large to compare
+    const oldLines = new Set((old ?? '').split(/\r?\n/));
+    const hits: number[] = [];
+    after.split(/\r?\n/).forEach((line, index) => {
+      const match = DAMAGE.exec(line);
+      if (!match || oldLines.has(line) || (old ?? '').includes(match[0])) return;
+      hits.push(index + 1);
+    });
+    if (hits.length) errors.push(`${rel}:${hits.slice(0, 3).join(',')}: a line you wrote contains "???" or "�", which usually means non-ASCII text (such as Korean) was lost to a wrong encoding. Rewrite the text as UTF-8, check it, then submit the report again.`);
+  }
+  return errors;
+}

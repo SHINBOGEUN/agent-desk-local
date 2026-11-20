@@ -301,3 +301,18 @@ test('the model each role ran on is recorded', async () => {
   const result = await run(runtime);
   assert.deepEqual(result.modelsUsed, { lead: 'gpt-lead', builder: 'gpt-build', verifier: 'claude-review' });
 });
+
+test('text lost to a wrong encoding is sent back before the review; "??" in code is not', async () => {
+  const runtime = setup(
+    [script([write('feature.txt', 'a'), write('page.html', '<label>??? <input></label>'), write('code.js', 'const v = a ?? b;'), { report: builderReport(['code.js', 'feature.txt', 'page.html']) },
+      write('page.html', '<label>마감일 <input></label>'), { report: builderReport(['code.js', 'feature.txt', 'page.html']) }])],
+    [script([{ report: pass }])],
+  );
+  const result = await run(runtime);
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.redo, 0);
+  const results = runtime.turns.find(turn => turn.role === 'builder')?.toolResults ?? [];
+  assert.deepEqual(results.map(item => item.ok), [false, true]);
+  assert.match(results[0]?.message ?? '', /page\.html:1: a line you wrote contains "\?\?\?"/);
+  assert.doesNotMatch(results[0]?.message ?? '', /code\.js/);
+});

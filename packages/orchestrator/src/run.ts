@@ -11,7 +11,7 @@ import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gat
 import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
-import { commandClaimErrors, findingLocationErrors, missingSourceErrors, skillsTouched, staleFindingErrors } from './evidence.ts';
+import { commandClaimErrors, encodingDamageErrors, findingLocationErrors, missingSourceErrors, skillsTouched, staleFindingErrors } from './evidence.ts';
 import type { ObservedCommand } from './evidence.ts';
 import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt, selfReviewPrompt } from './review.ts';
@@ -379,7 +379,10 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
     if (point.ok) ctx.restorePoint = { dir: point.dir, files: point.files, bytes: point.bytes };
     else ctx.warnings.push(`No restore point was made: ${point.reason}. Revert will not be available for this run.`);
   }
-  const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => [...builderCoverageErrors(requirements, report), ...commandClaimErrors(report.commandsRun, ctx.commands.get('build') ?? [])]);
+  const newCollector = (): ReportCollector<'builder'> => new ReportCollector('builder', report => {
+    const now = diffSnapshots(before, takeSnapshot(config.cwd, { ignore: ctx.ignore }));
+    return [...builderCoverageErrors(requirements, report), ...commandClaimErrors(report.commandsRun, ctx.commands.get('build') ?? []), ...encodingDamageErrors(config.cwd, before, [...now.added, ...now.modified])];
+  });
   let collector = newCollector();
   const holder: Holder = { current: { submit: report => collector.submit(report), done: () => collector.report !== null } };
   let session: Session | null = null;
@@ -532,7 +535,7 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
 
 function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g3: GateResult, base: Partial<RunResult>, review: ReviewOutcome): RunResult {
   const testFiles = (g2.data?.testFilesChanged as string[] | undefined) ?? [];
-  if (testFiles.length) ctx.warnings.push(`Test or check files changed: ${testFiles.join(', ')}. Confirm the change was required by the request.`);
+  if (testFiles.length) ctx.warnings.push(ctx.say(`Test or check files changed: ${testFiles.join(', ')}. Confirm the change was required by the request.`, `테스트·검사 파일이 바뀌었습니다: ${testFiles.join(', ')}. 요청에 필요한 변경이었는지 확인하세요.`));
   const openIds = report.requirements.filter(entry => entry.status === 'unverified').map(entry => entry.id);
   const unverified = [...openIds.map(id => ctx.say(`Requirement ${id} was reported as unverified.`, `요구사항 ${id}은(는) 검증되지 않은 것으로 보고되었습니다.`)), ...report.unverified];
   if (g3.skipped) ctx.warnings.push(ctx.say('No automatic verification: no verify commands are configured.', '자동 검증이 없습니다: 검증 명령이 설정되어 있지 않습니다.'));
