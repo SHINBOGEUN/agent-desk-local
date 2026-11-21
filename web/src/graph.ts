@@ -31,7 +31,7 @@ export function layoutGraph(nodes: readonly GraphNodeIn[], edges: readonly Graph
   });
   if (n === 1) { positions.set(nodes[0]!.id, { x: cx, y: cy }); return positions; }
   const area = (width - margin * 2) * (height - margin * 2);
-  const k = Math.sqrt(area / n) * 0.75;
+  const k = Math.sqrt(area / n) * 0.8;
   const iterations = options.iterations ?? 220;
   let temperature = Math.min(width, height) / 8;
   const ids = nodes.map(node => node.id);
@@ -68,14 +68,28 @@ export function layoutGraph(nodes: readonly GraphNodeIn[], edges: readonly Graph
     for (const id of ids) {
       const point = positions.get(id)!;
       const move = shift.get(id)!;
-      move.x += (cx - point.x) * 0.02 * k / 10;
-      move.y += (cy - point.y) * 0.02 * k / 10;
+      // Gravity grows with distance, so notes without links stay near the rest instead of drifting to a corner.
+      move.x += (cx - point.x) * 0.15;
+      move.y += (cy - point.y) * 0.15;
       const length = Math.hypot(move.x, move.y) || 1;
       const limited = Math.min(length, temperature);
-      point.x = Math.min(width - margin, Math.max(margin, point.x + (move.x / length) * limited));
-      point.y = Math.min(height - margin, Math.max(margin, point.y + (move.y / length) * limited));
+      point.x += (move.x / length) * limited;
+      point.y += (move.y / length) * limited;
     }
     temperature = Math.max(0.5, temperature * 0.97);
+  }
+  // The simulation runs unbounded (clamping piles nodes on the edges); the result is then scaled into the box.
+  // Notes without links float far out; the box is fitted to the linked ones and the rest are kept at its edge.
+  const linked = new Set(links.flatMap(edge => [edge.from, edge.to]));
+  const fitted = [...positions.entries()].filter(([id]) => linked.size === 0 || linked.has(id)).map(([, point]) => point);
+  const xs = fitted.map(point => point.x);
+  const ys = fitted.map(point => point.y);
+  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const sx = maxX - minX > 1 ? (width - margin * 2) / (maxX - minX) : 0;
+  const sy = maxY - minY > 1 ? (height - margin * 2) / (maxY - minY) : 0;
+  for (const point of positions.values()) {
+    point.x = Math.min(width - margin, Math.max(margin, sx ? margin + (point.x - minX) * sx : cx));
+    point.y = Math.min(height - margin, Math.max(margin, sy ? margin + (point.y - minY) * sy : cy));
   }
   return positions;
 }

@@ -2,7 +2,9 @@
 // the diff, the review), never from a model call, so the notes cost no tokens and say only what was checked.
 
 import type { RunResult } from '#orchestrator';
-import { listNotes, noteFileName, proposeMemory, readNote, searchNotes, writeNote } from '#project';
+import { listNotes, loadMemory, memoryFacts, noteFileName, proposeMemory, readNote, recordDecision, searchNotes, writeNote } from '#project';
+import type { SkillUsage } from '#project';
+import type { RunStore } from '#store';
 
 type Lang = 'en' | 'ko';
 
@@ -84,7 +86,9 @@ export function runNoteText(input: RunNoteInput): string {
     for (const suggestion of result.review.optional) lines.push(`- ${say('Suggestion', '제안')}: ${suggestion}`);
     lines.push('');
   }
-  if (skills.length) lines.push(`## ${say('Skills used', '쓰인 스킬')}`, '', ...skills.map(skill => `- [[skills/${skill}]]`), '');
+  const roles = [...new Set([...Object.keys(result.modelsUsed ?? {}), ...(result.skillsRead ?? []).map(entry => entry.role)])];
+  if (roles.length) lines.push(`## ${say('Team', '참여한 역할')}`, '', ...roles.map(role => `- [[team/roles/${role}|${role}]]${result.modelsUsed?.[role as keyof typeof result.modelsUsed] ? ` (${result.modelsUsed[role as keyof typeof result.modelsUsed]})` : ''}`), '');
+  if (skills.length) lines.push(`## ${say('Skills read', '읽은 스킬')}`, '', ...skills.map(skill => `- [[team/skills/${skill}|${skill}]]`), '');
   if (input.proposals?.length) lines.push(`## ${say('Memory proposals', '메모 제안')}`, '', ...input.proposals.map(rel => `- [[${rel.replace(/\.md$/i, '')}]]`), '');
   return `${lines.join('\n').trimEnd()}\n`;
 }
@@ -108,7 +112,8 @@ export function writeRunNotes(project: string, root: string, input: Omit<RunNote
 export const NOTES_ANSWER_MAX_CHARS = 4000;
 const INDEX_MAX_CHARS = 1500;
 /** Runs are the harness's own record (read_history covers them); inbox notes are unapproved, so not facts. */
-const readable = (folder: string): boolean => folder !== 'runs' && folder !== 'inbox';
+/** team/ mirrors the role files and skills the roles already get, so it is left out too. */
+const readable = (folder: string): boolean => folder !== 'runs' && folder !== 'inbox' && folder !== 'team';
 
 /** Titles of the notes the roles may read (specs, decisions and the user's own folders), newest first. Empty when none. */
 export function vaultIndexText(root: string): string {
@@ -146,4 +151,65 @@ export function notesLookup(root: string, query: { path?: string; search?: strin
   if (!hits.length) return `No notes match "${query.search ?? ''}".`;
   const text = hits.map(hit => `## ${hit.path}\n${hit.excerpt}`).join('\n\n');
   return text.length > NOTES_ANSWER_MAX_CHARS ? `${text.slice(0, NOTES_ANSWER_MAX_CHARS)}\n…(cut)` : `${text}\n\n(Read a whole note with read_notes path.)`;
+}
+
+/** Run notes by run id ("runs/0056 ..." without .md), read once from the vault. */
+export function runNoteIndex(root: string): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const note of listNotes(root)) {
+    if (note.folder !== 'runs') continue;
+    const id = Number(/^(\d+) /.exec(note.title)?.[1]);
+    if (Number.isInteger(id) && !out.has(id)) out.set(id, note.path.replace(/\.md$/i, ''));
+  }
+  return out;
+}
+
+/** Which runs read each skill (the harness's own record of SKILL.md opens), newest first, from the last `limit` runs. */
+export function skillUsage(store: RunStore, project: string, root: string, limit = 200): SkillUsage {
+  const notes = runNoteIndex(root);
+  const usage: SkillUsage = {};
+  for (const run of store.listRuns(project, limit)) {
+    const read = store.getReport(run.id)?.skillsRead;
+    if (!Array.isArray(read)) continue;
+    for (const skill of new Set(read.map(entry => (entry as { skill?: unknown }).skill).filter((skill): skill is string => typeof skill === 'string'))) {
+      (usage[skill] ??= { runs: [] }).runs.push({ id: run.id, note: notes.get(run.id) ?? null });
+    }
+  }
+  return usage;
+}
+
+export interface ImportResult { runs: number; decisions: number; skipped: number }
+
+/**
+ * Notes for what happened before the vault existed: a run note for every finished run that has none (from the
+ * stored report; no model call), and a decision note for every memory entry that has none. Safe to repeat.
+ */
+export function importHistory(store: RunStore, project: string, root: string, lang: 'en' | 'ko' = 'en', limit = 500): ImportResult {
+  const result: ImportResult = { runs: 0, decisions: 0, skipped: 0 };
+  const existing = runNoteIndex(root);
+  const runs = store.listRuns(project, limit).filter(run => run.status !== 'running').sort((a, b) => a.id - b.id);
+  for (const run of runs) {
+    if (existing.has(run.id)) { result.skipped++; continue; }
+    const report = (store.getReport(run.id) ?? {}) as Partial<RunResult>;
+    const stored = {
+      ...report,
+      status: run.status,
+      reason: run.reason ?? '',
+      ...(run.workflow ? { workflow: run.workflow } : {}),
+      requirements: Array.isArray(report.requirements) ? report.requirements : [],
+      redo: typeof report.redo === 'number' ? report.redo : 0,
+      gates: [],
+      usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, totalTokens: store.usageTotal(run.id) },
+    } as unknown as RunResult;
+    const resumedOf = (store.getSettings(run.id) as { resumeOf?: unknown } | null)?.resumeOf;
+    const name = runNoteName(run.id, run.request);
+    const written = writeNote(root, `${name}.md`, runNoteText({ id: run.id, request: run.request, result: stored, lang, resumedNote: typeof resumedOf === 'number' ? existing.get(resumedOf) ?? null : null }), { create: true });
+    if (written.ok) { result.runs++; existing.set(run.id, name); }
+  }
+  const decided = listNotes(root).filter(note => note.folder === 'decisions').map(note => (typeof note.frontmatter.fact === 'string' ? note.frontmatter.fact : note.title).toLowerCase().replace(/\s+/g, ' ').trim());
+  for (const fact of memoryFacts(loadMemory(project))) {
+    if (decided.includes(fact.toLowerCase().replace(/\s+/g, ' ').trim())) continue;
+    if (recordDecision(project, root, fact, { lang }).ok) result.decisions++;
+  }
+  return result;
 }

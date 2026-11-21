@@ -9,8 +9,8 @@ import type { RoleId, Runtime, UserQuestion } from '#core';
 import { planText, projectHistory, runRequest } from '#orchestrator';
 import { historyLookup } from './history.ts';
 import type { ReviewPolicy, RunConfig, RunEvent, RunResult } from '#orchestrator';
-import { initVault, syncApprovals, vaultRoot, loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
-import { findRunNote, notesLookup, noteTextOf, vaultIndexText, writeRunNotes } from './vault-notes.ts';
+import { initVault, syncApprovals, syncTeamNotes, vaultRoot, loadMemory, planRuntimes, withoutReviewRuntime, loadProject, newSuggestions, roleSettings, skillsByRole } from '#project';
+import { findRunNote, notesLookup, noteTextOf, skillUsage, vaultIndexText, writeRunNotes } from './vault-notes.ts';
 import type { RuntimeKind, RuntimeMode } from '#project';
 import { RunStore } from '#store';
 import { locate } from './discover.ts';
@@ -173,6 +173,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
       const synced = syncApprovals(project, vault);
       if (synced.approved.length) options.onNote?.(`added to memory from approved notes: ${synced.approved.join('; ')}`);
       for (const problem of synced.errors) options.onNote?.(`notes: ${problem}`);
+      syncTeamNotes(project, vault, loaded, { usage: skillUsage(store, project, vault), lang: language === 'ko' ? 'ko' : 'en' });
     } catch (error) {
       vaultReady = false;
       options.onNote?.(`notes folder unavailable (${vault}): ${error instanceof Error ? error.message : String(error)}`);
@@ -245,6 +246,7 @@ export async function executeRun(options: ExecuteOptions): Promise<ExecuteOutcom
     if (vaultReady) {
       const notes = writeRunNotes(project, vault, { id: runId, request: options.request, result, lang: language === 'ko' ? 'ko' : 'en', resumedNote: resumed ? findRunNote(vault, resumed.id) : null });
       if (notes.error) options.onNote?.(`run note not written: ${notes.error}`);
+      try { syncTeamNotes(project, vault, loaded, { usage: skillUsage(store, project, vault), lang: language === 'ko' ? 'ko' : 'en' }); } catch { /* the run note is what matters */ }
     }
     pruneRestorePoints(path.join(dir, 'restore'), 10);
     return { ok: true, runId, result, suggestions: newSuggestions(project, result.memorySuggestions ?? []), durationMs: Date.now() - started, dataDir: dir };

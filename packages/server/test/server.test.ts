@@ -366,15 +366,16 @@ test('notes: list with graph, read with backlinks, write with conflict check, mo
   const { server, port, token } = await start(new FakeRuntime({ scripts: {} }));
   const enc = encodeURIComponent(project);
   try {
-    const empty = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { inProject: string; notes: unknown[] };
+    const empty = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { inProject: string; notes: { folder: string }[] };
     assert.equal(empty.inProject, '.agent-desk/notes');
-    assert.deepEqual(empty.notes, []);
+    assert.deepEqual(empty.notes.filter(note => note.folder !== 'team'), []);
+    assert.equal(empty.notes.filter(note => note.folder === 'team').length, 4);
     assert.equal((await call(port, 'POST', '/api/notes/write', { body: { project, path: 'specs/A.md', text: 'x' } })).status, 403);
     assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'specs/Login.md', text: '# Login\nSee [[Polite]] and [[src/app.mjs]]', create: true } })).status, 200);
     assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: 'decisions/Polite.md', text: 'Polite errors', create: true } })).status, 200);
     assert.equal((await call(port, 'POST', '/api/notes/write', { token, body: { project, path: '../escape.md', text: 'x' } })).status, 400);
-    const listed = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { notes: { path: string }[]; graph: { nodes: { id: string }[]; edges: unknown[] } };
-    assert.equal(listed.notes.length, 2);
+    const listed = JSON.parse((await call(port, 'GET', `/api/notes?path=${enc}`)).body) as { notes: { path: string; folder: string }[]; graph: { nodes: { id: string }[]; edges: unknown[] } };
+    assert.equal(listed.notes.filter(note => note.folder !== 'team').length, 2);
     assert.equal(listed.graph.edges.length, 2);
     const read = JSON.parse((await call(port, 'GET', `/api/notes/read?project=${enc}&path=${encodeURIComponent('decisions/Polite.md')}`)).body) as { text: string; mtimeMs: number; backlinks: string[] };
     assert.deepEqual(read.backlinks, ['specs/Login.md']);
@@ -389,5 +390,7 @@ test('notes: list with graph, read with backlinks, write with conflict check, mo
     assert.match(fs.readFileSync(path.join(project, '.agent-desk', 'memory.md'), 'utf8'), /Dates are YYYY-MM-DD/);
     assert.equal((await call(port, 'POST', '/api/project/memory', { token, body: { project, fact: 'Port is 3000', runId: 1, lang: 'ko' } })).status, 200);
     assert.ok(fs.existsSync(path.join(project, '.agent-desk', 'notes', 'decisions', 'Port is 3000.md')));
+    const imported = JSON.parse((await call(port, 'POST', '/api/notes/import', { token, body: { project, lang: 'ko' } })).body) as { runs: number; decisions: number };
+    assert.equal(imported.decisions, 0);
   } finally { await server.close(); }
 });

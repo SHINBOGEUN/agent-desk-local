@@ -9,6 +9,7 @@ export * from './config.ts';
 export * from './roles.ts';
 export * from './vault.ts';
 export * from './vault-memory.ts';
+export * from './vault-team.ts';
 
 export interface LoadedProject {
   config: ProjectConfig;

@@ -48,7 +48,7 @@ export interface RunDetail {
 
 export interface ModelChoice { id: string; label: string; isDefault: boolean }
 export interface NoteLinkView { target: string; resolved: string | null }
-export interface NoteRow { path: string; title: string; folder: string; tags: string[]; links: NoteLinkView[]; status: string | null; type: string | null; mtimeMs: number }
+export interface NoteRow { path: string; title: string; folder: string; tags: string[]; links: NoteLinkView[]; status: string | null; type: string | null; generated?: boolean; mtimeMs: number }
 export interface NotesInfo {
   root: string;
   /** The vault's path inside the project, or null when it lives elsewhere (a central Obsidian vault). */
@@ -113,7 +113,8 @@ export const api = {
   saveFile: (body: { project: string; kind: 'config' | 'role' | 'skill'; id?: string; text?: string; remove?: boolean }): Promise<SaveReply> => request('POST', '/api/project/files', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string, runId?: number, lang?: 'en' | 'ko'): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact, ...(runId !== undefined ? { runId } : {}), ...(lang ? { lang } : {}) }),
-  notes: (project: string): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}`),
+  notes: (project: string, lang?: 'en' | 'ko'): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}${lang ? `&lang=${lang}` : ''}`),
+  importNotes: (project: string, lang: 'en' | 'ko'): Promise<{ runs: number; decisions: number; skipped: number }> => request('POST', '/api/notes/import', { project, lang }),
   readNote: (project: string, path: string): Promise<{ path: string; text: string; mtimeMs: number; backlinks: string[] }> => request('GET', `/api/notes/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`),
   writeNote: (body: { project: string; path: string; text: string; create?: boolean; expectedMtimeMs?: number }): Promise<{ path: string; mtimeMs: number }> => request('POST', '/api/notes/write', body),
   moveNote: (project: string, path: string, to: string): Promise<{ path: string }> => request('POST', '/api/notes/move', { project, path, to }),

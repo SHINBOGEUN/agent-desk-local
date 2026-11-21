@@ -163,3 +163,25 @@ test('read_notes answers from specs and decisions, never from runs or the unappr
   assert.equal(noteTextOf(root, 'runs/0001 x.md'), null);
   assert.equal(vaultIndexText(tmp('svc-empty-')), '');
 });
+
+test('import writes notes for past runs and existing memory once; run notes link roles and skills read', async () => {
+  const { importHistory, runNoteText } = await import('../src/index.ts');
+  const home = tmp('svc-home-');
+  const project = tmp('svc-p-');
+  const store = new RunStore(path.join(home, 'agent-desk.db'));
+  try {
+    const id = store.startRun(project, 'add a ping endpoint');
+    store.finishRun(id, 'add a ping endpoint', { status: 'completed', reason: 'all gates passed', workflow: 'build', requirements: [{ id: 'R1', text: 'GET /ping' }], gates: [], redo: 1, warnings: [], unverified: [], usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, totalTokens: 0 }, usageEntries: [], events: [], builder: { summary: 'added ping', changedFiles: ['src/ping.js'], commandsRun: [], requirements: [{ id: 'R1', status: 'done', evidence: 'x' }], unverified: [] }, skillsRead: [{ step: 'build', role: 'builder', skill: 'verify-before-report' }], modelsUsed: { lead: 'gpt-a', builder: 'gpt-a' } });
+    fs.mkdirSync(path.join(project, '.agent-desk'), { recursive: true });
+    fs.writeFileSync(path.join(project, '.agent-desk', 'memory.md'), '# Project memory\n\n- Dates are YYYY-MM-DD\n');
+    const root = path.join(project, '.agent-desk', 'notes');
+    assert.deepEqual(importHistory(store, project, root, 'ko'), { runs: 1, decisions: 1, skipped: 0 });
+    assert.deepEqual(importHistory(store, project, root, 'ko'), { runs: 0, decisions: 0, skipped: 1 });
+    const note = fs.readFileSync(path.join(root, 'runs', `${String(id).padStart(4, '0')} add a ping endpoint.md`), 'utf8');
+    assert.match(note, /## 변경 파일\n\n- \[\[src\/ping\.js\]\]/);
+    assert.match(note, /## 참여한 역할\n\n- \[\[team\/roles\/lead\|lead\]\] \(gpt-a\)\n- \[\[team\/roles\/builder\|builder\]\] \(gpt-a\)/);
+    assert.match(note, /## 읽은 스킬\n\n- \[\[team\/skills\/verify-before-report\|verify-before-report\]\]/);
+    assert.ok(fs.existsSync(path.join(root, 'decisions', 'Dates are YYYY-MM-DD.md')));
+    assert.equal(typeof runNoteText, 'function');
+  } finally { store.close(); }
+});

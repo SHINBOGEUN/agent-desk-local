@@ -9,9 +9,10 @@ import { insertLink, layoutGraph, neighbours } from './graph.ts';
 import { serverLines, useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
 import { projectName } from './model.ts';
+import { SettingsPanel } from './settings.tsx';
 import { errorText } from './util.ts';
 
-const FOLDERS = ['specs', 'decisions', 'inbox', 'runs'] as const;
+const FOLDERS = ['specs', 'decisions', 'inbox', 'runs', 'team'] as const;
 const W = 860;
 const H = 420;
 const MAX_NODES = 300;
@@ -88,7 +89,8 @@ function Graph({ info, selected, showRuns, showMissing, onPick }: { info: NotesI
 }
 
 export function NotesView({ project, busy }: { project: string | null; busy: boolean }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const [settingsFor, setSettingsFor] = useState<{ role?: string; skill?: string } | null>(null);
   const [info, setInfo] = useState<NotesInfo | null>(null);
   const [error, setError] = useState('');
   const [folder, setFolder] = useState<string>('all');
@@ -104,8 +106,13 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
 
   const load = useCallback(async (): Promise<void> => {
     if (!project) return;
-    try { setInfo(await api.notes(project)); setError(''); } catch (caught) { setError(errorText(caught)); }
-  }, [project]);
+    try { setInfo(await api.notes(project, lang)); setError(''); } catch (caught) { setError(errorText(caught)); }
+  }, [project, lang]);
+  const importOld = async (): Promise<void> => {
+    if (!project) return;
+    try { const done = await api.importNotes(project, lang); await load(); setStatus({ kind: 'ok', text: t('notesImported', { runs: done.runs, decisions: done.decisions }) }); }
+    catch (caught) { setStatus({ kind: 'error', text: errorText(caught) }); }
+  };
   useEffect(() => { setOpen(null); setStatus(null); void load(); }, [load]);
 
   const dirty = open !== null && open.text !== open.saved;
@@ -168,6 +175,8 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
   const listed = notes.filter(note => (folder === 'all' || (folder === 'other' ? !FOLDERS.includes(note.folder as (typeof FOLDERS)[number]) : note.folder === folder)) && (!words || note.path.toLowerCase().includes(words)));
   const count = (name: string): number => notes.filter(note => (name === 'other' ? !FOLDERS.includes(note.folder as (typeof FOLDERS)[number]) : note.folder === name)).length;
   const current: NoteRow | undefined = open ? notes.find(note => note.path === open.path) : undefined;
+  const generated = current?.generated === true;
+  const mirrorOf = (path: string): { role?: string; skill?: string } => { const [, kind, id] = path.replace(/\.md$/i, '').split('/'); return kind === 'roles' ? { role: id! } : { skill: id! }; };
   const pickable = picker === null ? [] : notes.filter(note => note.path !== open?.path && note.path.toLowerCase().includes(picker.toLowerCase())).slice(0, 12);
 
   return (
@@ -175,7 +184,8 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
       <header className="notes-head">
         <h2>{t('notesTitle', { name: projectName(project) })}</h2>
         {info ? <span className="mono notes-root" title={info.root}>{info.inProject ?? info.root}</span> : null}
-        <button className="ghost push" onClick={() => { void load(); }}>{t('notesReload')}</button>
+        <button className="ghost push" disabled={busy} title={t('notesImportHint')} onClick={() => { void importOld(); }}>{t('notesImport')}</button>
+        <button className="ghost" onClick={() => { void load(); }}>{t('notesReload')}</button>
       </header>
       <p className="notes-hint">{t('notesHint')}</p>
       {error ? <p className="error">{serverLines([error])[0]}</p> : null}
@@ -220,11 +230,12 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
                 <strong className="mono">{open.path}</strong>
                 {dirty ? <span className="badge tone-warning">{t('unsaved')}</span> : null}
                 <span className="push" />
+                {generated ? <><span className="badge tone-neutral">{t('notesGenerated')}</span><button onClick={() => setSettingsFor(mirrorOf(open.path))}>{t('notesEditInSettings')}</button></> : <>
                 {open.path.startsWith('inbox/') ? <button disabled={busy} title={busy ? t('busyProject') : ''} onClick={() => { void approve(); }}>{t('notesApprove')}</button> : null}
                 <button className="ghost" onClick={() => setPicker(picker === null ? '' : null)}>{t('notesInsertLink')}</button>
                 <button className="ghost" onClick={() => setRenaming(renaming === null ? open.path.replace(/\.md$/i, '') : null)}>{t('notesRename')}</button>
                 <button className="ghost danger" onClick={() => { void trash(); }}>{t('notesTrash')}</button>
-                <button className="send" disabled={!dirty} onClick={() => { void save(); }}>{t('save')}</button>
+                <button className="send" disabled={!dirty} onClick={() => { void save(); }}>{t('save')}</button></>}
               </div>
               {picker !== null ? (
                 <div className="link-picker">
@@ -241,7 +252,7 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
                   <div className="row"><button onClick={() => { void rename(); }}>{t('notesRename')}</button><button className="ghost" onClick={() => setRenaming(null)}>{t('cancel')}</button></div>
                 </div>
               ) : null}
-              <textarea ref={editor} className="mono editor-text" spellCheck={false} value={open.text} aria-label={open.path}
+              <textarea ref={editor} className="mono editor-text" spellCheck={false} value={open.text} aria-label={open.path} readOnly={generated}
                 onChange={event => setOpen({ ...open, text: event.target.value })}
                 onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); void save(); } }} />
               {status ? (
@@ -264,6 +275,7 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
           ) : status ? <p className={`editor-status ${status.kind === 'conflict' ? 'error' : status.kind}`}>{status.text}</p> : <p className="muted">{t('notesPick')}</p>}
         </section>
       </div>
+      {settingsFor && project ? <SettingsPanel project={project} runtimes={null} busy={busy} initialRole={settingsFor.role} initialSkill={settingsFor.skill} onClose={() => setSettingsFor(null)} onSaved={() => { void load(); }} /> : null}
     </div>
   );
 }

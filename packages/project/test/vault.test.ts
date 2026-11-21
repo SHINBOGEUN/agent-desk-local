@@ -110,3 +110,32 @@ test('memory proposals go through the inbox and reach memory.md only when approv
   assert.ok(direct.ok && direct.decision === 'decisions/Buttons say 저장.md');
   assert.deepEqual(syncApprovals(project, tmp('none-')), { approved: [], rejected: [], errors: [] });
 });
+
+test('team notes mirror the role files and skills, link them, and only touch generated notes', async () => {
+  const { loadProject, syncTeamNotes } = await import('#project');
+  const project = tmp('vault-team-');
+  put(project, '.agent-desk/agents/builder.md', '---\ndescription: Builds\neffort: high\nmodel-codex: gpt-x\nskills: [verify-before-report]\n---\nBe careful.');
+  put(project, '.agent-desk/skills/verify-before-report/SKILL.md', '---\nname: verify-before-report\ndescription: Checks the work before the report when the builder finishes. Do not use for questions.\n---\nRun the tests because reports lie.');
+  put(project, '.agent-desk/skills/unused-one/SKILL.md', '---\nname: unused-one\ndescription: Formats dates when the user asks. Do not use otherwise.\n---\nBody.');
+  const root = path.join(project, '.agent-desk', 'notes');
+  const first = syncTeamNotes(project, root, loadProject(project), { usage: { 'verify-before-report': { runs: [{ id: 56, note: 'runs/0056 x' }, { id: 50, note: null }] } }, lang: 'ko' });
+  assert.ok(first.written.includes('team/roles/builder.md') && first.written.includes('team/skills/unused-one.md'));
+  const builder = fs.readFileSync(path.join(root, 'team/roles/builder.md'), 'utf8');
+  assert.match(builder, /generated: true/);
+  assert.match(builder, /runtime: codex/);
+  assert.match(builder, /- \[\[team\/skills\/verify-before-report\|verify-before-report\]\]/);
+  const skill = fs.readFileSync(path.join(root, 'team/skills/verify-before-report.md'), 'utf8');
+  assert.match(skill, /reads: 2\nlast-run: 56/);
+  assert.match(skill, /\[\[team\/roles\/builder\|builder\]\]/);
+  assert.match(skill, /- \[\[runs\/0056 x\|#56\]\]\n- #50/);
+  assert.match(fs.readFileSync(path.join(root, 'team/skills/unused-one.md'), 'utf8'), /없음 \(어느 역할에도 주어지지 않음\)/);
+  // Nothing changed: nothing rewritten. A removed skill loses its generated note; a user's note in team/ stays.
+  assert.deepEqual(syncTeamNotes(project, root, loadProject(project), { usage: { 'verify-before-report': { runs: [{ id: 56, note: 'runs/0056 x' }, { id: 50, note: null }] } }, lang: 'ko' }).written, []);
+  put(root, 'team/My notes.md', 'mine');
+  fs.rmSync(path.join(project, '.agent-desk/skills/unused-one'), { recursive: true });
+  const after = syncTeamNotes(project, root, loadProject(project), { lang: 'ko' });
+  assert.deepEqual(after.removed, ['team/skills/unused-one.md']);
+  assert.ok(fs.existsSync(path.join(root, 'team/My notes.md')));
+  const graph = buildGraph(listNotes(root));
+  assert.ok(graph.edges.some(edge => edge.from === 'team/roles/builder.md' && edge.to === 'team/skills/verify-before-report.md'));
+});

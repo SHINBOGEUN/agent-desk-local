@@ -11,9 +11,9 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
+import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
-import { dataDirectory, executeRun, findRunNote, locate, normalizeRateLimits, readMachineSettings } from '#service';
+import { dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
@@ -382,9 +382,11 @@ export function createServer(options: ServerOptions): LocalServer {
       const project = projectDir(url.searchParams.get('path'));
       const vault = vaultOf(project);
       initVault(vault);
+      const lang = url.searchParams.get('lang') === 'ko' ? 'ko' : 'en';
+      try { syncTeamNotes(project, vault, loadProject(project), { usage: withStore(store => skillUsage(store, project, vault)), lang }); } catch { /* the notes still list */ }
       const notes = listNotes(vault);
       const rel = path.relative(project, vault).split(path.sep).join('/');
-      return send(res, 200, { root: vault, inProject: rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : null, notes: notes.map(note => ({ path: note.path, title: note.title, folder: note.folder, tags: note.tags, links: note.links, status: typeof note.frontmatter.status === 'string' ? note.frontmatter.status : null, type: typeof note.frontmatter.type === 'string' ? note.frontmatter.type : null, mtimeMs: note.mtimeMs })), graph: buildGraph(notes) });
+      return send(res, 200, { root: vault, inProject: rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : null, notes: notes.map(note => ({ path: note.path, title: note.title, folder: note.folder, tags: note.tags, links: note.links, status: typeof note.frontmatter.status === 'string' ? note.frontmatter.status : null, generated: note.frontmatter.generated === 'true', type: typeof note.frontmatter.type === 'string' ? note.frontmatter.type : null, mtimeMs: note.mtimeMs })), graph: buildGraph(notes) });
     }
     if (method === 'GET' && p === '/api/notes/read') {
       const project = projectDir(url.searchParams.get('project'));
@@ -393,6 +395,17 @@ export function createServer(options: ServerOptions): LocalServer {
       if ('error' in read) throw new HttpError(read.error === 'note not found' ? 404 : 400, read.error);
       const backlinks = listNotes(vault).filter(note => note.links.some(link => link.resolved === read.path)).map(note => note.path);
       return send(res, 200, { ...read, backlinks });
+    }
+    if (method === 'POST' && p === '/api/notes/import') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const vault = vaultOf(project);
+      initVault(vault);
+      const lang = body.lang === 'ko' ? 'ko' : 'en';
+      const imported = withStore(store => importHistory(store, project, vault, lang));
+      try { syncTeamNotes(project, vault, loadProject(project), { usage: withStore(store => skillUsage(store, project, vault)), lang }); } catch { /* counted above */ }
+      return send(res, 200, imported);
     }
     if (method === 'POST' && (p === '/api/notes/write' || p === '/api/notes/move' || p === '/api/notes/trash' || p === '/api/notes/approve')) {
       const body = await readBody(req);
