@@ -13,6 +13,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { LampState, Mood } from './scene.ts';
+import { GATE_AT, OBSTACLES, SPOTS, nextPlan, route, seeded } from './office-life.ts';
+import type { Circle, Plan } from './office-life.ts';
 
 export interface PanelView { title: string; lines: string[]; foot: string; tone: 'work' | 'ok' | 'bad' | 'ask' | 'idle' }
 export interface OfficeState {
@@ -32,14 +34,13 @@ const SEATS: Record<string, { x: number; z: number; yaw: number }> = {
   builder: { x: 1.55, z: 2.5, yaw: -0.12 },
   researcher: { x: -1.55, z: 2.5, yaw: 0.12 },
 };
-const GATE = new THREE.Vector3(0, 0, -1.2);
+const GATE = new THREE.Vector3(GATE_AT.x, 0, GATE_AT.z);
 const BODY: Record<string, string> = { lead: '#F2C14E', builder: '#F0843C', verifier: '#8C9BFF', researcher: '#4FC29A' };
 const RUNTIME: Record<string, string> = { codex: '#3CC3B0', claude: '#A993FF' };
 const TONE: Record<string, string> = { info: '#9DB4FF', ok: '#7FCF8F', problem: '#FF8F84' };
 const LAMP: Record<LampState, string> = { ok: '#7FCF8F', fail: '#FF8F84', skip: '#6F7A8E', wait: '#323B4E' };
 
 type Clip = 'Idle' | 'Walking' | 'Wave' | 'ThumbsUp' | 'No' | 'Yes' | 'Sitting' | 'Standing' | 'Dance' | 'Jump';
-type Trip = { kind: 'deliver'; phase: 'out' | 'scan' | 'back'; t: number; carrying: boolean } | null;
 
 interface Robot {
   role: string;
@@ -67,7 +68,19 @@ interface Robot {
   mood: Mood;
   moodSince: number;
   seen: boolean;
-  trip: Trip;
+  /** What it is doing (from office-life), where it is walking, and a delivery to the gate when one is under way. */
+  plan: Plan;
+  path: THREE.Vector3[];
+  deliver: { phase: 'out' | 'scan'; t: number } | null;
+  random: () => number;
+  speed: number;
+  pose: 'type' | 'think' | 'stretch';
+  poseUntil: number;
+  nodAt: number;
+  spot: string | null;
+  listening: string | null;
+  mug: THREE.Object3D;
+  tool: THREE.Object3D | null;
   oneShot: string | null;
 }
 
@@ -120,6 +133,7 @@ export class Office {
     this.buildRoom();
     this.buildGate();
     this.buildCourier();
+    this.buildProps();
   }
 
   // ---------- loading ----------
@@ -231,6 +245,87 @@ export class Office {
     this.gate = { crystal, crystalMat, ring, arch, beam, beamMat, light, lamps, flash: 0, flashColor: new THREE.Color('#9db4ff') };
   }
 
+  /** The rest of the office: a coffee bar, a whiteboard, a lounge, a server rack, a bookshelf, a window and plants. */
+  private buildProps(): void {
+    const add = (mesh: THREE.Mesh, x: number, y: number, z: number, ry = 0): THREE.Mesh => {
+      mesh.position.set(x, y, z); mesh.rotation.y = ry; mesh.castShadow = true; mesh.receiveShadow = true; this.scene.add(mesh); return mesh;
+    };
+    const mat = (color: string, roughness = 0.6, metalness = 0.1): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    const glow = (color: string): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ color });
+
+    // coffee bar
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.75, 1.0, 1.9, 3, 0.04), mat('#3b2f2a', 0.7)), -7.05, 0.5, 1.55, 0);
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.85, 0.05, 2.0, 2, 0.02), mat('#cfc8bd', 0.35)), -7.05, 1.02, 1.55);
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.55, 0.42, 3, 0.05), mat('#1f232b', 0.3, 0.6)), -7.1, 1.33, 1.1);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), glow('#ff6b5e')), -6.88, 1.45, 1.1);
+    for (const [i, color] of ['#e8e4da', '#3a6ea5', '#c0504d'].entries()) add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.13, 14), mat(color, 0.4)), -7.0, 1.11, 1.75 + i * 0.2);
+
+    // whiteboard
+    const boardCanvas = document.createElement('canvas');
+    boardCanvas.width = 1024; boardCanvas.height = 512;
+    const bg = boardCanvas.getContext('2d')!;
+    bg.fillStyle = '#f4f6fa'; bg.fillRect(0, 0, 1024, 512);
+    bg.strokeStyle = '#3a6ea5'; bg.lineWidth = 6;
+    const box = (x: number, y: number, w: number, h: number): void => { bg.strokeRect(x, y, w, h); };
+    box(70, 90, 200, 110); box(410, 90, 200, 110); box(750, 90, 200, 110); box(410, 320, 200, 110);
+    bg.beginPath(); bg.moveTo(270, 145); bg.lineTo(410, 145); bg.moveTo(610, 145); bg.lineTo(750, 145); bg.moveTo(510, 200); bg.lineTo(510, 320); bg.stroke();
+    bg.fillStyle = '#c0504d'; bg.font = '600 44px "Noto Sans KR", sans-serif'; bg.fillText('lead', 120, 160); bg.fillText('build', 455, 160); bg.fillText('review', 775, 160); bg.fillText('gate', 465, 390);
+    const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace = THREE.SRGBColorSpace;
+    add(new THREE.Mesh(new RoundedBoxGeometry(3.1, 1.6, 0.08, 2, 0.03), mat('#c9ced8', 0.4, 0.4)), 0, 1.55, -5.35);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(2.95, 1.45), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.5 })), 0, 1.55, -5.305);
+    for (const x of [-1.4, 1.4]) add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 10), mat('#8a93a3', 0.4, 0.6)), x, 0.8, -5.4);
+
+    // lounge: two beanbags and a low table
+    for (const [x, z, color] of [[6.15, 1.0, '#4a5fa8'], [6.35, 2.95, '#a8504a']] as const) {
+      const bag = add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 16), mat(color, 0.9)), x + 0.45, 0.3, z);
+      bag.scale.set(1, 0.55, 1);
+    }
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32), mat('#c9a77a', 0.5)), 6.75, 0.45, 1.95);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.42, 12), mat('#2a3243', 0.5, 0.5)), 6.75, 0.21, 1.95);
+
+    // server rack with blinking lights
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.85, 2.1, 0.85, 3, 0.03), mat('#151a22', 0.4, 0.6)), 5.8, 1.05, -4.8, -0.75);
+    this.rackLights = [];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 3; col++) {
+        const light = glow(row % 3 === 0 ? '#3cc3b0' : '#7fcf8f');
+        const led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.01), light);
+        const local = new THREE.Vector3(-0.2 + col * 0.2, 0.3 + row * 0.2, 0.43).applyAxisAngle(UP, -0.75);
+        add(led, 5.8 + local.x, local.y, -4.8 + local.z, -0.75);
+        this.rackLights.push(light);
+      }
+    }
+
+    // bookshelf
+    add(new THREE.Mesh(new RoundedBoxGeometry(1.2, 2.0, 0.45, 2, 0.02), mat('#5a4636', 0.8)), -5.8, 1.0, -4.8, 0.75);
+    const colors = ['#c0504d', '#3a6ea5', '#e0b85a', '#4fc29a', '#8c9bff', '#e8e4da'];
+    for (let shelf = 0; shelf < 4; shelf++) {
+      for (let k = 0; k < 7; k++) {
+        const h = 0.3 + ((shelf * 7 + k) % 3) * 0.04;
+        const local = new THREE.Vector3(-0.45 + k * 0.14, 0.28 + shelf * 0.46 + h / 2, 0.06).applyAxisAngle(UP, 0.75);
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.3), mat(colors[(shelf + k) % colors.length]!, 0.8)), -5.8 + local.x, local.y, -4.8 + local.z, 0.75);
+      }
+    }
+
+    // a window panel on the back wall: night city lights
+    const windowCanvas = document.createElement('canvas');
+    windowCanvas.width = 512; windowCanvas.height = 256;
+    const wg = windowCanvas.getContext('2d')!;
+    const sky = wg.createLinearGradient(0, 0, 0, 256); sky.addColorStop(0, '#0b1226'); sky.addColorStop(1, '#2a2f5a');
+    wg.fillStyle = sky; wg.fillRect(0, 0, 512, 256);
+    for (let i = 0; i < 26; i++) { const w = 18 + (i * 37) % 30, h = 50 + (i * 53) % 150, x = (i * 41) % 512; wg.fillStyle = '#121a30'; wg.fillRect(x, 256 - h, w, h); wg.fillStyle = '#f0c063'; for (let j = 0; j < h / 18; j++) if ((i + j) % 3 === 0) wg.fillRect(x + 4, 256 - h + 6 + j * 18, 4, 5); }
+    const windowTex = new THREE.CanvasTexture(windowCanvas); windowTex.colorSpace = THREE.SRGBColorSpace;
+    add(new THREE.Mesh(new RoundedBoxGeometry(2.6, 1.5, 0.08, 2, 0.03), mat('#2a3243', 0.4, 0.5)), 3.4, 1.9, -7.3, -0.25);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(2.45, 1.36), new THREE.MeshBasicMaterial({ map: windowTex, toneMapped: false })), 3.4 + Math.sin(-0.25) * 0.05, 1.9, -7.3 + Math.cos(-0.25) * 0.05, -0.25);
+
+    // plants
+    for (const [x, z] of [[-7.6, -1.6], [7.4, -1.4], [-3.0, -6.6], [7.0, 4.6], [-6.8, 4.4]] as const) {
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.22, 0.5, 18), mat('#c9a77a', 0.7)), x, 0.25, z);
+      for (let k = 0; k < 4; k++) add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.3 - k * 0.04, 1), mat(k % 2 ? '#3f8f4f' : '#4fa65f', 0.8)), x + Math.sin(k * 2.1) * 0.12, 0.7 + k * 0.22, z + Math.cos(k * 2.1) * 0.12);
+    }
+  }
+  private rackLights: THREE.MeshBasicMaterial[] = [];
+
   private buildCourier(): void {
     const mat = new THREE.MeshStandardMaterial({ color: '#f3f5fa', emissive: '#9db4ff', emissiveIntensity: 0.9, roughness: 0.4 });
     const mesh = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.025, 0.44, 2, 0.01), mat);
@@ -267,11 +362,17 @@ export class Office {
       const bone = node as THREE.Bone;
       if (bone.isBone && !bones[bone.name]) bones[bone.name] = bone;
     });
+    const random = seeded(role);
     const mixer = new THREE.AnimationMixer(model);
+    // each robot keeps its own rhythm, so no two move in step
+    mixer.timeScale = 0.88 + random() * 0.24;
     const actions = new Map<string, THREE.AnimationAction>();
     for (const clip of clips) actions.set(clip.name, mixer.clipAction(clip));
-    for (const name of ['Wave', 'ThumbsUp', 'No', 'Yes', 'Jump']) { const a = actions.get(name); if (a) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } }
-    actions.get('Idle')?.play();
+    for (const name of ['ThumbsUp', 'No', 'Yes', 'Jump']) { const a = actions.get(name); if (a) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } }
+    const idle = actions.get('Idle');
+    idle?.play();
+    if (idle) idle.time = random() * idle.getClip().duration;
+    actions.get('Wave')?.setLoop(THREE.LoopRepeat, Infinity);
 
     // the ring under the robot shows its model's colour (Codex teal / Claude violet)
     const ringMat = new THREE.MeshBasicMaterial({ color: '#9DB4FF' });
@@ -282,7 +383,14 @@ export class Office {
     // accessories, fixed to the head and hands so they follow the animations (sizes in metres)
     group.updateMatrixWorld(true);
     const probe = new THREE.Group(); probe.add(model); probe.updateMatrixWorld(true);
-    this.addAccessories(role, bones, scale);
+    const tool = this.addAccessories(role, bones, scale);
+    const mug = new THREE.Group();
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.15, 18), new THREE.MeshStandardMaterial({ color: ['#e8e4da', '#3a6ea5', '#c0504d', '#2e2e2e'][Math.floor(random() * 4)] ?? '#e8e4da', roughness: 0.4 }));
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.012, 8, 16), cup.material);
+    handle.position.x = 0.075; handle.rotation.y = Math.PI / 2;
+    mug.add(cup, handle);
+    mug.visible = false;
+    fixTo(bones.Palm2R ?? bones.LowerArmR, mug, 0, 0.06, 0.06, scale);
     group.add(model);
 
     // the station: a desk in front of the robot, a wall screen behind it
@@ -326,26 +434,19 @@ export class Office {
       role, home, homeYaw: seat.yaw, group, model, mixer, actions, current: 'Idle', face, bones, ring, ringMat,
       rest: ['UpperArmL', 'UpperArmR', 'LowerArmL', 'LowerArmR', 'ShoulderL', 'ShoulderR', 'Neck', 'Head'].map(name => bones[name]).filter((bone): bone is THREE.Bone => !!bone).map(bone => [bone, bone.quaternion.clone()]),
       screen, screenCanvas, screenTex, screenKey: '', screenAt: 0, screenLight, strip, keys, doc,
-      mood: 'idle', moodSince: 0, seen: false, trip: null, oneShot: null,
+      mood: 'idle', moodSince: 0, seen: false, oneShot: null,
+      plan: { kind: 'desk', until: 0 }, path: [], deliver: null, random, speed: 1.15 + random() * 0.35, pose: 'type', poseUntil: 0, nodAt: 0,
+      spot: null, listening: null, mug, tool,
     };
   }
 
-  private addAccessories(role: string, bones: Robot['bones'], scale: number): void {
+  private addAccessories(role: string, bones: Robot['bones'], scale: number): THREE.Object3D | null {
     const head = bones.Head;
     const handR = bones.Palm2R ?? bones.LowerArmR;
     const handL = bones.Palm2L ?? bones.LowerArmL;
     // bones live in model units; children are sized in metres and divided by the model scale
-    // offsets and sizes are given in the robot's own frame (metres, +z = where it faces), whatever the bone's axes are
-    const attach = (bone: THREE.Bone | undefined, object: THREE.Object3D, x: number, y: number, z: number): void => {
-      if (!bone) return;
-      const k = bone.getWorldScale(new THREE.Vector3()).x || scale;
-      const inverse = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
-      object.quaternion.premultiply(inverse);
-      object.scale.setScalar(1 / k);
-      object.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(inverse).divideScalar(k));
-      object.traverse(node => { if ((node as THREE.Mesh).isMesh) (node as THREE.Mesh).castShadow = true; });
-      bone.add(object);
-    };
+    const attach = (bone: THREE.Bone | undefined, object: THREE.Object3D, x: number, y: number, z: number): void => fixTo(bone, object, x, y, z, scale);
+    let tool: THREE.Object3D | null = null;
     if (role === 'lead') {
       const band = new THREE.MeshStandardMaterial({ color: '#2c3446', metalness: 0.6, roughness: 0.3 });
       const set = new THREE.Group();
@@ -372,6 +473,7 @@ export class Office {
       const lens = new THREE.Mesh(new THREE.CircleGeometry(0.14, 28), new THREE.MeshPhysicalMaterial({ color: '#cfe0ff', transmission: 0.6, roughness: 0.05, transparent: true, opacity: 0.45, side: THREE.DoubleSide })); lens.position.y = 0.28;
       glass.add(handle, rim, lens);
       attach(handR, glass, 0, 0.05, 0.05);
+      tool = glass;
       const monocle = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 8, 28), gold);
       attach(head, monocle, -0.22, 0.25, 0.5);
     } else if (role === 'researcher') {
@@ -381,10 +483,12 @@ export class Office {
       book.add(cover, pages);
       book.rotation.x = -0.9;
       attach(handL, book, 0.1, 0.06, 0.08);
+      tool = book;
       const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.08, 12, 28), new THREE.MeshStandardMaterial({ color: '#2f8f88', roughness: 0.8 }));
       scarf.rotation.x = Math.PI / 2;
       attach(bones.Neck, scarf, 0, 0.02, 0);
     }
+    return tool;
   }
 
   // ---------- screens ----------
@@ -445,13 +549,62 @@ export class Office {
     robot.current = name;
   }
 
-  /** The clip a robot should be in at its desk for its mood. */
+  /** The clip for a robot that has arrived where it was going. */
   private restingClip(robot: Robot): Clip {
-    switch (robot.mood) {
-      case 'asking': return 'Wave';
-      case 'idle': return 'Idle';
-      default: return 'Idle';
+    if (robot.plan.kind === 'ask' && !robot.path.length) return 'Wave';
+    return 'Idle';
+  }
+
+  /** Desks are two circles each, so a robot walks around a desk rather than through it. */
+  private obstacles(): Circle[] {
+    const out: Circle[] = [...OBSTACLES];
+    for (const robot of this.robots.values()) {
+      const center = new THREE.Vector3(0, 0, 0.6).applyAxisAngle(UP, robot.homeYaw).add(robot.home);
+      const side = new THREE.Vector3(0.42, 0, 0).applyAxisAngle(UP, robot.homeYaw);
+      out.push({ x: center.x + side.x, z: center.z + side.z, r: 0.45 }, { x: center.x - side.x, z: center.z - side.z, r: 0.45 });
     }
+    return out;
+  }
+
+  /** Where a plan puts the robot and which way it faces there. */
+  private goalOf(robot: Robot, plan: Plan): { at: THREE.Vector3; face: number } {
+    if (plan.kind === 'desk') return { at: robot.home.clone(), face: robot.homeYaw };
+    if (plan.kind === 'spot') return { at: new THREE.Vector3(plan.spot.x, 0, plan.spot.z), face: Math.atan2(plan.spot.look.x - plan.spot.x, plan.spot.look.z - plan.spot.z) };
+    if (plan.kind === 'ask') return { at: new THREE.Vector3(Math.max(-2.5, Math.min(2.5, robot.home.x * 0.6)), 0, 5.6), face: 0 };
+    const other = this.robots.get(plan.with);
+    const there = other ? other.group.position.clone() : robot.home.clone();
+    const away = robot.group.position.clone().sub(there).setY(0);
+    if (away.lengthSq() < 1e-4) away.set(1, 0, 0);
+    const at = there.clone().add(away.setLength(1.2));
+    return { at, face: Math.atan2(there.x - at.x, there.z - at.z) };
+  }
+
+  private setPlan(robot: Robot, plan: Plan): void {
+    const before = robot.plan;
+    if (before.kind === 'chat') { const other = this.robots.get(before.with); if (other && other.listening === robot.role) other.listening = null; }
+    robot.plan = plan;
+    robot.spot = plan.kind === 'spot' ? plan.spot.id : null;
+    if (plan.kind === 'chat') {
+      const other = this.robots.get(plan.with);
+      if (other) { other.listening = robot.role; if (other.plan.until < plan.until) other.plan = { ...other.plan, until: plan.until } as Plan; }
+    }
+    const goal = this.goalOf(robot, plan).at;
+    const from = robot.group.position;
+    robot.path = from.distanceTo(goal) < 0.05 ? [] : route({ x: from.x, z: from.z }, { x: goal.x, z: goal.z }, this.obstacles()).map(p => new THREE.Vector3(p.x, 0, p.z));
+  }
+
+  /** Picks the next plan when the current one is over or the robot's duty changed. */
+  private think(robot: Robot, now: number): void {
+    if (robot.deliver || robot.oneShot) return;
+    const duty: Plan['kind'] | null = robot.mood === 'working' || robot.mood === 'failed' ? 'desk' : robot.mood === 'asking' ? 'ask' : null;
+    const plan = robot.plan;
+    if (duty) { if (plan.kind !== duty || plan.until !== Infinity) this.setPlan(robot, nextPlan({ role: robot.role, mood: robot.mood, now, free: [], partners: [], random: robot.random })); return; }
+    if (plan.until !== Infinity && now < plan.until) return;
+    if (robot.listening) return;
+    const taken = new Set([...this.robots.values()].filter(other => other !== robot).map(other => other.spot));
+    const free = SPOTS.filter(spot => !taken.has(spot.id));
+    const partners = [...this.robots.values()].filter(other => other !== robot && other.group.visible && (other.mood === 'idle' || other.mood === 'done') && !other.deliver && !other.path.length && !other.listening && other.plan.kind !== 'chat').map(other => other.role);
+    this.setPlan(robot, nextPlan({ role: robot.role, mood: robot.mood, now, free, partners, random: robot.random }));
   }
 
   private project(p: THREE.Vector3): Anchor | null {
@@ -462,8 +615,8 @@ export class Office {
 
   anchors(): { tags: Record<string, Anchor | null>; gate: Anchor | null; gateBase: Anchor | null } {
     const tags: Record<string, Anchor | null> = {};
-    // name tags sit on the floor in front of each desk, clear of the screens
-    for (const [role, robot] of this.robots) tags[role] = robot.group.visible ? this.project(new THREE.Vector3(0, 0, 1.25).applyAxisAngle(new THREE.Vector3(0, 1, 0), robot.homeYaw).add(robot.home)) : null;
+    // name tags follow the robots, at their feet
+    for (const [role, robot] of this.robots) tags[role] = robot.group.visible ? this.project(robot.group.position.clone().add(new THREE.Vector3(0, 0, 0.35))) : null;
     return { tags, gate: this.project(GATE.clone().add(new THREE.Vector3(0, 2.05, 0))), gateBase: this.project(GATE.clone().add(new THREE.Vector3(0, 0, 1.5))) };
   }
 
@@ -506,10 +659,9 @@ export class Office {
     // camera: three-quarter view of the room, drifting slightly, turned by the user's drag
     const sway = state.still ? 0 : Math.sin(now * 0.1) * 0.05;
     const yaw = this.yaw + sway;
-    const working = [...this.robots.values()].find(robot => robot.group.visible && robot.mood === 'working');
-    const goal = working ? new THREE.Vector3(working.home.x * 0.25, 1.0, working.home.z * 0.2 - 0.3) : new THREE.Vector3(0, 1.0, -0.3);
-    this.focus.lerp(goal, state.still ? 1 : 1 - Math.exp(-dt * 0.8));
-    const radius = 11.8, pitch = 0.5;
+    // the whole office stays in view: the robots move around it
+    this.focus.set(0, 0.8, -0.4);
+    const radius = 14.5, pitch = 0.55;
     this.camera.position.set(this.focus.x + Math.sin(yaw) * radius * Math.cos(pitch), this.focus.y + radius * Math.sin(pitch), this.focus.z + Math.cos(yaw) * radius * Math.cos(pitch));
     this.camera.lookAt(this.focus);
     this.composer.render(dt);
@@ -519,10 +671,9 @@ export class Office {
     const before = robot.mood;
     robot.mood = mood;
     robot.moodSince = now;
-    if (state.still || robot.trip) return;
+    if (state.still || robot.deliver) return;
     if (mood === 'done' && before === 'working') this.oneShot(robot, 'ThumbsUp');
     else if (mood === 'failed') this.oneShot(robot, 'No');
-    else if (mood === 'working' && before !== 'working') this.oneShot(robot, 'Yes');
   }
 
   private oneShot(robot: Robot, name: string): void {
@@ -553,10 +704,12 @@ export class Office {
     this.courier.tone = h.tone;
     this.courier.t = 0;
     this.gate.flashColor.set(TONE[h.tone] ?? '#9DB4FF');
-    if (sender && sender.group.visible && !sender.trip) {
+    if (sender && sender.group.visible && !sender.deliver) {
       // the sender walks it over; the document leaves its hands at the gate
-      sender.trip = { kind: 'deliver', phase: 'out', t: 0, carrying: true };
-      this.play(sender, 'Walking', 0.3);
+      sender.deliver = { phase: 'out', t: 0 };
+      const stop = GATE.clone().add(sender.group.position.clone().sub(GATE).setY(0).setLength(2.0));
+      const from = sender.group.position;
+      sender.path = route({ x: from.x, z: from.z }, { x: stop.x, z: stop.z }, this.obstacles().slice(1)).map(p => new THREE.Vector3(p.x, 0, p.z));
       this.courier.route = null;
     } else {
       // the harness itself sends it (a sent-back reason): it starts in the gate
@@ -567,79 +720,55 @@ export class Office {
 
   private animateRobot(robot: Robot, accent: string, t: number, now: number, dt: number, still: boolean): void {
     const g = robot.group;
-    const trip = robot.trip;
-    const stop = GATE.clone().add(robot.home.clone().sub(GATE).setLength(1.75));
-    if (trip) {
-      const speed = 1.35;
-      const legLength = robot.home.distanceTo(stop);
-      if (trip.phase === 'out' || trip.phase === 'back') {
-        trip.t += (dt * speed) / legLength;
-        const k = Math.min(1, trip.t);
-        const from = trip.phase === 'out' ? robot.home : stop, to = trip.phase === 'out' ? stop : robot.home;
-        g.position.lerpVectors(from, to, k);
-        const dir = to.clone().sub(from);
-        const heading = Math.atan2(dir.x, dir.z);
-        g.rotation.y = turnTowards(g.rotation.y, heading, dt * 8);
-        if (k >= 1) {
-          if (trip.phase === 'out') {
-            trip.phase = 'scan'; trip.t = 0;
-            this.play(robot, 'Idle', 0.3);
-            // hand the document to the gate
-            this.courier.route = [...this.pendingRoute];
-            this.courier.t = 0;
-            this.courier.mesh.position.copy(g.position).add(new THREE.Vector3(0, 1.0, 0));
-            trip.carrying = false;
-          } else {
-            robot.trip = null;
-            this.play(robot, this.restingClip(robot), 0.3);
-          }
-        }
-      } else if (trip.phase === 'scan') {
-        trip.t += dt;
-        g.rotation.y = turnTowards(g.rotation.y, Math.atan2(GATE.x - g.position.x, GATE.z - g.position.z), dt * 6);
-        if (trip.t > 1.2) { trip.phase = 'back'; trip.t = 0; this.play(robot, 'Walking', 0.3); }
+    if (!still) this.think(robot, now);
+    const goal = this.goalOf(robot, robot.plan);
+
+    // walking: along the planned route, turning into the direction of travel
+    if (robot.path.length && !still) {
+      const next = robot.path[0]!;
+      const to = next.clone().sub(g.position).setY(0);
+      const step = robot.speed * dt;
+      if (to.length() <= step) {
+        g.position.copy(next);
+        robot.path.shift();
+        if (!robot.path.length) this.arrived(robot);
+      } else {
+        g.position.addScaledVector(to.normalize(), step);
+        g.rotation.y = turnTowards(g.rotation.y, Math.atan2(to.x, to.z), dt * 7);
       }
-      robot.doc.visible = false;
+      if (!robot.oneShot) this.play(robot, 'Walking', 0.25);
+      const walk = robot.actions.get('Walking');
+      if (walk) walk.timeScale = robot.speed / 1.3;
     } else {
-      g.position.lerp(robot.home, 1 - Math.exp(-dt * 6));
-      g.rotation.y = turnTowards(g.rotation.y, robot.homeYaw, dt * 5);
+      if (still) { g.position.copy(goal.at.distanceTo(g.position) < 0.05 ? goal.at : g.position); }
+      if (robot.deliver?.phase === 'scan') {
+        robot.deliver.t += dt;
+        g.rotation.y = turnTowards(g.rotation.y, Math.atan2(GATE.x - g.position.x, GATE.z - g.position.z), dt * 6);
+        if (robot.deliver.t > 1.2) { robot.deliver = null; this.setPlan(robot, robot.plan); }
+      } else {
+        const listen = robot.listening ? this.robots.get(robot.listening) : null;
+        const face = listen && !listen.path.length ? Math.atan2(listen.group.position.x - g.position.x, listen.group.position.z - g.position.z) : goal.face;
+        g.rotation.y = turnTowards(g.rotation.y, face, dt * 5);
+      }
       if (!robot.oneShot) this.play(robot, this.restingClip(robot));
-      robot.doc.visible = robot.mood === 'done';
+      // a chat: now and then one of them nods
+      if (!still && (robot.plan.kind === 'chat' || robot.listening) && !robot.path.length && now > robot.nodAt) {
+        robot.nodAt = now + 2.5 + robot.random() * 3.5;
+        if (robot.random() < 0.6) this.oneShot(robot, 'Yes');
+      }
     }
 
-    // bones the current clip does not animate keep their rest pose, so the typing offsets never pile up
     for (const [bone, rest] of robot.rest) bone.quaternion.copy(rest);
     robot.mixer.update(still ? 0 : dt);
+    robot.model.updateMatrixWorld(true);
+    const settled = !robot.path.length && !robot.oneShot && robot.current === 'Idle' && !robot.deliver;
+    const typing = settled && robot.plan.kind === 'desk' && robot.mood === 'working';
+    this.posture(robot, settled, typing, t, now);
 
-    // working: the hands reach for the keyboard (or the role's tool) and the head follows the work, on top of Idle
-    const working = !trip && !robot.oneShot && robot.mood === 'working' && robot.current === 'Idle';
-    if (working) {
-      robot.model.updateMatrixWorld(true);
-      const b = robot.bones;
-      const rate = robot.role === 'builder' ? 14 : 8;
-      const tap = (phase: number): number => Math.max(0, Math.sin(t * rate + phase)) * 0.06;
-      const local = (x: number, y: number, z: number): THREE.Vector3 => g.localToWorld(new THREE.Vector3(x, y, z));
-      let left: THREE.Vector3, right: THREE.Vector3;
-      if (robot.role === 'verifier') {
-        left = local(0.25, 0.8 + tap(0), 0.44);
-        right = local(-0.05 + Math.sin(t * 1.3) * 0.22, 1.05, 0.5);
-        rotateWorld(b.Head, g.localToWorld(new THREE.Vector3(0, 1, 0)).sub(g.position).normalize(), Math.sin(t * 1.3) * 0.25);
-      } else if (robot.role === 'lead') {
-        left = local(0.12, 1.0, 0.4);
-        right = local(-0.05, 0.98 + tap(0) * 1.5, 0.45);
-      } else if (robot.role === 'researcher') {
-        left = local(0.14, 0.98, 0.42);
-        right = local(-0.14, 0.98 + Math.max(0, Math.sin(t * 2)) * 0.08, 0.42);
-      } else {
-        left = local(0.25, 0.8 + tap(0), 0.46);
-        right = local(-0.25, 0.8 + tap(1.9), 0.46);
-      }
-      reach(b.UpperArmL, b.LowerArmL, b.Palm2L, left, g.localToWorld(new THREE.Vector3(0.34, 0.85, 0.05)));
-      reach(b.UpperArmR, b.LowerArmR, b.Palm2R, right, g.localToWorld(new THREE.Vector3(-0.34, 0.85, 0.05)));
-      const sideways = new THREE.Vector3(1, 0, 0).applyQuaternion(g.quaternion);
-      rotateWorld(b.Head, sideways, 0.16 + Math.sin(t * 1.1) * 0.05);
-    }
-    robot.keys.opacity = working ? 0.55 + Math.sin(t * 8) * 0.15 : 0;
+    robot.doc.visible = robot.mood === 'done';
+    robot.mug.visible = settled && robot.plan.kind === 'spot' && robot.plan.spot.kind === 'coffee';
+    if (robot.tool) robot.tool.visible = !robot.mug.visible && (robot.role === 'researcher' || robot.mood === 'working');
+    robot.keys.opacity = typing && robot.pose === 'type' ? 0.55 + Math.sin(t * 8) * 0.15 : 0;
 
     // faces: the model has three expressions
     if (robot.face?.morphTargetDictionary && robot.face.morphTargetInfluences) {
@@ -654,8 +783,84 @@ export class Office {
     robot.ring.scale.setScalar(robot.mood === 'working' ? 1 + Math.sin(now * 3) * 0.04 : 1);
   }
 
+  private arrived(robot: Robot): void {
+    if (robot.deliver?.phase === 'out') {
+      robot.deliver = { phase: 'scan', t: 0 };
+      // the document leaves its hands into the gate
+      this.courier.route = [...this.pendingRoute];
+      this.courier.t = 0;
+      this.courier.mesh.position.copy(robot.group.position).add(new THREE.Vector3(0, 1.0, 0));
+    }
+  }
+
+  /** Hands and head on top of the clip: typing, thinking, stretching at the desk; coffee, writing, reading elsewhere. */
+  private posture(robot: Robot, settled: boolean, typing: boolean, t: number, now: number): void {
+    if (!settled) return;
+    const g = robot.group;
+    const b = robot.bones;
+    const local = (x: number, y: number, z: number): THREE.Vector3 => g.localToWorld(new THREE.Vector3(x, y, z));
+    const elbowL = local(0.34, 0.85, 0.05), elbowR = local(-0.34, 0.85, 0.05);
+    const sideways = new THREE.Vector3(1, 0, 0).applyQuaternion(g.quaternion);
+    const upward = new THREE.Vector3(0, 1, 0);
+    const hands = (left: THREE.Vector3 | null, right: THREE.Vector3 | null): void => {
+      if (left) reach(b.UpperArmL, b.LowerArmL, b.Palm2L, left, elbowL);
+      if (right) reach(b.UpperArmR, b.LowerArmR, b.Palm2R, right, elbowR);
+    };
+    const plan = robot.plan;
+    if (typing) {
+      if (now > robot.poseUntil) {
+        const r = robot.random();
+        robot.pose = r < 0.72 ? 'type' : r < 0.9 ? 'think' : 'stretch';
+        robot.poseUntil = now + (robot.pose === 'type' ? 5 + robot.random() * 7 : robot.pose === 'think' ? 2 + robot.random() * 2.5 : 1.6 + robot.random());
+      }
+      if (robot.pose === 'think') {
+        hands(local(0.22, 0.8, 0.4), local(-0.04, 1.22, 0.3));
+        rotateWorld(b.Head, sideways, -0.12);
+        rotateWorld(b.Head, upward, 0.25 * Math.sin(now * 0.6));
+        return;
+      }
+      if (robot.pose === 'stretch') { hands(local(0.28, 2.1, -0.05), local(-0.28, 2.1, -0.05)); rotateWorld(b.Head, sideways, -0.2); return; }
+      const rate = robot.role === 'builder' ? 14 : robot.role === 'lead' ? 7 : 9;
+      const tap = (phase: number): number => Math.max(0, Math.sin(t * rate + phase)) * 0.06;
+      if (robot.role === 'verifier') {
+        hands(local(0.25, 0.8 + tap(0), 0.44), local(-0.05 + Math.sin(t * 1.3) * 0.22, 1.05, 0.5));
+        rotateWorld(b.Head, upward, Math.sin(t * 1.3) * 0.25);
+      } else if (robot.role === 'lead') hands(local(0.12, 1.0, 0.4), local(-0.05, 0.98 + tap(0) * 1.5, 0.45));
+      else if (robot.role === 'researcher') hands(local(0.14, 0.98, 0.42), local(-0.14, 0.98 + Math.max(0, Math.sin(t * 2)) * 0.08, 0.42));
+      else hands(local(0.25, 0.8 + tap(0), 0.46), local(-0.25, 0.8 + tap(1.9), 0.46));
+      rotateWorld(b.Head, sideways, 0.16 + Math.sin(t * 1.1) * 0.05);
+      return;
+    }
+    if (plan.kind === 'desk' && robot.mood === 'failed') { hands(local(0.3, 0.8, 0.36), local(-0.3, 0.8, 0.36)); rotateWorld(b.Head, sideways, 0.35); return; }
+    if (plan.kind === 'spot') {
+      const kind = plan.spot.kind;
+      if (kind === 'coffee') {
+        const sip = (now + robot.speed * 3) % 6 < 1.6;
+        hands(null, sip ? local(-0.04, 1.42, 0.36) : local(-0.18, 1.0, 0.32));
+        if (sip) rotateWorld(b.Head, sideways, -0.15);
+      } else if (kind === 'board') {
+        const write = local(-0.1 + Math.sin(t * 1.7) * 0.25, 1.35 + Math.sin(t * 3.1) * 0.12, 0.75);
+        hands(null, write);
+        rotateWorld(b.Head, upward, Math.sin(t * 1.7) * 0.18);
+      } else if (kind === 'lounge') {
+        hands(local(0.2, 1.72, -0.18), local(-0.2, 1.72, -0.18));
+        rotateWorld(b.Head, sideways, -0.12);
+      } else if (kind === 'window') {
+        hands(local(0.14, 0.86, -0.28), local(-0.14, 0.86, -0.28));
+        rotateWorld(b.Head, upward, Math.sin(now * 0.3) * 0.3);
+      } else if (kind === 'shelf' || (robot.role === 'researcher')) {
+        hands(local(0.14, 0.98, 0.42), local(-0.14, 0.98, 0.42));
+        rotateWorld(b.Head, sideways, 0.25);
+      } else if (kind === 'rack') {
+        const point = (now + robot.speed * 5) % 7 < 2.5;
+        hands(null, point ? local(-0.15, 1.35, 0.7) : null);
+      }
+    }
+  }
+
   private animateGate(state: OfficeState, t: number, dt: number): void {
     const gate = this.gate;
+    this.rackLights.forEach((light, i) => { const on = state.still || Math.sin(t * (2 + (i % 5)) + i * 1.7) > -0.3; light.color.set(on ? (i % 3 === 0 ? '#3cc3b0' : '#7fcf8f') : '#1d2a2a'); });
     gate.crystal.rotation.y = t * 0.8;
     gate.crystal.position.y = 1.62 + Math.sin(t * 1.6) * 0.06;
     gate.flash = Math.max(0, gate.flash - dt * 1.4);
@@ -717,6 +922,19 @@ export class Office {
   }
 }
 
+/** Fixes an object to a bone, with offset and size given in the robot's own frame (metres, +z = where it faces). */
+function fixTo(bone: THREE.Bone | undefined, object: THREE.Object3D, x: number, y: number, z: number, fallbackScale: number): void {
+  if (!bone) return;
+  const k = bone.getWorldScale(new THREE.Vector3()).x || fallbackScale;
+  const inverse = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
+  object.quaternion.premultiply(inverse);
+  object.scale.setScalar(1 / k);
+  object.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(inverse).divideScalar(k));
+  object.traverse(node => { if ((node as THREE.Mesh).isMesh) (node as THREE.Mesh).castShadow = true; });
+  bone.add(object);
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _p = new THREE.Quaternion();
 
 /** Turns a bone (in world space) so the direction to its child points at `target`. */

@@ -106,7 +106,7 @@ export function AgentScene({ timeline, runtimes, asking, live }: { timeline: Tim
           if (document.hidden || !room) return;
           room.frame();
           const anchors = room.anchors();
-          for (const [role, node] of Object.entries(tags.current)) place(node, anchors.tags[role], 'translate(-50%, -30%)');
+          for (const [role, node] of Object.entries(tags.current)) place(node, anchors.tags[role], 'translate(-50%, 4px)');
           // every hand-off goes through the harness, so its bubble sits over the gate
           place(bubble.current, anchors.gate);
           place(coreTag.current, anchors.gateBase, 'translate(-50%, 0)');
