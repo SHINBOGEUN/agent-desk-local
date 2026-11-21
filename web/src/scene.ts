@@ -32,7 +32,8 @@ export function sceneOf(timeline: Timeline, asking: boolean): Scene {
   const bubbles: Bubble[] = [];
   timeline.steps.forEach((step, index) => {
     const previous = timeline.steps[index - 1];
-    if (previous && previous.finishedAt) {
+    // The same role again means the harness sent the work back; that bubble comes from the redo itself.
+    if (previous && previous.finishedAt && previous.role !== step.role) {
       bubbles.push({ id: `h${index}`, from: previous.role, to: step.role, text: clip(previous.detail || `${previous.step} → ${step.step}`), tone: previous.ok === false ? 'problem' : 'info' });
     }
     step.reports.filter(report => !report.accepted).forEach((report, n) => bubbles.push({ id: `r${index}-${n}`, from: step.role, to: 'harness', text: clip(report.detail), tone: 'problem' }));
@@ -44,4 +45,53 @@ export function sceneOf(timeline: Timeline, asking: boolean): Scene {
 
   const gates = timeline.steps.flatMap(step => step.gates).map(result => ({ gate: result.gate, ok: result.ok, skipped: result.skipped === true }));
   return { robots, bubbles, speaking: bubbles.at(-1) ?? null, gates };
+}
+
+// ---------- role lanes (the "timeline" view of a run) ----------
+
+export interface LaneBlock { step: string; start: number; end: number; ok: boolean | null; running: boolean }
+export interface Lane { role: string; blocks: LaneBlock[] }
+export interface Checkpoint { gate: string; at: number; ok: boolean; skipped: boolean }
+
+/**
+ * Each role's steps on one time axis (0 = the first step's start, 1 = the run's end or now), and the harness's
+ * checks as checkpoints. A step's checks are placed where they happened: at the start of a step nested inside it
+ * (the review inside the build) or else at its end. G1 (report shape) is left out: it is part of every report.
+ */
+export function lanesOf(timeline: Timeline, now: number): { lanes: Lane[]; checkpoints: Checkpoint[]; spanMs: number } {
+  const steps = timeline.steps;
+  if (!steps.length) return { lanes: [], checkpoints: [], spanMs: 0 };
+  const startOf = (step: (typeof steps)[number]): number => Date.parse(step.startedAt);
+  const endOf = (step: (typeof steps)[number]): number => (step.finishedAt ? Date.parse(step.finishedAt) : now);
+  const t0 = Math.min(...steps.map(startOf));
+  const t1 = Math.max(t0 + 1, ...steps.map(endOf));
+  const span = t1 - t0;
+  const at = (time: number): number => Math.min(1, Math.max(0, (time - t0) / span));
+  const roles = ROLE_ORDER.filter(role => steps.some(step => step.role === role));
+  const lanes = roles.map(role => ({
+    role,
+    blocks: steps.filter(step => step.role === role).map(step => ({ step: step.step, start: at(startOf(step)), end: Math.max(at(endOf(step)), at(startOf(step)) + 0.008), ok: step.ok, running: step.finishedAt === null && timeline.finished === null })),
+  }));
+  const checkpoints: Checkpoint[] = [];
+  for (const step of steps) {
+    const nested = steps.filter(other => other !== step && startOf(other) > startOf(step) && startOf(other) < endOf(step)).map(startOf);
+    const when = nested.length ? Math.min(...nested) : endOf(step);
+    step.gates.filter(gate => gate.gate !== 'G1').forEach(gate => {
+      let place = at(when);
+      while (checkpoints.some(point => Math.abs(point.at - place) < 0.03)) place = Math.min(1, place + 0.035);
+      checkpoints.push({ gate: gate.gate, at: place, ok: gate.ok, skipped: gate.skipped === true });
+    });
+  }
+  return { lanes, checkpoints, spanMs: span };
+}
+
+export type LampState = 'ok' | 'fail' | 'skip' | 'wait';
+
+/** The harness pillar's three lamps: the latest result of changed files (G2), tests (G3) and review (G4). */
+export function gateLamps(timeline: Timeline): { gate: 'G2' | 'G3' | 'G4'; state: LampState }[] {
+  const all = timeline.steps.flatMap(step => step.gates);
+  return (['G2', 'G3', 'G4'] as const).map(gate => {
+    const last = all.filter(result => result.gate === gate).at(-1);
+    return { gate, state: !last ? 'wait' : last.skipped ? 'skip' : last.ok ? 'ok' : 'fail' };
+  });
 }

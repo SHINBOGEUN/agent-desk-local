@@ -9,6 +9,7 @@ import type { I18n, Key, Lang } from './i18n.ts';
 import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
 import { NotesView } from './notes.tsx';
+import { AgentScene, RoleLanes } from './agent-scene.tsx';
 import { errorText } from './util.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
@@ -356,149 +357,152 @@ function BenchmarkView() {
 }
 
 
-function ProjectButton({ project, on, live, onSelect, onForget }: { project: ProjectEntry; on: boolean; live: boolean; onSelect: () => void; onForget: () => Promise<void> }) {
-  const { t } = useI18n();
-  const [confirming, setConfirming] = useState(false);
-  if (confirming) {
-    return (
-      <div className="project-item confirm" role="group">
-        <span className="project-text"><span className="project-name">{t('forgetQuestion', { name: project.name })}</span><span className="project-path">{t('forgetNote', { n: project.runs })}</span></span>
-        <span className="confirm-actions">
-          <button className="mini danger" onClick={() => { void onForget().finally(() => setConfirming(false)); }}>{t('delete')}</button>
-          <button className="mini" onClick={() => setConfirming(false)}>{t('cancel')}</button>
-        </span>
-      </div>
-    );
-  }
+type Tab = 'chat' | 'bench' | 'quality' | 'notes';
+const STAGE_KEY = 'agent-desk.stage';
+
+/** The busiest Codex window as one short line in the top bar; opening it shows the full gauge. */
+function UsageInline() {
+  const { t, lang } = useI18n();
+  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  useEffect(() => { api.usage().then(setUsage).catch(() => setUsage(null)); }, []);
+  const windows = usage?.limits?.windows ?? [];
+  const top = windows.reduce<(typeof windows)[number] | null>((best, entry) => (!best || entry.usedPercent > best.usedPercent ? entry : best), null);
+  const label = top ? t('usageShort', { window: top.windowDurationMins === 10080 ? (lang === 'ko' ? '주간' : 'week') : '5h', pct: Math.round(top.usedPercent) }) : t('usageNone');
+  const tone = !top ? 'muted' : top.usedPercent >= 90 ? 'danger' : top.usedPercent >= 70 ? 'warning' : 'success';
   return (
-    <div className={`project-row${on ? ' on' : ''}`}>
-      <button title={project.path} className={`project-item${on ? ' on' : ''}`} onClick={onSelect}>
-        <span className="project-initial" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span>
-        <span className="project-text"><span className="project-name">{project.name}</span><span className="project-path">{project.path}</span></span>
-        {live ? <span className="live-dot" aria-label={t('status_running')} /> : null}
-      </button>
-      {!live ? <button className="forget" aria-label={t('forgetLabel', { name: project.name })} title={t('forgetLabel', { name: project.name })} onClick={() => setConfirming(true)}>×</button> : null}
-    </div>
+    <details className="usage-inline">
+      <summary><span className={`usage-dot tone-${tone}`} aria-hidden="true" />{label}</summary>
+      <div className="usage-pop"><UsageGauge /></div>
+    </details>
   );
 }
 
-type Tab = 'chat' | 'bench' | 'quality' | 'notes';
-
-function Sidebar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
+function TopBar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
   projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void;
   onForget: (project: ProjectEntry) => Promise<void>; onForgetBench: () => Promise<void>; opening: boolean; tab: Tab; onTab: (tab: Tab) => void;
 }) {
   const { t, lang, setLang } = useI18n();
-  const [confirmBench, setConfirmBench] = useState(false);
+  const [confirm, setConfirm] = useState<'project' | 'bench' | null>(null);
   const mine = projects.filter(project => !project.bench);
   const bench = projects.filter(project => project.bench);
   const benchRuns = bench.reduce((sum, project) => sum + project.runs, 0);
-  const item = (project: ProjectEntry) => (
-    <ProjectButton key={project.path} project={project} on={tab === 'chat' && sameProject(project.path, current)} live={project.active && activeRunId !== null}
-      onSelect={() => { onSelect(project.path); onTab('chat'); }} onForget={() => onForget(project)} />
-  );
+  const entry = projects.find(project => sameProject(project.path, current)) ?? null;
+  const live = (project: ProjectEntry): boolean => project.active && activeRunId !== null;
+  const option = (project: ProjectEntry) => <option key={project.path} value={project.path}>{project.name}{live(project) ? ` · ${t('status_running')}` : ''}</option>;
+  const tabs: [Tab, Key][] = [['chat', 'tabRuns'], ['notes', 'tabNotes'], ['quality', 'tabQuality'], ['bench', 'tabBench']];
   return (
-    <aside className="sidebar">
+    <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Agent Desk</span></div>
-      <div className="side-head"><span>{t('projects')}</span></div>
-      <nav className="project-nav" aria-label={t('projects')}>
-        {mine.map(item)}
-        {!mine.length ? <p className="side-empty">{t('noProjectsYet')}</p> : null}
-        {bench.length ? (
-          <details className="bench-group">
-            <summary>{t('benchWorkspaces', { n: bench.length })}</summary>
-            {confirmBench ? (
-              <div className="bench-confirm">
-                <p>{t('forgetBenchQuestion', { n: benchRuns })}</p>
-                <span className="confirm-actions">
-                  <button className="mini danger" onClick={() => { void onForgetBench().finally(() => setConfirmBench(false)); }}>{t('delete')}</button>
-                  <button className="mini" onClick={() => setConfirmBench(false)}>{t('cancel')}</button>
-                </span>
-              </div>
-            ) : <button className="bench-clear" onClick={() => setConfirmBench(true)}>{t('forgetBench')}</button>}
-            {bench.map(item)}
-          </details>
+      <div className="project-pick">
+        <select aria-label={t('projectSelect')} title={current} value={entry?.path ?? ''} disabled={opening}
+          onChange={event => { const value = event.target.value; setConfirm(null); if (value === '__open') onOpen(); else if (value) { onSelect(value); onTab('chat'); } }}>
+          {!entry ? <option value="">{t('projectSelect')}</option> : null}
+          {mine.map(option)}
+          {bench.length ? <optgroup label={t('benchWorkspaces', { n: bench.length })}>{bench.map(option)}</optgroup> : null}
+          <option value="__open">+ {t('openProject')}</option>
+        </select>
+        {entry && !live(entry) ? <button className="icon-btn" title={t('forgetCurrent')} aria-label={t('forgetCurrent')} onClick={() => setConfirm(entry.bench ? 'bench' : 'project')}>×</button> : null}
+        {confirm ? (
+          <div className="topbar-confirm" role="group">
+            <span>{confirm === 'bench' ? t('forgetBenchQuestion', { n: benchRuns }) : entry ? `${t('forgetQuestion', { name: entry.name })} ${t('forgetNote', { n: entry.runs })}` : ''}</span>
+            <button className="mini danger" onClick={() => { const job = confirm === 'bench' ? onForgetBench() : entry ? onForget(entry) : Promise.resolve(); void job.finally(() => setConfirm(null)); }}>{t('delete')}</button>
+            <button className="mini" onClick={() => setConfirm(null)}>{t('cancel')}</button>
+          </div>
         ) : null}
+      </div>
+      <nav className="tabs" aria-label="Agent Desk">
+        {tabs.map(([id, key]) => <button key={id} className={tab === id ? 'on' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => onTab(id)}>{t(key)}</button>)}
       </nav>
-      <button className="open-project" disabled={opening} onClick={onOpen}>+ {t('openProject')}</button>
-      {opening ? <p className="side-empty">{t('dialogOpen')}</p> : null}
-      <div className="side-foot">
-        <button className={`side-link${tab === 'notes' ? ' on' : ''}`} onClick={() => onTab('notes')}>{t('tabNotes')}</button>
-        <button className={`side-link${tab === 'quality' ? ' on' : ''}`} onClick={() => onTab('quality')}>{t('tabQuality')}</button>
-        <button className={`side-link${tab === 'bench' ? ' on' : ''}`} onClick={() => onTab('bench')}>{t('tabBench')}</button>
+      <div className="topbar-side">
+        <UsageInline />
         <span className="lang" role="group" aria-label={t('language')}>
           <button className={lang === 'ko' ? 'on' : ''} onClick={() => setLang('ko')}>한국어</button>
           <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
         </span>
       </div>
-    </aside>
+    </header>
   );
 }
 
-/** One request and the team's reply. Live runs follow the event stream; finished runs load their saved report. */
-function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFinished, projectSkills, onOpenTarget, onFollowUp }: {
-  run: RunRow; live: boolean; canResume: boolean; onResume: (run: RunRow) => void; onPending: (pending: Pending | null) => void; onTimeline: (timeline: Timeline) => void; onFinished: () => void;
-  projectSkills: string[]; onOpenTarget: (target: string) => void; onFollowUp: (runId: number, items: string[]) => void;
-}) {
-  const { t, lang } = useI18n();
+interface RunData { detail: RunDetail | null; timeline: Timeline; pending: Pending | null }
+
+/** Follows one run: its event stream (replayed for finished runs) and its saved detail once it is not running. */
+function useRunFollow(run: RunRow | null, onDone?: () => void): RunData {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [timeline, setTimeline] = useState<Timeline>(emptyTimeline);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [showSteps, setShowSteps] = useState(false);
-  const [revertNote, setRevertNote] = useState('');
-  const callbacks = useRef({ onPending, onTimeline, onFinished });
-  callbacks.current = { onPending, onTimeline, onFinished };
-  const following = live || showSteps;
-  const running = run.status === 'running';
-
-  const reload = useCallback(async (): Promise<void> => { try { setDetail(await api.run(run.id)); } catch { /* shown as missing report */ } }, [run.id]);
-  useEffect(() => { if (!running) void reload(); }, [running, reload]);
+  const done = useRef(onDone);
+  done.current = onDone;
+  const id = run?.id ?? null;
+  const running = run?.status === 'running';
+  useEffect(() => { setDetail(null); setTimeline(emptyTimeline); setPending(null); }, [id]);
+  const reload = useCallback(async (): Promise<void> => { if (id === null) return; try { setDetail(await api.run(id)); } catch { /* shown as missing report */ } }, [id]);
+  useEffect(() => { if (id !== null && !running) void reload(); }, [id, running, reload]);
   useEffect(() => {
-    if (!following) return;
-    return followRun(run.id, {
+    if (id === null) return;
+    return followRun(id, {
       onEvent: event => setTimeline(current => applyEvents(current, [event])),
-      onPending: next => { setPending(next); if (live) callbacks.current.onPending(next); },
-      onDone: () => { setPending(null); if (live) { callbacks.current.onPending(null); callbacks.current.onFinished(); } void reload(); },
+      onPending: setPending,
+      onDone: () => { setPending(null); done.current?.(); void reload(); },
       onError: () => { /* EventSource retries by itself */ },
     });
-  }, [following, live, run.id, reload]);
-  useEffect(() => { if (live) callbacks.current.onTimeline(timeline); }, [live, timeline]);
+  }, [id, reload]);
+  return { detail, timeline, pending };
+}
 
+/** The selected run: what was asked, the agent scene or role timeline, and the result with its follow-up actions. */
+function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTarget, onFollowUp }: {
+  run: RunRow; data: RunData; live: boolean; canResume: boolean; onResume: (run: RunRow) => void;
+  projectSkills: string[]; onOpenTarget: (target: string) => void; onFollowUp: (runId: number, items: string[]) => void;
+}) {
+  const { t, lang } = useI18n();
+  const { detail, timeline, pending } = data;
+  const [view, setView] = useState<'scene' | 'lanes'>(() => (read(STAGE_KEY) === 'lanes' ? 'lanes' : 'scene'));
+  const [revertNote, setRevertNote] = useState('');
+  useEffect(() => { setRevertNote(''); }, [run.id]);
+  const pick = (next: 'scene' | 'lanes'): void => { setView(next); write(STAGE_KEY, next); };
   const status = detail?.run.status ?? run.status;
+  const running = status === 'running';
   const settings = detail?.settings ?? null;
   const runtimes = timeline.runtimes ?? settings?.runtimes;
   const resumable = !running && (status === 'interrupted' || ((status === 'needs_review' || status === 'failed') && detail?.report?.resume !== undefined));
   const current = timeline.steps.at(-1);
   const summary = gateSummary(timeline);
   const gateName = useGateName();
-  const time = new Date(run.startedAt).toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  const skills = timeline.skillsRead ?? detail?.report?.skillsRead ?? [];
+  const time = new Date(run.startedAt).toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const revert = async (yes: boolean): Promise<void> => {
     try {
       const plan = await api.revert(run.id, yes);
       setRevertNote(t(yes ? 'revertDone' : 'revertPreview', { restore: plan.restore.length, remove: plan.remove.length }));
     } catch (caught) { setRevertNote(errorText(caught)); }
   };
-
+  const tokens = ((): string => {
+    if (!detail) return '';
+    const cached = detail.usage.reduce((sum, row) => sum + (row.usage.cachedInputTokens ?? 0), 0);
+    const fresh = detail.usage.reduce((sum, row) => sum + Math.max(0, (row.usage.inputTokens ?? 0) - (row.usage.cachedInputTokens ?? 0)), 0);
+    return cached ? t('runMetaSplit', { id: run.id, tokens: formatTokens(detail.usageTotal), fresh: formatTokens(fresh), cached: formatTokens(cached) }) : t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) });
+  })();
   return (
-    <article className="exchange">
-      <div className="msg msg-user">
-        <div className="bubble">{run.request}</div>
-        <span className="msg-meta">{t('you')} · {time}{settings?.images ? ` · ${t('imagesAttached', { n: settings.images })}` : ''}{settings?.resumeOf ? ` · ${t('resumedFrom', { id: settings.resumeOf })}` : ''}</span>
-      </div>
-      <div className={`msg msg-team status-${statusTone(status)}`}>
-        <div className="bubble">
-          <header className="reply-head">
-            <Badge status={status} />
-            {detail ? <span className="msg-meta">{(() => {
-              const cached = detail.usage.reduce((sum, row) => sum + (row.usage.cachedInputTokens ?? 0), 0);
-              const fresh = detail.usage.reduce((sum, row) => sum + Math.max(0, (row.usage.inputTokens ?? 0) - (row.usage.cachedInputTokens ?? 0)), 0);
-              return cached ? t('runMetaSplit', { id: run.id, tokens: formatTokens(detail.usageTotal), fresh: formatTokens(fresh), cached: formatTokens(cached) }) : t('runMeta', { id: run.id, tokens: formatTokens(detail.usageTotal) });
-            })()}</span> : <span className="msg-meta">#{run.id}</span>}
-            {!running ? <button className="link push" onClick={() => setShowSteps(value => !value)}>{showSteps ? t('hideSteps') : t('showSteps')}</button> : null}
-          </header>
-          {runtimes ? <div className="team-line" aria-label={t('teamUsed')}>{(['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>)}{settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}</div> : null}
-          {settings?.fallback ? <p className="msg-meta warn-text">{(() => { const match = /Codex (5-hour|weekly) usage is (\d+)% \(switch at (\d+)%\)/.exec(settings.fallback); return match ? t('fallbackNote', { window: t(match[1] === 'weekly' ? 'fallbackWeekly' : 'fallback5h'), used: match[2]!, at: match[3]! }) : settings.fallback; })()}</p> : null}
-          {(() => { const used = timeline.skillsRead ?? detail?.report?.skillsRead ?? []; return used.length ? <div className="team-line" aria-label={t('skillsUsed')}>{used.map((entry, index) => <span key={index} className="team-chip skill-chip">{t('skillsUsed')} {entry.skill} · {entry.role}</span>)}</div> : null; })()}
+    <section className={`run-pane status-${statusTone(status)}`} aria-label={`#${run.id}`}>
+      <header className="run-head">
+        <div className="run-line"><span className="run-id">#{run.id}</span><Badge status={status} /><span className="muted">{time}{durationOf(run, lang)}</span>{tokens ? <span className="muted push">{tokens}</span> : null}</div>
+        <h1 className="run-request">{run.request}</h1>
+        <div className="team-line">
+          {runtimes ? (['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>) : null}
+          {settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}
+          {settings?.images ? <span className="team-chip">{t('imagesAttached', { n: settings.images })}</span> : null}
+          {settings?.resumeOf ? <span className="team-chip">{t('resumedFrom', { id: settings.resumeOf })}</span> : null}
+          {skills.map((entry, index) => <span key={index} className="team-chip skill-chip">{t('skillsUsed')} {entry.skill} · {entry.role}</span>)}
+        </div>
+        {settings?.fallback ? <p className="msg-meta warn-text">{(() => { const match = /Codex (5-hour|weekly) usage is (\d+)% \(switch at (\d+)%\)/.exec(settings.fallback); return match ? t('fallbackNote', { window: t(match[1] === 'weekly' ? 'fallbackWeekly' : 'fallback5h'), used: match[2]!, at: match[3]! }) : settings.fallback; })()}</p> : null}
+      </header>
+      <div className="stage">
+        <div className="stage-head">
+          <div className="seg" role="group" aria-label={t('viewScene')}>
+            <button className={view === 'scene' ? 'on' : ''} aria-pressed={view === 'scene'} onClick={() => pick('scene')}>{t('viewScene')}</button>
+            <button className={view === 'lanes' ? 'on' : ''} aria-pressed={view === 'lanes'} onClick={() => pick('lanes')}>{t('viewLanes')}</button>
+          </div>
           {running ? (
             <div className="live-line">
               <span className="pulse" aria-hidden="true" />
@@ -506,25 +510,39 @@ function Exchange({ run, live, canResume, onResume, onPending, onTimeline, onFin
               {current ? <RuntimeTag kind={timeline.runtimes?.[current.role]} /> : null}
             </div>
           ) : null}
-          {timeline.questions?.filter(question => question.answered).map((question, index) => (
-            <div key={index} className="asked"><span className="msg-meta">{t('agentAsks', { role: question.step })} · {t('answeredTag')}</span><p>{question.question}</p></div>
-          ))}
-          {pending && live ? <QuestionBlock pending={pending} /> : null}
-          {!running && detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
-          {!running ? <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} /> : null}
-          {!running && summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
-          {(running || showSteps) && timeline.steps.length ? <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div> : null}
-          {live && running ? <div className="row"><button className="ghost danger" onClick={() => { void api.cancel(); }}>{t('stop')}</button></div> : null}
-          {!running && (status === 'needs_review' || status === 'failed') ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
-          {!running && detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
-          {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
-          {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
-          {!running && detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
-            targetsFor={cause => feedbackTargets(cause, { skillsRead: (timeline.skillsRead ?? detail.report?.skillsRead ?? []).map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
+          {live && running ? <button className="ghost danger push" onClick={() => { void api.cancel(); }}>{t('stop')}</button> : null}
         </div>
-        <span className="msg-meta">Agent Desk{durationOf(run, lang)}</span>
+        {view === 'scene' ? <AgentScene timeline={timeline} runtimes={runtimes} asking={pending !== null && live} live={running} /> : <RoleLanes timeline={timeline} runtimes={runtimes} live={running} />}
+        {view === 'scene' ? <p className="stage-note">{t('sceneNote')}</p> : null}
       </div>
-    </article>
+      {pending && live ? <QuestionBlock pending={pending} /> : null}
+      {timeline.questions?.filter(question => question.answered).map((question, index) => (
+        <div key={index} className="asked"><span className="msg-meta">{t('agentAsks', { role: question.step })} · {t('answeredTag')}</span><p>{question.question}</p></div>
+      ))}
+      {!running ? (
+        <div className="run-grid">
+          <div className="panel-card result-card">
+            {detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
+            <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
+          </div>
+          <div className="panel-card side-card">
+            {summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
+            {detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
+            {status === 'needs_review' || status === 'failed' ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
+            {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
+            {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
+            {detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
+              targetsFor={cause => feedbackTargets(cause, { skillsRead: skills.map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
+          </div>
+        </div>
+      ) : null}
+      {timeline.steps.length ? (
+        <details className="steps-detail">
+          <summary>{t('viewSteps')}</summary>
+          <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div>
+        </details>
+      ) : null}
+    </section>
   );
 }
 
@@ -558,49 +576,18 @@ function QuestionBlock({ pending }: { pending: Pending }) {
   );
 }
 
-function TeamRail({ runtimes, timeline, info, installed, modeChoice, onEdit }: { runtimes: Record<string, string> | null; timeline: Timeline | null; info: ProjectInfo | null; installed: Installed | null; modeChoice: RuntimeMode | ''; onEdit: (role?: string) => void }) {
-  const { t } = useI18n();
-  const state = (role: string): 'working' | 'done' | 'idle' => {
-    const steps = timeline?.steps.filter(step => step.role === role) ?? [];
-    if (steps.some(step => !step.finishedAt) && !timeline?.finished) return 'working';
-    return steps.length ? 'done' : 'idle';
-  };
-  const usesDefault = modeChoice === '' && info !== null && !info.config.mode && !info.config.runtimes;
-  return (
-    <aside className="rail">
-      <section className="rail-block">
-        <div className="rail-head"><h3>{t('teamTitle')}</h3><button className="link push" onClick={() => onEdit()}>{t('editTeam')}</button></div>
-        <ul className="team">
-          {ROLES.map(role => {
-            const now = timeline ? state(role) : 'idle';
-            return (
-              <li key={role} className={`member member-${now}`} role="button" tabIndex={0} onClick={() => onEdit(role)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onEdit(role); } }}>
-                <span className={`avatar avatar-${role}`} aria-hidden="true">{role.slice(0, 1).toUpperCase()}</span>
-                <span className="member-text"><span className="member-name">{role}</span><span className="member-desc">{t(`role_${role}` as Key)}</span></span>
-                <span className="member-side"><RuntimeTag kind={runtimes?.[role]} />{now !== 'idle' ? <span className="member-state">{now === 'working' ? t('roleWorking') : t('roleDone')}</span> : null}</span>
-              </li>
-            );
-          })}
-        </ul>
-        {usesDefault && installed && !installed.claude ? <p className="rail-note">{t('modeDefaultFallback')}</p> : null}
-      </section>
-      <UsageGauge />
-    </aside>
-  );
-}
-
-function ChatView({ project, runs, active, installed, onChanged, onOpen }: { project: string; runs: RunRow[]; active: ActiveRun | null; installed: Installed | null; onChanged: () => void; onOpen: () => void }) {
+/** The run view: the selected run on the left, the conversation and composer on the right. */
+function RunsView({ project, runs, active, installed, onChanged, onOpen }: { project: string; runs: RunRow[]; active: ActiveRun | null; installed: Installed | null; onChanged: () => void; onOpen: () => void }) {
   const { t, lang } = useI18n();
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [liveTimeline, setLiveTimeline] = useState<Timeline | null>(null);
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [modes, setModes] = useState<Record<string, RuntimeMode | ''>>(() => readJson(MODES_KEY, {}));
   const [review, setReview] = useState<'always' | 'auto' | 'never' | 'self' | ''>('');
   const [images, setImages] = useState<Attachment[]>([]);
   const [settingsFor, setSettingsFor] = useState<{ role?: string; skill?: string } | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const openTarget = (target: string): void => {
     const where = targetLocation(target);
     if (!where) return;
@@ -613,7 +600,7 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const setMode = (next: RuntimeMode | ''): void => { const all = { ...modes, [project]: next }; setModes(all); write(MODES_KEY, JSON.stringify(all)); };
 
   useEffect(() => {
-    setInfo(null); setPending(null); setLiveTimeline(null); setError('');
+    setError(''); setSelectedId(null);
     api.project(project).then(setInfo).catch(() => setInfo(null));
   }, [project]);
 
@@ -621,13 +608,23 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const shown = thread.slice(-30);
   const activeHere = active !== null && sameProject(active.project, project);
   const activeElsewhere = active !== null && !activeHere;
-  useEffect(() => { threadEnd.current?.scrollIntoView({ block: 'end' }); }, [shown.length, liveTimeline?.steps.length, pending]);
+  const activeRow = activeHere ? thread.find(run => run.id === active.runId) ?? null : null;
+  // A new run in this project takes the left pane; otherwise the chosen run, or the latest one.
+  const lastActive = useRef<number | null>(null);
+  useEffect(() => { if (activeRow && lastActive.current !== activeRow.id) { lastActive.current = activeRow.id; setSelectedId(activeRow.id); } }, [activeRow]);
+  const selected = thread.find(run => run.id === selectedId) ?? activeRow ?? thread.at(-1) ?? null;
+  const liveData = useRunFollow(activeRow, onChanged);
+  const otherData = useRunFollow(selected && selected.id !== activeRow?.id ? selected : null);
+  const selectedData = selected && selected.id === activeRow?.id ? liveData : otherData;
+  const pending = activeRow ? liveData.pending : null;
+  useEffect(() => { threadEnd.current?.scrollIntoView({ block: 'end' }); }, [shown.length, pending]);
 
   const effectiveMode = (mode || info?.mode || null) as RuntimeMode | null;
   const missing = mode && installed ? modeNeeds(mode).filter(kind => !installed[kind]) : [];
-  const runtimes = liveTimeline?.runtimes ?? (effectiveMode ? previewRuntimes(effectiveMode) : null);
+  const liveRuntimes = activeRow ? liveData.timeline.runtimes : undefined;
+  const runtimes = liveRuntimes ?? (effectiveMode ? previewRuntimes(effectiveMode) : null);
   const usesDefault = mode === '' && info !== null && !info.config.mode && !info.config.runtimes;
-  const railRuntimes = usesDefault && installed && !installed.claude && runtimes && !liveTimeline?.runtimes ? { ...runtimes, verifier: runtimes.builder ?? 'codex' } : runtimes;
+  const teamRuntimes = usesDefault && installed && !installed.claude && runtimes && !liveRuntimes ? { ...runtimes, verifier: runtimes.builder ?? 'codex' } : runtimes;
 
   const addFiles = async (files: File[]): Promise<void> => {
     let next = [...images];
@@ -647,13 +644,14 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
     askNotifications();
     await api.start({ project, request, ...(mode ? { mode } : {}), ...(review ? { review } : {}), ...(images.length && !extra.resumeOf ? { images: images.map(image => image.dataUrl) } : {}), ...extra, language: lang });
   };
+  const answering = pending !== null && activeHere;
   const submit = async (): Promise<void> => {
     const value = text.trim();
     if (!value || busy) return;
     setError('');
     setBusy(true);
     try {
-      if (pending && activeHere) await api.answer(value);
+      if (answering) await api.answer(value);
       else { await startRun(value); setImages([]); }
       setText('');
       onChanged();
@@ -666,17 +664,52 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); }
   };
-  const answering = pending !== null && activeHere;
+  const followUp = (runId: number, items: string[]): void => {
+    const draft = followUpRequest(runId, items, lang);
+    setText(current => (current.trim() ? `${current.trimEnd()}\n\n${draft}` : draft));
+    requestAnimationFrame(() => { composer.current?.focus(); composer.current?.scrollIntoView({ block: 'nearest' }); });
+  };
   const blocked = (activeHere && !answering) || activeElsewhere || missing.length > 0;
+  const replyLine = (run: RunRow): string => {
+    if (run.id === activeRow?.id) { const step = liveData.timeline.steps.at(-1); return step ? t('workingOn', { role: step.role, step: step.step }) : t('starting'); }
+    return run.reason ?? '';
+  };
 
   return (
     <div className="workspace">
-      <section className="chat">
+      <div className="run-side">
+        {selected ? <RunPane key={selected.id} run={selected} data={selectedData} live={selected.id === activeRow?.id} canResume={active === null} onResume={run => { void resume(run); }}
+          projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} onFollowUp={followUp} />
+          : <div className="run-empty"><h2>{t('chatEmptyTitle', { name: projectName(project) })}</h2><p>{t('chatEmptyHint')}</p><ProjectPanel project={project} /></div>}
+      </div>
+      <section className="chat" aria-label={t('chatTitle')}>
         <header className="chat-head">
           <div className="chat-title">
-            <h1>{projectName(project)}</h1>
-            <button className="path" title={t('changeProject')} onClick={onOpen}>{project}</button>
+            <h2>{t('chatTitle')}</h2>
+            <button className="path" title={t('changeProject')} onClick={onOpen}>{projectName(project)}</button>
           </div>
+          <button className="ghost small push" onClick={() => setSettingsFor({})}>{t('editTeam')}</button>
+        </header>
+        <div className="thread" aria-live="polite">
+          {thread.length > shown.length ? <p className="thread-note">{t('olderRuns', { n: thread.length - shown.length })}</p> : null}
+          {!shown.length ? <p className="thread-note">{t('chatEmpty')}</p> : null}
+          {shown.map(run => {
+            const on = run.id === selected?.id;
+            const time = new Date(run.startedAt).toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+            return (
+              <article key={run.id} className="exchange">
+                <div className="msg msg-user"><div className="bubble">{run.request}</div><span className="msg-meta">{t('you')} · {time}</span></div>
+                <button className={`reply status-${statusTone(run.status)}${on ? ' on' : ''}`} aria-pressed={on} onClick={() => setSelectedId(run.id)}>
+                  <span className="reply-head"><span className="run-id">#{run.id}</span><Badge status={run.status} /><span className="msg-meta">{durationOf(run, lang).replace(/^ · /, '')}</span>{on ? <span className="reply-viewing push">{t('viewingRun')}</span> : null}</span>
+                  {replyLine(run) ? <span className="reply-text">{replyLine(run)}</span> : null}
+                </button>
+                {run.id === activeRow?.id && pending ? <QuestionBlock pending={pending} /> : null}
+              </article>
+            );
+          })}
+          <div ref={threadEnd} />
+        </div>
+        <div className="composer-wrap">
           <div className="chat-controls">
             <label className="control">{t('teamLabel')}
               <select value={mode} onChange={event => setMode(event.target.value as RuntimeMode | '')}>
@@ -690,27 +723,10 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
               </select>
             </label>
           </div>
-        </header>
-        <div className="thread" aria-live="polite">
-          {thread.length > shown.length ? <p className="thread-note">{t('olderRuns', { n: thread.length - shown.length })}</p> : null}
-          {!shown.length ? (
-            <div className="thread-empty">
-              <h2>{t('chatEmptyTitle', { name: projectName(project) })}</h2>
-              <p>{t('chatEmptyHint')}</p>
-              <ProjectPanel project={project} />
-            </div>
-          ) : shown.map(run => (
-            <Exchange key={run.id} run={run} live={active?.runId === run.id} canResume={active === null} onResume={run => { void resume(run); }}
-              onPending={setPending} onTimeline={setLiveTimeline} onFinished={() => { setLiveTimeline(null); onChanged(); }}
-              projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget}
-              onFollowUp={(runId, items) => { const draft = followUpRequest(runId, items, lang); setText(current => (current.trim() ? `${current.trimEnd()}\n\n${draft}` : draft)); requestAnimationFrame(() => { composer.current?.focus(); composer.current?.scrollIntoView({ block: 'nearest' }); }); }} />
-          ))}
-          <div ref={threadEnd} />
-        </div>
-        <div className="composer-wrap">
           {activeElsewhere && active ? <p className="composer-note">{t('otherProjectActive', { id: active.runId, name: projectName(active.project) })}</p> : null}
           {activeHere && !answering && active ? <p className="composer-note">{t('composerBusy', { id: active.runId })}</p> : null}
           {missing.length ? <p className="composer-note warn">{t('modeMissing', { name: missing.map(kind => (kind === 'codex' ? 'Codex' : 'Claude')).join(', ') })}</p> : null}
+          {usesDefault && installed && !installed.claude ? <p className="composer-note">{t('modeDefaultFallback')}</p> : null}
           {error ? <p className="composer-note error">{error}</p> : null}
           {images.length ? (
             <div className="attachments">{images.map((image, index) => (
@@ -722,15 +738,14 @@ function ChatView({ project, runs, active, installed, onChanged, onOpen }: { pro
             <button className="attach" disabled={blocked || answering} aria-label={t('attachImage')} title={t('attachImage')} onClick={() => fileInput.current?.click()}>
               <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M13.5 6.5 7.8 12.2a1.6 1.6 0 0 0 2.3 2.3l6-6a3.2 3.2 0 0 0-4.5-4.5l-6 6a4.8 4.8 0 0 0 6.8 6.8l5.1-5.1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </button>
-            <textarea ref={composer} value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} onPaste={onPaste} rows={2} disabled={blocked}
+            <textarea ref={composer} value={text} onChange={event => setText(event.target.value)} onKeyDown={onKey} onPaste={onPaste} rows={3} disabled={blocked}
               placeholder={answering ? t('composerAnswer') : t('composerPlaceholder')} aria-label={answering ? t('composerAnswer') : t('composerPlaceholder')} />
             <button className="send" disabled={blocked || busy || !text.trim()} onClick={() => { void submit(); }}>{answering ? t('sendAnswer') : t('sendRequest')}</button>
           </div>
           <p className="composer-hint">{t('sendHint')}</p>
         </div>
       </section>
-      <TeamRail runtimes={railRuntimes} timeline={liveTimeline} info={info} installed={installed} modeChoice={mode} onEdit={role => setSettingsFor(role ? { role } : {})} />
-      {settingsFor ? <SettingsPanel project={project} runtimes={railRuntimes} busy={activeHere} initialRole={settingsFor.role} initialSkill={settingsFor.skill} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
+      {settingsFor ? <SettingsPanel project={project} runtimes={teamRuntimes} busy={activeHere} initialRole={settingsFor.role} initialSkill={settingsFor.skill} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
     </div>
   );
 }
@@ -827,13 +842,13 @@ export function App() {
   return (
     <I18nContext.Provider value={i18n}>
       <div className="app">
-        <Sidebar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} onForget={forget} onForgetBench={forgetBench} opening={opening} tab={tab} onTab={setTab} />
+        <TopBar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} onForget={forget} onForgetBench={forgetBench} opening={opening} tab={tab} onTab={setTab} />
         <main className="main">
           {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
           {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>
             : tab === 'quality' ? <div className="bench-page"><QualityView project={project} /></div>
             : tab === 'notes' ? <NotesView key={project ?? ''} project={project || null} busy={active !== null && project !== '' && sameProject(active.project, project)} />
-            : project ? <ChatView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
+            : project ? <RunsView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
               : <Welcome onOpen={() => { void open(); }} opening={opening} />}
         </main>
         {browsing ? <FolderPicker start={project} onPick={path => { choose(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}

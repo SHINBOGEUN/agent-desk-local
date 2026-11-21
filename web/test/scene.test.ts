@@ -40,8 +40,36 @@ test('the active step makes its role work, hand-offs and REDO become bubbles, an
   assert.deepEqual(scene.gates, [{ gate: 'G4', ok: false, skipped: false }]);
 });
 
+test('a role that starts again after being sent back gets the REDO bubble, not a hand-off to itself', () => {
+  seq = 0;
+  const timeline = buildTimeline([
+    ev(0, { type: 'step_started', step: 'build', role: 'builder' }),
+    ev(2, { type: 'step_finished', step: 'build', ok: false, detail: 'R2 evidence missing' }),
+    ev(3, { type: 'redo', attempt: 1, mode: 'fix', reasons: ['add a test for R2'] }),
+    ev(4, { type: 'step_started', step: 'build', role: 'builder' }),
+  ]);
+  assert.deepEqual(sceneOf(timeline, false).bubbles.map(bubble => [bubble.from, bubble.to, bubble.text]), [['harness', 'builder', 'add a test for R2']]);
+});
+
 test('the researcher only appears when it was used', () => {
   seq = 0;
   const scene = sceneOf(buildTimeline([ev(0, { type: 'step_started', step: 'research', role: 'researcher' })]), false);
   assert.ok(scene.robots.some(robot => robot.role === 'researcher'));
+});
+
+test('lanes put each role on one time axis and place checks where they happened', async () => {
+  const { lanesOf, gateLamps } = await import('../src/scene.ts');
+  const at = (s: number) => new Date(Date.UTC(2026, 10, 20, 9, 0, s)).toISOString();
+  const step = (name: string, role: string, start: number, end: number | null, gates: { gate: string; ok: boolean }[] = []) => ({ step: name, role, startedAt: at(start), finishedAt: end === null ? null : at(end), ok: true, detail: '', gates, redo: [], retries: [], reports: [], messages: [], commands: 0, fileChanges: 0 });
+  const timeline = { steps: [step('classify', 'lead', 0, 4, [{ gate: 'G1', ok: true }]), step('build', 'builder', 4, 40, [{ gate: 'G2', ok: true }, { gate: 'G3', ok: true }]), step('review', 'verifier', 28, 39, [{ gate: 'G4', ok: true }])], finished: { status: 'completed', reason: 'ok' }, lastSeq: 9 };
+  const { lanes, checkpoints, spanMs } = lanesOf(timeline, Date.parse(at(60)));
+  assert.equal(spanMs, 40_000);
+  assert.deepEqual(lanes.map(lane => lane.role), ['lead', 'builder', 'verifier']);
+  assert.deepEqual(lanes[1]!.blocks[0], { step: 'build', start: 0.1, end: 1, ok: true, running: false });
+  assert.deepEqual(checkpoints.map(point => point.gate), ['G2', 'G3', 'G4']);
+  assert.equal(checkpoints[0]!.at, 0.7);
+  assert.ok(checkpoints[1]!.at > checkpoints[0]!.at);
+  assert.deepEqual(gateLamps(timeline).map(lamp => lamp.state), ['ok', 'ok', 'ok']);
+  assert.deepEqual(gateLamps({ ...timeline, steps: [timeline.steps[0]!] }).map(lamp => lamp.state), ['wait', 'wait', 'wait']);
+  assert.deepEqual(lanesOf({ steps: [], finished: null, lastSeq: 0 }, 0), { lanes: [], checkpoints: [], spanMs: 0 });
 });
