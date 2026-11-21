@@ -9,8 +9,10 @@ import type { Key } from './i18n.ts';
 import type { Timeline } from './model.ts';
 import { gateLamps, lanesOf, sceneOf, stationOf } from './scene.ts';
 import type { Mood, Station } from './scene.ts';
-import { Crew } from './crew3d.ts';
-import type { CrewState, PanelView } from './crew3d.ts';
+import type { Office, OfficeState, PanelView } from './office3d.ts';
+
+/** The robot model (CC0, by Tomás Laulhé, from the three.js examples); see web/public/models/README.md. */
+const MODEL_URL = '/models/RobotExpressive.glb';
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -41,7 +43,8 @@ export function AgentScene({ timeline, runtimes, asking, live }: { timeline: Tim
   const now = useNow(live);
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const crew = useRef<Crew | null>(null);
+  const office = useRef<Office | null>(null);
+  const [loading, setLoading] = useState(true);
   const tags = useRef<Record<string, HTMLDivElement | null>>({});
   const bubble = useRef<HTMLDivElement>(null);
   const coreTag = useRef<HTMLDivElement>(null);
@@ -64,55 +67,70 @@ export function AgentScene({ timeline, runtimes, asking, live }: { timeline: Tim
   };
   const panels = Object.fromEntries(scene.robots.map(robot => [robot.role, panel(robot.role, robot.mood, stationOf(timeline, robot.role, now))]));
   const handoff = latest ? { id: latest.id, from: latest.from, to: latest.to, tone: latest.tone } : null;
-  const state: CrewState = { robots: scene.robots.map(robot => ({ role: robot.role, mood: robot.mood })), panels, lamps, handoff, runtimes, live, still };
+  const state: OfficeState = { robots: scene.robots.map(robot => ({ role: robot.role, mood: robot.mood })), panels, lamps, handoff, runtimes, live, still };
   const stateKey = JSON.stringify(state);
   const stateRef = useRef(state);
   stateRef.current = state;
-  useEffect(() => { crew.current?.setState(stateRef.current); }, [stateKey]);
+  useEffect(() => { office.current?.setState(stateRef.current); }, [stateKey]);
 
   useEffect(() => {
     const el = canvas.current, box = wrap.current;
     if (!el || !box) return undefined;
-    let room: Crew;
-    try { room = new Crew(el); } catch { setBroken(true); return undefined; }
-    crew.current = room;
-    room.setState(stateRef.current);
-    const size = (): void => { const rect = box.getBoundingClientRect(); room.resize(rect.width, rect.height, Math.min(2, window.devicePixelRatio || 1)); };
-    size();
-    const observer = new ResizeObserver(size);
-    observer.observe(box);
+    let room: Office | null = null;
     let frame = 0;
-    const place = (node: HTMLElement | null, at: { x: number; y: number } | null | undefined, shift = 'translate(-50%, 0)'): void => {
+    let stopped = false;
+    let observer: ResizeObserver | null = null;
+    const place = (node: HTMLElement | null, at: { x: number; y: number } | null | undefined, shift = 'translate(-50%, -100%)'): void => {
       if (!node) return;
       if (!at) { node.style.visibility = 'hidden'; return; }
       node.style.visibility = 'visible';
       node.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) ${shift}`;
     };
-    const loop = (ms: number): void => {
-      frame = requestAnimationFrame(loop);
-      if (document.hidden) return;
-      room.frame(ms / 1000);
-      const anchors = room.anchors();
-      for (const [role, node] of Object.entries(tags.current)) place(node, anchors.tags[role], 'translate(-50%, -100%)');
-      // every hand-off goes through the harness, so its bubble sits over the core
-      place(bubble.current, anchors.core, 'translate(-50%, -100%)');
-      place(coreTag.current, anchors.coreBase);
-    };
-    frame = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); room.dispose(); crew.current = null; };
+    // three.js is loaded only when the scene is shown, so the rest of the dashboard stays light
+    void (async () => {
+      try {
+        const { Office: Room } = await import('./office3d.ts');
+        if (stopped) return;
+        room = new Room(el);
+        const size = (): void => { const rect = box.getBoundingClientRect(); room?.resize(rect.width, rect.height, Math.min(2, window.devicePixelRatio || 1)); };
+        size();
+        observer = new ResizeObserver(size);
+        observer.observe(box);
+        await room.load(MODEL_URL);
+        if (stopped) return;
+        room.setState(stateRef.current);
+        office.current = room;
+        setLoading(false);
+        const loop = (): void => {
+          frame = requestAnimationFrame(loop);
+          if (document.hidden || !room) return;
+          room.frame();
+          const anchors = room.anchors();
+          for (const [role, node] of Object.entries(tags.current)) place(node, anchors.tags[role], 'translate(-50%, -30%)');
+          // every hand-off goes through the harness, so its bubble sits over the gate
+          place(bubble.current, anchors.gate);
+          place(coreTag.current, anchors.gateBase, 'translate(-50%, 0)');
+        };
+        frame = requestAnimationFrame(loop);
+      } catch {
+        if (!stopped) setBroken(true);
+      }
+    })();
+    return () => { stopped = true; cancelAnimationFrame(frame); observer?.disconnect(); room?.dispose(); office.current = null; };
   }, []);
 
   const drag = useRef<{ x: number; yaw: number } | null>(null);
-  const onDown = (event: ReactPointerEvent<HTMLDivElement>): void => { if (!crew.current) return; drag.current = { x: event.clientX, yaw: crew.current.yaw }; event.currentTarget.setPointerCapture(event.pointerId); };
-  const onMove = (event: ReactPointerEvent<HTMLDivElement>): void => { if (!drag.current || !crew.current) return; crew.current.yaw = Math.max(-1.1, Math.min(1.1, drag.current.yaw - (event.clientX - drag.current.x) * 0.005)); };
+  const onDown = (event: ReactPointerEvent<HTMLDivElement>): void => { if (!office.current) return; drag.current = { x: event.clientX, yaw: office.current.yaw }; event.currentTarget.setPointerCapture(event.pointerId); };
+  const onMove = (event: ReactPointerEvent<HTMLDivElement>): void => { if (!drag.current || !office.current) return; office.current.yaw = Math.max(-1.1, Math.min(1.1, drag.current.yaw - (event.clientX - drag.current.x) * 0.005)); };
   const onUp = (): void => { drag.current = null; };
   const label = useMemo(() => t('sceneLabel', { text: latest ? `${who(latest.from)} → ${who(latest.to)}: ${latest.text}` : t('sceneQuiet') }), [latest?.id, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (broken) return <><p className="muted">{t('sceneNoWebgl')}</p><RoleLanes timeline={timeline} runtimes={runtimes} live={live} /></>;
   return (
     <div ref={wrap} className="scene3d" role="img" aria-label={label} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-      onDoubleClick={() => { if (crew.current) crew.current.yaw = 0; }}>
+      onDoubleClick={() => { if (office.current) office.current.yaw = 0; }}>
       <canvas ref={canvas} aria-hidden="true" />
+      {loading ? <p className="scene-loading">{t('sceneLoading')}</p> : null}
       {scene.robots.map(robot => (
         <div key={robot.role} className={`scene-tag mood-${robot.mood}`} ref={node => { tags.current[robot.role] = node; }} aria-hidden="true">
           <strong>{robot.role}</strong>
