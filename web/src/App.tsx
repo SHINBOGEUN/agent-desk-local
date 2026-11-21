@@ -395,12 +395,19 @@ function TopBar({ projects, current, activeRunId, onSelect, onOpen, onForget, on
       <div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Agent Desk</span></div>
       <div className="project-pick">
         <select aria-label={t('projectSelect')} title={current} value={entry?.path ?? ''} disabled={opening}
-          onChange={event => { const value = event.target.value; setConfirm(null); if (value === '__open') onOpen(); else if (value) { onSelect(value); onTab('chat'); } }}>
+          onChange={event => { const value = event.target.value; setConfirm(null); if (value === '__open') onOpen(); else if (value === '__bench') setConfirm('bench'); else if (value) { onSelect(value); onTab('chat'); } }}>
           {!entry ? <option value="">{t('projectSelect')}</option> : null}
-          {mine.map(option)}
-          {bench.length ? <optgroup label={t('benchWorkspaces', { n: bench.length })}>{bench.map(option)}</optgroup> : null}
           <option value="__open">+ {t('openProject')}</option>
+          {mine.length ? <optgroup label={t('projects')}>{mine.map(option)}</optgroup> : null}
+          {/* benchmark workspaces are many and rarely opened: listed only while one is open, otherwise one line to clear them */}
+          {bench.length ? (
+            <optgroup label={t('benchWorkspaces', { n: bench.length })}>
+              {entry?.bench ? bench.map(option) : null}
+              <option value="__bench">{t('forgetBench')} ({bench.length})</option>
+            </optgroup>
+          ) : null}
         </select>
+        <button className="ghost small open-btn" disabled={opening} title={t('openProject')} onClick={() => { setConfirm(null); onOpen(); }}>+ {t('openProjectShort')}</button>
         {entry && !live(entry) ? <button className="icon-btn" title={t('forgetCurrent')} aria-label={t('forgetCurrent')} onClick={() => setConfirm(entry.bench ? 'bench' : 'project')}>×</button> : null}
         {confirm ? (
           <div className="topbar-confirm" role="group">

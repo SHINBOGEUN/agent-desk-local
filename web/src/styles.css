@@ -492,6 +492,7 @@ select { padding-right: 28px; }
 .topbar .brand { padding: 0; }
 .project-pick { display: flex; align-items: center; gap: 6px; position: relative; }
 .project-pick select { background: var(--sunk); border-color: var(--line); font-weight: 600; min-width: 200px; max-width: 320px; }
+.open-btn { white-space: nowrap; }
 .icon-btn { padding: 2px 8px; background: transparent; border-color: transparent; color: var(--faint); font-size: 16px; line-height: 1; }
 .icon-btn:hover:not(:disabled) { color: var(--bad); border-color: var(--line); }
 .topbar-confirm { position: absolute; top: calc(100% + 8px); left: 0; display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); white-space: nowrap; font-size: 13px; }
