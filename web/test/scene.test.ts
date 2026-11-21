@@ -73,3 +73,19 @@ test('lanes put each role on one time axis and place checks where they happened'
   assert.deepEqual(gateLamps({ ...timeline, steps: [timeline.steps[0]!] }).map(lamp => lamp.state), ['wait', 'wait', 'wait']);
   assert.deepEqual(lanesOf({ steps: [], finished: null, lastSeq: 0 }, 0), { lanes: [], checkpoints: [], spanMs: 0 });
 });
+
+test('a station shows only what the events recorded: the running step, its time, counts, and a sent-back reason first', async () => {
+  const { stationOf } = await import('../src/scene.ts');
+  seq = 0;
+  const timeline = buildTimeline([
+    ev(0, { type: 'step_started', step: 'build', role: 'builder' }),
+    ev(2, { type: 'gate', result: { gate: 'G2', ok: false, attempt: 0, detail: 'R2' } }),
+    ev(3, { type: 'redo', attempt: 1, mode: 'fix', reasons: ['add evidence for R2'] }),
+  ]);
+  const station = stationOf(timeline, 'builder', Date.parse(at(10)));
+  assert.equal(station.step, 'build');
+  assert.equal(station.elapsedMs, 10_000);
+  assert.equal(station.note, 'add evidence for R2');
+  assert.deepEqual(station.checks, [{ gate: 'G2', ok: false }]);
+  assert.deepEqual(stationOf(timeline, 'verifier', 0), { step: null, elapsedMs: 0, commands: 0, fileChanges: 0, note: null, checks: [] });
+});

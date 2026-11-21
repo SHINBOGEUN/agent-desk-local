@@ -513,7 +513,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
           {live && running ? <button className="ghost danger push" onClick={() => { void api.cancel(); }}>{t('stop')}</button> : null}
         </div>
         {view === 'scene' ? <AgentScene timeline={timeline} runtimes={runtimes} asking={pending !== null && live} live={running} /> : <RoleLanes timeline={timeline} runtimes={runtimes} live={running} />}
-        {view === 'scene' ? <p className="stage-note">{t('sceneNote')}</p> : null}
+        {view === 'scene' ? <p className="stage-note">{t('sceneNote')} {t('sceneDrag')}</p> : null}
       </div>
       {pending && live ? <QuestionBlock pending={pending} /> : null}
       {timeline.questions?.filter(question => question.answered).map((question, index) => (

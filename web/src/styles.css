@@ -522,16 +522,6 @@ select { padding-right: 28px; }
 .stage-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .stage-head .live-line { font-size: 13px; }
 .stage-note { font-size: 12px; color: var(--faint); }
-.agent-scene { width: 100%; height: auto; display: block; border-radius: var(--radius); background: radial-gradient(ellipse at 50% 60%, #1f2737 0%, #171c26 70%); }
-.agent-scene text { font-family: var(--font); }
-.agent-scene .handoff { animation: dash 1.2s linear infinite; }
-@keyframes dash { to { stroke-dashoffset: -24; } }
-.bot-ring.working { animation: ring 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes ring { 50% { opacity: 0.35; } }
-.lamp.waiting { animation: ring 1.2s ease-in-out infinite; }
-.speech { transition: opacity 300ms; }
-.speech.faded { opacity: 0.45; }
-.desk-idle { opacity: 0.55; }
 .lanes { display: flex; flex-direction: column; gap: 6px; padding: 6px 2px 2px; }
 .lane { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: center; }
 .lane-name { display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
@@ -540,7 +530,8 @@ select { padding-right: 28px; }
 .lane-track { position: relative; height: 26px; background: var(--sunk); border-radius: var(--radius-s); }
 .lane-block { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; background: var(--faint); min-width: 4px; }
 .lane-block.rt-codex { background: var(--codex); } .lane-block.rt-claude { background: var(--claude); }
-.lane-block.running { animation: ring 1.4s ease-in-out infinite; }
+.lane-block.running { animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }
 .lane-block.failed { box-shadow: inset 0 0 0 2px var(--bad); }
 .lane-track.checks { background: transparent; border-top: 1px dashed var(--line); border-radius: 0; height: 30px; }
 .checkpoint { position: absolute; top: 5px; transform: translateX(-50%); font-size: 11px; padding: 1px 6px; border-radius: 999px; white-space: nowrap; background: var(--ok-bg); color: var(--ok); }
@@ -596,5 +587,27 @@ select { padding-right: 28px; }
   .lane-axis { margin-left: 96px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .agent-scene .handoff, .bot-ring.working, .lamp.waiting, .lane-block.running { animation: none; }
+  .lane-block.running { animation: none; }
 }
+
+/* ---- 3D agent room ---- */
+.scene3d { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 620px; border-radius: var(--radius); overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #273046 0%, #171c27 62%, #12161e 100%); cursor: grab; touch-action: pan-y; user-select: none; }
+.scene3d:active { cursor: grabbing; }
+.scene3d canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.scene-tag, .scene-bubble, .scene-core { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; visibility: hidden; }
+.scene-tag { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 10px 4px; border-radius: 10px; background: rgba(18, 23, 33, 0.78); border: 1px solid var(--line); font-size: 12px; line-height: 1.3; white-space: nowrap; }
+.scene-tag strong { font-size: 13px; }
+.scene-tag span { font-size: 11px; }
+.scene-tag.mood-failed { border-color: var(--bad); }
+.scene-tag.mood-asking { border-color: var(--warn); }
+.scene-tag.mood-done { border-color: #3d6b48; }
+.scene-tag .zz { position: absolute; top: -22px; right: -14px; font-style: normal; font-weight: 700; color: var(--muted); animation: zz 2.4s ease-in-out infinite; }
+@keyframes zz { 0% { opacity: 0; transform: translateY(6px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+.scene-bubble { max-width: 280px; padding: 8px 12px; border-radius: 12px; background: rgba(28, 34, 48, 0.94); border: 1px solid var(--accent); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; display: flex; flex-direction: column; gap: 2px; margin-top: -10px; animation: pop 260ms ease-out; }
+.scene-bubble strong { font-size: 12px; color: var(--accent); }
+.scene-bubble.tone-problem { border-color: var(--bad); } .scene-bubble.tone-problem strong { color: var(--bad); }
+.scene-bubble.tone-ok { border-color: var(--ok); } .scene-bubble.tone-ok strong { color: var(--ok); }
+@keyframes pop { from { opacity: 0; } to { opacity: 1; } }
+.scene-core { font-size: 11.5px; color: var(--muted); text-align: center; white-space: nowrap; display: flex; flex-direction: column; }
+.scene-core span { font-size: 10.5px; color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .scene-bubble, .scene-tag .zz { animation: none; } }

@@ -95,3 +95,34 @@ export function gateLamps(timeline: Timeline): { gate: 'G2' | 'G3' | 'G4'; state
     return { gate, state: !last ? 'wait' : last.skipped ? 'skip' : last.ok ? 'ok' : 'fail' };
   });
 }
+
+// ---------- stations (what each role's screen shows in the 3D room) ----------
+
+export interface Station {
+  /** The step on screen: the running one, else the role's last one. */
+  step: string | null;
+  elapsedMs: number;
+  commands: number;
+  fileChanges: number;
+  /** One real line about the step: a sent-back reason, its result detail or its last message. */
+  note: string | null;
+  checks: { gate: string; ok: boolean }[];
+}
+
+/** A role's screen, built only from recorded events (nothing invented for show). */
+export function stationOf(timeline: Timeline, role: string, now: number): Station {
+  const mine = timeline.steps.filter(step => step.role === role);
+  const step = mine.find(item => item.finishedAt === null && timeline.finished === null) ?? mine.at(-1);
+  if (!step) return { step: null, elapsedMs: 0, commands: 0, fileChanges: 0, note: null, checks: [] };
+  const end = step.finishedAt ? Date.parse(step.finishedAt) : now;
+  const redo = step.redo.at(-1)?.reasons[0];
+  const note = redo ?? (step.detail || step.messages.at(-1) || null);
+  return {
+    step: step.step,
+    elapsedMs: Math.max(0, end - Date.parse(step.startedAt)),
+    commands: step.commands,
+    fileChanges: step.fileChanges,
+    note: note ? clip(note, 90) : null,
+    checks: step.gates.filter(gate => gate.gate !== 'G1').map(gate => ({ gate: gate.gate, ok: gate.ok })),
+  };
+}
