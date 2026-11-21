@@ -3,9 +3,10 @@
 // overwritten: the save is refused and the note can be reloaded.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { api, ApiError } from './api.ts';
 import type { NoteRow, NotesInfo } from './api.ts';
-import { insertLink, layoutGraph, neighbours } from './graph.ts';
+import { insertLink, layoutGraph, layoutGraph3D, neighbours, project3D } from './graph.ts';
 import { serverLines, useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
 import { projectName } from './model.ts';
@@ -40,7 +41,12 @@ const statusTone = (status: string): string => {
 };
 const short = (text: string, max = 22): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-function Graph({ info, selected, showRuns, showMissing, onPick }: { info: NotesInfo; selected: string | null; showRuns: boolean; showMissing: boolean; onPick: (id: string, kind: string, title: string) => void }) {
+/** Labels for every node in a small graph; in a big one only for hubs, specs, decisions and what is in focus. */
+const showLabel = (count: number, node: { links: number; folder: string }, focused: boolean): boolean => count <= 40 || focused || node.links >= 3 || node.folder === 'specs' || node.folder === 'decisions';
+
+type GraphNode = NotesInfo['graph']['nodes'][number];
+
+function Graph({ info, selected, showRuns, showMissing, mode, onPick }: { info: NotesInfo; selected: string | null; showRuns: boolean; showMissing: boolean; mode: '2d' | '3d'; onPick: (id: string, kind: string, title: string) => void }) {
   const { t } = useI18n();
   const [hover, setHover] = useState<string | null>(null);
   const { nodes, edges, cut } = useMemo(() => {
@@ -50,41 +56,113 @@ function Graph({ info, selected, showRuns, showMissing, onPick }: { info: NotesI
     const ids = new Set(kept.map(node => node.id));
     return { nodes: kept, edges: info.graph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)), cut: total - kept.length };
   }, [info, showRuns, showMissing]);
-  const positions = useMemo(() => layoutGraph(nodes, edges, { width: W, height: H }), [nodes, edges]);
   const focus = hover ?? selected;
   const near = useMemo(() => (focus ? neighbours(focus, edges) : new Set<string>()), [focus, edges]);
   if (!nodes.length) return <div className="graph-empty">{t('notesGraphEmpty')}</div>;
+  const view = mode === '3d'
+    ? <Graph3D nodes={nodes} edges={edges} focus={focus} near={near} setHover={setHover} onPick={onPick} />
+    : <Graph2D nodes={nodes} edges={edges} focus={focus} near={near} setHover={setHover} onPick={onPick} />;
   return (
     <div className="graph-wrap">
-      <svg className="notes-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('notesGraph')}>
-        {edges.map((edge, index) => {
-          const a = positions.get(edge.from)!; const b = positions.get(edge.to)!;
-          const lit = focus !== null && (edge.from === focus || edge.to === focus);
-          return <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={lit ? 'edge lit' : focus ? 'edge dim' : 'edge'} />;
-        })}
-        {nodes.map(node => {
-          const point = positions.get(node.id)!;
-          const radius = 4 + Math.min(node.links, 8) * 0.8;
-          const on = node.id === focus;
-          const faded = focus !== null && !on && !near.has(node.id);
-          const label = on || near.has(node.id) || node.links >= 3 || node.folder === 'specs' || node.folder === 'decisions';
-          return (
-            <g key={node.id} className={`gnode ${folderClass(node.folder, node.kind)}${on ? ' on' : ''}${faded ? ' faded' : ''}`} transform={`translate(${point.x} ${point.y})`}
-              onMouseEnter={() => setHover(node.id)} onMouseLeave={() => setHover(null)} onClick={() => onPick(node.id, node.kind, node.title)}
-              tabIndex={0} role="button" aria-label={node.title} onKeyDown={event => { if (event.key === 'Enter') onPick(node.id, node.kind, node.title); }}>
-              <circle r={radius} />
-              {label ? <text y={radius + 12} textAnchor="middle">{short(node.title)}</text> : null}
-            </g>
-          );
-        })}
-      </svg>
+      {view}
       <div className="graph-legend">
         {FOLDERS.map(folder => <span key={folder}><i className={`dot g-${folder}`} />{t(folderKey(folder))}</span>)}
         <span><i className="dot g-other" />{t('nf_other')}</span>
         <span><i className="dot g-missing" />{t('notesMissing')}</span>
         {cut > 0 ? <span className="muted">{t('notesCut', { n: cut })}</span> : null}
+        {mode === '3d' ? <span className="muted push">{t('notes3dHint')}</span> : null}
       </div>
     </div>
+  );
+}
+
+interface ViewProps { nodes: GraphNode[]; edges: NotesInfo['graph']['edges']; focus: string | null; near: Set<string>; setHover: (id: string | null) => void; onPick: (id: string, kind: string, title: string) => void }
+
+function NodeMark({ node, x, y, radius, opacity, focus, near, count, setHover, onPick, labelHidden }: { node: GraphNode; x: number; y: number; radius: number; opacity: number; focus: string | null; near: Set<string>; count: number; setHover: (id: string | null) => void; onPick: (id: string, kind: string, title: string) => void; labelHidden?: boolean }) {
+  const on = node.id === focus;
+  const faded = focus !== null && !on && !near.has(node.id);
+  const label = !labelHidden && showLabel(count, node, on || near.has(node.id));
+  return (
+    <g className={`gnode ${folderClass(node.folder, node.kind)}${on ? ' on' : ''}${faded ? ' faded' : ''}`} transform={`translate(${x} ${y})`} style={faded ? undefined : { opacity }}
+      onMouseEnter={() => setHover(node.id)} onMouseLeave={() => setHover(null)} onClick={() => onPick(node.id, node.kind, node.title)}
+      tabIndex={0} role="button" aria-label={node.title} onKeyDown={event => { if (event.key === 'Enter') onPick(node.id, node.kind, node.title); }}>
+      <circle r={radius} />
+      {label ? <text y={radius + 12} textAnchor="middle">{short(node.title)}</text> : null}
+    </g>
+  );
+}
+
+function Graph2D({ nodes, edges, focus, near, setHover, onPick }: ViewProps) {
+  const { t } = useI18n();
+  const positions = useMemo(() => layoutGraph(nodes, edges, { width: W, height: H }), [nodes, edges]);
+  return (
+    <svg className="notes-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('notesGraph')}>
+      {edges.map((edge, index) => {
+        const a = positions.get(edge.from)!; const b = positions.get(edge.to)!;
+        const lit = focus !== null && (edge.from === focus || edge.to === focus);
+        return <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={lit ? 'edge lit' : focus ? 'edge dim' : 'edge'} />;
+      })}
+      {nodes.map(node => { const point = positions.get(node.id)!; return <NodeMark key={node.id} node={node} x={point.x} y={point.y} radius={4 + Math.min(node.links, 8) * 0.8} opacity={1} focus={focus} near={near} count={nodes.length} setHover={setHover} onPick={onPick} />; })}
+    </svg>
+  );
+}
+
+/**
+ * The rotating view: the 3D layout turns slowly (not with reduced motion), drag to turn it, wheel to zoom.
+ * Far nodes are smaller and paler and are drawn first, so near ones sit on top.
+ */
+function Graph3D({ nodes, edges, focus, near, setHover, onPick }: ViewProps) {
+  const { t } = useI18n();
+  const positions = useMemo(() => layoutGraph3D(nodes, edges), [nodes, edges]);
+  const [angle, setAngle] = useState({ yaw: 0.6, pitch: -0.35 });
+  const [zoom, setZoom] = useState(1);
+  const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
+  const idleUntil = useRef(0);
+  const svg = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (still) return undefined;
+    let frame = 0;
+    const tick = (): void => {
+      if (!drag.current && focus === null && Date.now() > idleUntil.current) setAngle(current => ({ ...current, yaw: current.yaw + 0.0025 }));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [focus]);
+  useEffect(() => {
+    const element = svg.current;
+    if (!element) return undefined;
+    const onWheel = (event: WheelEvent): void => { event.preventDefault(); setZoom(current => Math.min(3, Math.max(0.5, current * (1 - event.deltaY * 0.0012)))); };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+  const down = (event: ReactPointerEvent<SVGSVGElement>): void => { drag.current = { x: event.clientX, y: event.clientY, moved: 0 }; };
+  const move = (event: ReactPointerEvent<SVGSVGElement>): void => {
+    const current = drag.current;
+    if (!current) return;
+    const dx = event.clientX - current.x; const dy = event.clientY - current.y;
+    current.x = event.clientX; current.y = event.clientY; current.moved += Math.abs(dx) + Math.abs(dy);
+    if (current.moved > 4) event.currentTarget.setPointerCapture?.(event.pointerId);
+    setAngle(value => ({ yaw: value.yaw + dx * 0.008, pitch: Math.min(1.3, Math.max(-1.3, value.pitch + dy * 0.008)) }));
+  };
+  const up = (): void => { idleUntil.current = Date.now() + 2500; setTimeout(() => { drag.current = null; }, 0); };
+  const radius = Math.min(W, H) * 0.46 * zoom;
+  const projected = new Map(nodes.map(node => { const p = project3D(positions.get(node.id)!, angle.yaw, angle.pitch); return [node.id, { x: W / 2 + p.x * radius, y: H / 2 + p.y * radius, scale: p.scale, depth: p.depth }]; }));
+  const order = [...nodes].sort((a, b) => projected.get(a.id)!.depth - projected.get(b.id)!.depth);
+  const pick = (id: string, kind: string, title: string): void => { if ((drag.current?.moved ?? 0) <= 4) onPick(id, kind, title); };
+  return (
+    <svg ref={svg} className="notes-graph g3d" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('notesGraph')} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={() => { if (drag.current) up(); }}>
+      {edges.map((edge, index) => {
+        const a = projected.get(edge.from)!; const b = projected.get(edge.to)!;
+        const lit = focus !== null && (edge.from === focus || edge.to === focus);
+        return <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={lit ? 'edge lit' : focus ? 'edge dim' : 'edge'} style={lit || focus ? undefined : { opacity: 0.35 + 0.65 * ((a.depth + b.depth) / 2) }} />;
+      })}
+      {order.map(node => {
+        const point = projected.get(node.id)!;
+        return <NodeMark key={node.id} node={node} x={point.x} y={point.y} radius={(4 + Math.min(node.links, 8) * 0.8) * point.scale} opacity={0.45 + 0.55 * point.depth} focus={focus} near={near} count={nodes.length > 15 ? 99 : nodes.length} setHover={setHover} onPick={pick} labelHidden={point.depth < 0.35 && node.id !== focus && !near.has(node.id)} />;
+      })}
+    </svg>
   );
 }
 
@@ -97,6 +175,8 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
   const [query, setQuery] = useState('');
   const [showRuns, setShowRuns] = useState(true);
   const [showMissing, setShowMissing] = useState(true);
+  const [mode, setMode] = useState<'2d' | '3d'>(() => { try { return localStorage.getItem('agent-desk.graph') === '2d' ? '2d' : '3d'; } catch { return '3d'; } });
+  const pickMode = (next: '2d' | '3d'): void => { setMode(next); try { localStorage.setItem('agent-desk.graph', next); } catch { /* not kept */ } };
   const [open, setOpen] = useState<Open | null>(null);
   const [status, setStatus] = useState<Status>(null);
   const [picker, setPicker] = useState<string | null>(null);
@@ -219,8 +299,12 @@ export function NotesView({ project, busy }: { project: string | null; busy: boo
           <div className="graph-tools">
             <label><input type="checkbox" checked={showRuns} onChange={event => setShowRuns(event.target.checked)} /> {t('notesShowRuns')}</label>
             <label><input type="checkbox" checked={showMissing} onChange={event => setShowMissing(event.target.checked)} /> {t('notesShowMissing')}</label>
+            <span className="lang graph-mode push" role="group" aria-label={t('notesView')}>
+              <button className={mode === '2d' ? 'on' : ''} onClick={() => pickMode('2d')}>2D</button>
+              <button className={mode === '3d' ? 'on' : ''} onClick={() => pickMode('3d')}>3D</button>
+            </span>
           </div>
-          {info ? <Graph info={info} selected={open?.path ?? null} showRuns={showRuns} showMissing={showMissing} onPick={(id, kind, title) => {
+          {info ? <Graph info={info} selected={open?.path ?? null} showRuns={showRuns} showMissing={showMissing} mode={mode} onPick={(id, kind, title) => {
             if (kind === 'note') void openNote(id);
             else setStatus({ kind: 'ok', text: t('notesMissingInfo', { name: title }) });
           }} /> : null}

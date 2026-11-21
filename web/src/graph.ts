@@ -85,11 +85,15 @@ export function layoutGraph(nodes: readonly GraphNodeIn[], edges: readonly Graph
   const xs = fitted.map(point => point.x);
   const ys = fitted.map(point => point.y);
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const sx = maxX - minX > 1 ? (width - margin * 2) / (maxX - minX) : 0;
-  const sy = maxY - minY > 1 ? (height - margin * 2) / (maxY - minY) : 0;
+  // One scale for both axes (no stretching) and never enlarged, so a few loose pairs stay together in the middle.
+  const sx = maxX - minX > 1 ? (width - margin * 2) / (maxX - minX) : Infinity;
+  const sy = maxY - minY > 1 ? (height - margin * 2) / (maxY - minY) : Infinity;
+  const scale = Math.min(sx, sy, 1);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
   for (const point of positions.values()) {
-    point.x = Math.min(width - margin, Math.max(margin, sx ? margin + (point.x - minX) * sx : cx));
-    point.y = Math.min(height - margin, Math.max(margin, sy ? margin + (point.y - minY) * sy : cy));
+    point.x = Math.min(width - margin, Math.max(margin, cx + (point.x - midX) * scale));
+    point.y = Math.min(height - margin, Math.max(margin, cy + (point.y - midY) * scale));
   }
   return positions;
 }
@@ -107,4 +111,85 @@ export function insertLink(text: string, start: number, end: number, target: str
   const before = text.slice(0, Math.max(0, start));
   const after = text.slice(Math.max(start, end));
   return { text: `${before}${link}${after}`, cursor: before.length + link.length };
+}
+
+export interface Point3 { x: number; y: number; z: number }
+
+/**
+ * The same force simulation in three dimensions, for the rotating view. Positions are centred on the origin and
+ * scaled so the linked notes fit in a sphere of radius 1 (notes without links sit just outside it).
+ */
+export function layoutGraph3D(nodes: readonly GraphNodeIn[], edges: readonly GraphEdgeIn[], options: { iterations?: number } = {}): Map<string, Point3> {
+  const positions = new Map<string, Point3>();
+  const n = nodes.length;
+  if (!n) return positions;
+  const spread = Math.cbrt(n);
+  for (const node of nodes) {
+    const theta = hashUnit(node.id) * Math.PI * 2;
+    const phi = Math.acos(2 * hashUnit(`${node.id}#p`) - 1);
+    const radius = spread * (0.3 + 0.7 * hashUnit(`${node.id}#r`));
+    positions.set(node.id, { x: radius * Math.sin(phi) * Math.cos(theta), y: radius * Math.cos(phi), z: radius * Math.sin(phi) * Math.sin(theta) });
+  }
+  if (n === 1) { positions.set(nodes[0]!.id, { x: 0, y: 0, z: 0 }); return positions; }
+  const ids = nodes.map(node => node.id);
+  const links = edges.filter(edge => positions.has(edge.from) && positions.has(edge.to) && edge.from !== edge.to);
+  let temperature = spread / 2;
+  for (let step = 0; step < (options.iterations ?? 200); step++) {
+    const shift = new Map<string, Point3>(ids.map(id => [id, { x: 0, y: 0, z: 0 }]));
+    for (let i = 0; i < n; i++) {
+      const a = positions.get(ids[i]!)!;
+      for (let j = i + 1; j < n; j++) {
+        const b = positions.get(ids[j]!)!;
+        const dx = a.x - b.x; const dy = a.y - b.y; const dz = a.z - b.z;
+        const distance = Math.hypot(dx, dy, dz) || 0.01;
+        const force = 1 / distance;
+        const sa = shift.get(ids[i]!)!; const sb = shift.get(ids[j]!)!;
+        sa.x += (dx / distance) * force; sa.y += (dy / distance) * force; sa.z += (dz / distance) * force;
+        sb.x -= (dx / distance) * force; sb.y -= (dy / distance) * force; sb.z -= (dz / distance) * force;
+      }
+    }
+    for (const edge of links) {
+      const a = positions.get(edge.from)!; const b = positions.get(edge.to)!;
+      const dx = a.x - b.x; const dy = a.y - b.y; const dz = a.z - b.z;
+      const distance = Math.hypot(dx, dy, dz) || 0.01;
+      const force = distance * distance;
+      const sa = shift.get(edge.from)!; const sb = shift.get(edge.to)!;
+      sa.x -= (dx / distance) * force; sa.y -= (dy / distance) * force; sa.z -= (dz / distance) * force;
+      sb.x += (dx / distance) * force; sb.y += (dy / distance) * force; sb.z += (dz / distance) * force;
+    }
+    for (const id of ids) {
+      const point = positions.get(id)!;
+      const move = shift.get(id)!;
+      move.x -= point.x * 0.05; move.y -= point.y * 0.05; move.z -= point.z * 0.05;
+      const length = Math.hypot(move.x, move.y, move.z) || 1;
+      const limited = Math.min(length, temperature);
+      point.x += (move.x / length) * limited; point.y += (move.y / length) * limited; point.z += (move.z / length) * limited;
+    }
+    temperature = Math.max(0.01, temperature * 0.97);
+  }
+  const linked = new Set(links.flatMap(edge => [edge.from, edge.to]));
+  const fitted = [...positions.entries()].filter(([id]) => linked.size === 0 || linked.has(id)).map(([, point]) => point);
+  const centre = { x: avg(fitted.map(p => p.x)), y: avg(fitted.map(p => p.y)), z: avg(fitted.map(p => p.z)) };
+  const reach = Math.max(...fitted.map(p => Math.hypot(p.x - centre.x, p.y - centre.y, p.z - centre.z)), 0.001);
+  for (const [id, point] of positions) {
+    point.x = (point.x - centre.x) / reach; point.y = (point.y - centre.y) / reach; point.z = (point.z - centre.z) / reach;
+    const radius = Math.hypot(point.x, point.y, point.z);
+    if (!linked.has(id) && linked.size && radius > 1.15) { point.x *= 1.15 / radius; point.y *= 1.15 / radius; point.z *= 1.15 / radius; }
+  }
+  return positions;
+}
+
+const avg = (values: number[]): number => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
+
+/** Rotates by yaw (around the vertical axis) and pitch, then projects with perspective. depth: 0 far .. 1 near. */
+export function project3D(point: Point3, yaw: number, pitch: number): { x: number; y: number; scale: number; depth: number } {
+  const cosY = Math.cos(yaw); const sinY = Math.sin(yaw);
+  const x1 = point.x * cosY + point.z * sinY;
+  const z1 = -point.x * sinY + point.z * cosY;
+  const cosP = Math.cos(pitch); const sinP = Math.sin(pitch);
+  const y2 = point.y * cosP - z1 * sinP;
+  const z2 = point.y * sinP + z1 * cosP;
+  const camera = 3.2;
+  const scale = camera / (camera - z2);
+  return { x: x1 * scale, y: y2 * scale, scale, depth: Math.min(1, Math.max(0, (z2 + 1.2) / 2.4)) };
 }

@@ -492,3 +492,10 @@ select { padding-right: 28px; }
   .g-specs { --node: #7f9bff; } .g-decisions { --node: #d08ccb; } .g-inbox { --node: #f0a050; } .g-runs { --node: #6f7b8e; } .g-team { --node: #d1b27a; } .g-other { --node: #9aa6b8; }
   :root { --n-focus: #7f9bff; }
 }
+.graph-tools { align-items: center; }
+.graph-mode { background: var(--sunk); }
+.graph-mode button { color: var(--muted); }
+.graph-mode button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.notes-graph.g3d { cursor: grab; touch-action: none; user-select: none; }
+.notes-graph.g3d:active { cursor: grabbing; }
+.graph-legend .push { margin-left: auto; }

@@ -215,3 +215,18 @@ test('graph layout is deterministic, stays inside the box and pulls linked notes
   assert.ok(hashUnit('x') >= 0 && hashUnit('x') < 1);
   assert.equal(layoutGraph([], [], { width: 10, height: 10 }).size, 0);
 });
+
+test('3D layout fits linked notes in the unit sphere and projects near points larger than far ones', async () => {
+  const { layoutGraph3D, project3D } = await import('../src/graph.ts');
+  const nodes = ['a', 'b', 'c', 'd', 'lonely'].map(id => ({ id, links: 1 }));
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' }];
+  const points = layoutGraph3D(nodes, edges);
+  assert.deepEqual([...points.entries()], [...layoutGraph3D(nodes, edges).entries()]);
+  for (const id of ['a', 'b', 'c', 'd']) { const p = points.get(id)!; assert.ok(Math.hypot(p.x, p.y, p.z) <= 1.0001); }
+  const lonely = points.get('lonely')!;
+  assert.ok(Math.hypot(lonely.x, lonely.y, lonely.z) <= 1.1501);
+  const near = project3D({ x: 0, y: 0, z: 1 }, 0, 0);
+  const far = project3D({ x: 0, y: 0, z: -1 }, 0, 0);
+  assert.ok(near.scale > far.scale && near.depth > far.depth);
+  assert.ok(Math.abs(project3D({ x: 1, y: 0, z: 0 }, Math.PI / 2, 0).x) < 1e-9);
+});
