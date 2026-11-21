@@ -56,7 +56,7 @@ export function approveProposal(project: string, root: string, rel: string): App
   const fact = factOf(note?.frontmatter ?? {}, read.path.split('/').pop()!.replace(/\.md$/i, ''));
   const added = addMemory(project, fact);
   if (!added.ok && added.error !== 'already in memory') return { ok: false, error: added.error };
-  const text = setNoteProperty(setNoteProperty(read.text, 'status', 'approved'), 'approved', today());
+  const text = setNoteProperty(setNoteProperty(setNoteProperty(read.text, 'status', 'approved'), 'approved', today()), 'in-memory', 'true');
   const written = writeNote(root, read.path, text);
   if (!written.ok) return { ok: false, error: written.error };
   if (read.path.startsWith('decisions/')) return { ok: true, decision: read.path, fact };
@@ -77,12 +77,31 @@ export function recordDecision(project: string, root: string, fact: string, opti
   if (listNotes(root).some(note => note.folder === 'decisions' && same(factOf(note.frontmatter, note.title), fact))) return { ok: true, decision: '', fact };
   const rel = freePath(root, 'decisions', fact);
   const ko = options.lang === 'ko';
-  const text = ['---', 'type: memory', 'status: approved', `fact: ${quoted(fact)}`, ...(options.run !== undefined ? [`run: ${options.run}`] : []), `approved: ${today()}`, '---', `# ${fact}`, '', ...(options.runNote ? [`${ko ? '출처' : 'From'}: [[${options.runNote}]]`, ''] : [])].join('\n');
+  const text = ['---', 'type: memory', 'status: approved', `fact: ${quoted(fact)}`, ...(options.run !== undefined ? [`run: ${options.run}`] : []), `approved: ${today()}`, 'in-memory: true', '---', `# ${fact}`, '', ...(options.runNote ? [`${ko ? '출처' : 'From'}: [[${options.runNote}]]`, ''] : [])].join('\n');
   const written = writeNote(root, rel, text, { create: true });
   return written.ok ? { ok: true, decision: written.path, fact } : { ok: false, error: written.error };
 }
 
 export interface SyncResult { approved: string[]; rejected: string[]; errors: string[] }
+
+/**
+ * Decision notes the user wrote (or approved) in Obsidian: each one with `status: approved` goes into memory.md
+ * once, and is then marked `in-memory: true`. Removing the entry later in the memory tab sticks; the note does not
+ * bring it back.
+ */
+function syncDecisions(project: string, root: string, result: SyncResult): void {
+  for (const note of listNotes(root).filter(entry => entry.folder === 'decisions')) {
+    const status = typeof note.frontmatter.status === 'string' ? note.frontmatter.status.trim().toLowerCase() : '';
+    if (!APPROVED.includes(status) || String(note.frontmatter['in-memory']) === 'true') continue;
+    const fact = factOf(note.frontmatter, note.title);
+    const added = addMemory(project, fact);
+    if (!added.ok && added.error !== 'already in memory') { result.errors.push(`${note.path}: ${added.error}`); continue; }
+    const read = readNote(root, note.path);
+    if ('error' in read) continue;
+    writeNote(root, note.path, setNoteProperty(read.text, 'in-memory', 'true'));
+    if (added.ok) result.approved.push(fact);
+  }
+}
 
 /** Applies the status the user set in Obsidian: approved notes go to memory and decisions/, rejected ones to .trash. */
 export function syncApprovals(project: string, root: string): SyncResult {
@@ -98,6 +117,7 @@ export function syncApprovals(project: string, root: string): SyncResult {
       if (gone.ok) result.rejected.push(note.path); else result.errors.push(`${note.path}: ${gone.error}`);
     }
   }
+  syncDecisions(project, root, result);
   return result;
 }
 

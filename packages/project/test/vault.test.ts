@@ -139,3 +139,17 @@ test('team notes mirror the role files and skills, link them, and only touch gen
   const graph = buildGraph(listNotes(root));
   assert.ok(graph.edges.some(edge => edge.from === 'team/roles/builder.md' && edge.to === 'team/skills/verify-before-report.md'));
 });
+
+test('a decision note the user writes with status approved reaches memory once', () => {
+  const project = tmp('vault-dec-');
+  const root = vaultRoot(project);
+  put(root, 'decisions/결제는 토스.md', '---\nstatus: approved\nfact: "결제는 토스페이먼츠로 한다 (수수료 때문)"\n---\n# 결제는 토스\n\n이유: 수수료가 가장 낮다.');
+  put(root, 'decisions/초안.md', '---\nstatus: draft\n---\n아직 정하지 않음');
+  assert.deepEqual(syncApprovals(project, root), { approved: ['결제는 토스페이먼츠로 한다 (수수료 때문)'], rejected: [], errors: [] });
+  assert.deepEqual(memoryFacts(loadMemory(project)), ['결제는 토스페이먼츠로 한다 (수수료 때문)']);
+  assert.match(fs.readFileSync(path.join(root, 'decisions/결제는 토스.md'), 'utf8'), /in-memory: true/);
+  // Removed later in the memory tab: the note does not bring it back.
+  fs.writeFileSync(path.join(project, '.agent-desk', 'memory.md'), '# Project memory\n');
+  assert.deepEqual(syncApprovals(project, root).approved, []);
+  assert.deepEqual(memoryFacts(loadMemory(project)), []);
+});
