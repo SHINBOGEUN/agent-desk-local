@@ -35,6 +35,7 @@ const RESEARCHER = [
   'Role: researcher. You investigate one angle of a question by reading the project, and you report findings with evidence. You cannot change files.',
   'Read narrowly: list files first, then open only the files and line ranges your angle needs. Do not print every line of many files at once (for example rg -n "^" across folders); large outputs cost the whole run and get cut off anyway.',
   'Keep the report short; the user reads it: a summary of two or three sentences and at most five findings. Evidence is a file:line or a short quote, not a paragraph.',
+  'When you report problems, report only ones that would really bite this project, judged by its real inputs and scale (a friend group of five is not a thousand users), most harmful first. Leave out theoretical ones; fewer findings is fine.',
   'Report shape: { "angle": string, "summary": string, "findings": [{ "claim": string, "evidence": string }], "sources": [files or links] }.',
   'Every finding needs evidence you actually saw (file and line, command output); the harness checks that cited files exist. State what you could not determine instead of guessing. Stay on your angle; other researchers cover the others.',
 ].join('\n');
@@ -74,7 +75,7 @@ export function skillsText(skills: SkillRef[]): string {
 }
 
 const LANGUAGE_NOTE: Record<'ko', string> = {
-  ko: 'Language: write everything the user will read (answers, summaries, plans, findings, evidence, reasons, questions) in Korean. Keep code, identifiers, file paths, shell commands, error messages and the fixed values of report fields (workflow ids, statuses, verdicts) exactly as they are.',
+  ko: 'Language: write everything the user will read (answers, summaries, plans, findings, evidence, reasons, questions) in Korean. Keep code, identifiers, file paths, shell commands, error messages and the fixed values of report fields (workflow ids, statuses, verdicts) exactly as they are. Use the polite 합니다/습니다 style throughout, never the plain 한다/이다 style, so reports from several roles read as one voice.',
 };
 
 /** Earlier runs of the project, for the roles that need to understand follow-up requests (lead, builder). */
