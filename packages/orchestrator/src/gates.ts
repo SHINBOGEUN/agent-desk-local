@@ -2,6 +2,8 @@
 // result is judged by what happened rather than by what was said.
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { TokenUsage } from '#core';
 import { matchesIgnore } from './snapshot.ts';
 import type { Diff } from './snapshot.ts';
@@ -42,7 +44,8 @@ export function checkChangeReport(input: { attempt: number; cwd: string; reporte
   const problems: string[] = [];
   if (unreported.length) problems.push(pick(input.language, `These files changed but were not in changedFiles: ${unreported.join(', ')}`, `다음 파일이 바뀌었지만 changedFiles에 없습니다: ${unreported.join(', ')}`));
   if (falseClaims.length) problems.push(pick(input.language, `These files were listed in changedFiles but did not change: ${falseClaims.join(', ')}`, `다음 파일은 changedFiles에 있지만 실제로는 바뀌지 않았습니다: ${falseClaims.join(', ')}`));
-  const testFilesChanged = [...actual].filter(isTestPath).sort();
+  // only tests that existed before can be weakened; a new test file is not a warning
+  const testFilesChanged = [...input.diff.modified, ...input.diff.deleted].filter(isTestPath).sort();
   return {
     gate: 'G2', ok: problems.length === 0, attempt: input.attempt,
     detail: problems.length ? pick(input.language, `report and real changes differ (${unreported.length} unreported, ${falseClaims.length} not changed)`, `보고와 실제 변경이 다릅니다 (보고 누락 ${unreported.length}개, 변경 없음 ${falseClaims.length}개)`) : pick(input.language, `${actual.size} changed file(s) match the report`, `변경된 파일 ${actual.size}개가 보고와 일치합니다`),
@@ -85,6 +88,20 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<Ve
       done({ command, exitCode: timedOut ? null : code, timedOut, output, unavailable: missing && !timedOut });
     });
   });
+}
+
+/**
+ * Verify commands to use when none are configured: the project's own `npm test`, when package.json has a real
+ * test script (not npm's "no test specified" placeholder). Read after the build, so tests the builder just added count.
+ */
+export function detectVerify(cwd: string): string[] {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(cwd, 'package.json'), 'utf8')) as { scripts?: Record<string, unknown> };
+    const test = pkg.scripts?.test;
+    return typeof test === 'string' && test.trim() && !/no test specified/i.test(test) ? ['npm test'] : [];
+  } catch {
+    return [];
+  }
 }
 
 /** G3: run the project's verify commands. All must exit 0. */

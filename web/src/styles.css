@@ -542,6 +542,9 @@ select { padding-right: 28px; }
 .checkpoint.skip { background: var(--sunk); color: var(--faint); }
 .lane-axis { display: flex; justify-content: space-between; margin-left: 142px; font-size: 11px; color: var(--faint); font-family: var(--mono); }
 .run-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
+.side-card { position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow-y: auto; }
+.side-card .report-extras { border-top: 1px solid var(--line-soft); padding-top: 12px; gap: 12px; }
+.side-card .report-extras .prose, .side-card .report-extras li { font-size: 13px; }
 .panel-card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .run-pane.status-success .result-card { border-left: 3px solid var(--ok); }
 .run-pane.status-danger .result-card { border-left: 3px solid var(--bad); }
@@ -580,6 +583,7 @@ select { padding-right: 28px; }
   .chat { border-left: 0; border-top: 1px solid var(--line); min-height: 520px; }
   .thread { flex: none; overflow: visible; }
   .run-grid { grid-template-columns: minmax(0, 1fr); }
+  .side-card { position: static; max-height: none; }
 }
 @media (max-width: 760px) {
   .topbar { gap: 10px; padding: 8px 12px; }

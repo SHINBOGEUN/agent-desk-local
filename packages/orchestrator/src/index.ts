@@ -1,5 +1,5 @@
 export { runRequest, builderCoverageErrors } from './run.ts';
-export { checkBudget, checkChangeReport, checkNoChanges, isTestPath, runVerify } from './gates.ts';
+export { checkBudget, checkChangeReport, checkNoChanges, isTestPath, runVerify, detectVerify } from './gates.ts';
 export type { Budget, GateId, GateResult } from './gates.ts';
 export { classifyFailure } from './failure.ts';
 export type { FailureType } from './failure.ts';

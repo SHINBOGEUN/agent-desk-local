@@ -7,7 +7,7 @@ import { UsageLedger } from '#core';
 import { ReportCollector } from '#tools-mcp';
 import { classifyFailure } from './failure.ts';
 import type { FailureType } from './failure.ts';
-import { checkBudget, checkChangeReport, checkNoChanges, runVerify } from './gates.ts';
+import { checkBudget, checkChangeReport, checkNoChanges, runVerify, detectVerify } from './gates.ts';
 import type { GateResult } from './gates.ts';
 import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
@@ -436,7 +436,10 @@ async function runBuild(ctx: RunContext, request: string, requirements: Requirem
         return finish(ctx, 'failed', violation, { ...base, builder: report });
       }
       const g2 = ctx.recordGate(checkChangeReport({ attempt: ctx.redo, language: config.language, cwd: config.cwd, reported: report.changedFiles, diff: diffSnapshots(before, after), ignore: ctx.ignore }));
-      const verified = await runVerify({ attempt: ctx.redo, language: config.language, cwd: config.cwd, commands: config.verify ?? [], timeoutMs: config.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS });
+      const configured = config.verify ?? [];
+      const detected = configured.length ? [] : detectVerify(config.cwd);
+      const verified = await runVerify({ attempt: ctx.redo, language: config.language, cwd: config.cwd, commands: configured.length ? configured : detected, timeoutMs: config.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS });
+      if (detected.length) verified.result.data = { ...verified.result.data, detected: true };
       const g3 = ctx.recordGate(verified.result);
       if (g3.data?.unavailable) {
         ctx.emit({ type: 'step_finished', step: 'build', ok: false, detail: 'verify command unavailable' });
@@ -553,6 +556,7 @@ function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g
   const openIds = report.requirements.filter(entry => entry.status === 'unverified').map(entry => entry.id);
   const unverified = [...openIds.map(id => ctx.say(`Requirement ${id} was reported as unverified.`, `요구사항 ${id}은(는) 검증되지 않은 것으로 보고되었습니다.`)), ...report.unverified];
   if (g3.skipped) ctx.warnings.push(ctx.say('No automatic verification: no verify commands are configured.', '자동 검증이 없습니다: 검증 명령이 설정되어 있지 않습니다.'));
+  if (g3.data?.detected) ctx.warnings.push(ctx.say('No verify command is configured, so the harness ran the project\'s `npm test`. Add it to the verify commands in the settings to keep it.', '검증 명령이 설정되어 있지 않아 프로젝트의 `npm test`를 하네스가 실행했습니다. 계속 쓰려면 설정의 검증 명령에 넣으세요.'));
   const reviewExtra: Partial<RunResult> = review.kind === 'verdict' ? { review: review.report } : review.kind === 'skipped' ? { reviewSkipped: review.reason } : {};
   if (review.kind === 'verdict' && review.report.verdict === 'BLOCKED') {
     const why = review.report.blocking.map(finding => finding.reason).join('; ');
@@ -570,10 +574,10 @@ function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g
   const reviewed = review.kind === 'verdict' && review.report.verdict === 'PASS';
   const passed = ctx.say(
     ['the changed-files check', ...(g3.skipped ? [] : ['the tests']), ...(reviewed ? ['the review'] : [])].join(', ').replace(/, ([^,]*)$/, ' and $1'),
-    ['변경 파일 확인', ...(g3.skipped ? [] : ['테스트']), ...(reviewed ? ['리뷰'] : [])].join(', '),
+    ((list: string[]) => `${list.join(', ')}${objectParticle(list.at(-1) ?? '')}`)(['변경 파일 확인', ...(g3.skipped ? [] : ['테스트']), ...(reviewed ? ['리뷰'] : [])]),
   );
   const noTests = g3.skipped ? ctx.say(' No tests ran: no verify command is configured.', ' 검증 명령이 없어 테스트는 실행하지 않았습니다.') : '';
-  return finish(ctx, 'completed', ctx.say(`Every requirement is done; passed ${passed}.${noTests}${note}`, `모든 요구사항이 완료되었고 ${passed}을(를) 통과했습니다.${noTests}${note}`), { ...base, ...reviewExtra, builder: report, unverified });
+  return finish(ctx, 'completed', ctx.say(`Every requirement is done; passed ${passed}.${noTests}${note}`, `모든 요구사항이 완료되었고 ${passed} 통과했습니다.${noTests}${note}`), { ...base, ...reviewExtra, builder: report, unverified });
 }
 
 export async function runRequest(request: string, config: RunConfig): Promise<RunResult> {
@@ -609,4 +613,10 @@ export async function runRequest(request: string, config: RunConfig): Promise<Ru
   } catch (error) {
     return finish(ctx, 'failed', error instanceof Error ? error.message : String(error));
   }
+}
+
+/** 을 after a final consonant, 를 after a vowel (Korean object particle). */
+function objectParticle(word: string): string {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0 ? '을' : '를';
 }

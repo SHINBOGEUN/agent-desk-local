@@ -116,8 +116,11 @@ test('never skips the review; auto skips only small verified changes', async () 
   assert.equal(autoDone.status, 'completed');
   assert.match(autoDone.reviewSkipped ?? '', /small change/);
 
+  // an existing test that changes is what can weaken a check (a new test file is not flagged)
   const withTests = setup([script([write('feature.txt', 'a'), write('feature.test.js', 'assert'), { report: builderReport(['feature.txt', 'feature.test.js']) }])], [script([{ report: pass }])]);
-  const reviewed = await run(withTests, { review: 'auto' });
+  const existing = tmp();
+  fs.writeFileSync(path.join(existing, 'feature.test.js'), 'assert.equal(a, 1)');
+  const reviewed = await run(withTests, { review: 'auto', cwd: existing });
   assert.equal(reviewed.status, 'completed');
   assert.equal(reviewed.review?.verdict, 'PASS');
   const text = withTests.turns.find(turn => turn.role === 'verifier')!.input.text;

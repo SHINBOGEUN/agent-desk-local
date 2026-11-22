@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { FakeRuntime } from '#runtime-fake';
 import type { FakeScript } from '#runtime-fake';
-import { checkBudget, checkChangeReport, checkNoChanges, classifyFailure, diffProtected, diffSnapshots, isTestPath, restoreProtected, runRequest, runVerify, takeSnapshot } from '#orchestrator';
+import { detectVerify, checkBudget, checkChangeReport, checkNoChanges, classifyFailure, diffProtected, diffSnapshots, isTestPath, restoreProtected, runRequest, runVerify, takeSnapshot } from '#orchestrator';
 import type { RunConfig, RunEvent } from '#orchestrator';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
@@ -183,11 +183,25 @@ test('unverified items complete when G3 passes, and need review when there is no
   assert.ok(review.warnings.some(item => item.includes('No automatic verification')));
 });
 
-test('changed test files are flagged for review', async () => {
+test('changed test files are flagged for review; a new test file is not', async () => {
+  const cwd = tmp();
+  put(cwd, 'ok.test.js', 'assert.equal(a, 1)');
   const runtime = new FakeRuntime({ scripts: { lead: lead(), builder: [script([write('ok.txt'), write('ok.test.js'), { report: report(['ok.txt', 'ok.test.js']) }])] } });
-  const result = await run(runtime, tmp(), { verify: [NODE_OK] });
+  const result = await run(runtime, cwd, { verify: [NODE_OK] });
   assert.equal(result.status, 'completed');
   assert.ok(result.warnings.some(item => item.includes('ok.test.js')));
+  const fresh = new FakeRuntime({ scripts: { lead: lead(), builder: [script([write('ok.txt'), write('new.test.js'), { report: report(['ok.txt', 'new.test.js']) }])] } });
+  const added = await run(fresh, tmp(), { verify: [NODE_OK] });
+  assert.equal(added.warnings.some(item => item.includes('new.test.js')), false);
+});
+
+test('with no verify command, the project\'s own test script is used; npm\'s placeholder is not', () => {
+  const cwd = tmp();
+  assert.deepEqual(detectVerify(cwd), []);
+  put(cwd, 'package.json', JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));
+  assert.deepEqual(detectVerify(cwd), []);
+  put(cwd, 'package.json', JSON.stringify({ scripts: { test: 'node --test' } }));
+  assert.deepEqual(detectVerify(cwd), ['npm test']);
 });
 
 // ---------- protected paths, read-only, failure types ----------

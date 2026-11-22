@@ -148,7 +148,7 @@ function Suggestions({ items, onFollowUp }: { items: string[]; onFollowUp?: ((it
 function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null; workflow: string | null; onFollowUp?: ((items: string[]) => void) | undefined }) {
   const { t } = useI18n();
   if (!report) return <p className="msg-meta">{t('reportMissing')}</p>;
-  const { answer, builder, plan, research, review } = report;
+  const { answer, builder } = report;
   const requirementTone = (status: string): string => (status === 'done' ? 'success' : status === 'not_done' ? 'danger' : 'warning');
   const known = (status: string): boolean => ['done', 'not_done', 'unverified'].includes(status);
   return (
@@ -176,15 +176,27 @@ function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null
           })}</ul></div> : null}
         </>
       ) : null}
+      <List title={t('unverifiedTitle')} items={report.unverified ?? []} />
+      <List title={t('warningsTitle')} items={report.warnings ?? []} />
+      <p className="muted">{report.redo ? t('redoCount', { n: report.redo }) : ''}{report.restorePoint ? ` ${t('restorePoint', { files: report.restorePoint.files })}` : ''}</p>
+    </div>
+  );
+}
+
+/** The longer, secondary parts of a report (plan, research, review and its suggestions), shown beside the result. */
+function ReportExtras({ report, onFollowUp }: { report: RunReport | null; onFollowUp?: ((items: string[]) => void) | undefined }) {
+  const { t } = useI18n();
+  if (!report) return null;
+  const { plan, research, review } = report;
+  if (!plan && !research?.length && !review && !report.reviewSkipped) return null;
+  return (
+    <div className="report report-extras">
       {plan ? <div className="section"><div className="label">{t('planTitle')}</div><p className="prose">{plan.approach}</p><List title={t('planSteps')} items={plan.steps} /><List title={t('planRisks')} items={plan.risks} /></div> : null}
       {research?.length ? <div className="section"><div className="label">{t('researchTitle')}</div>{research.map((entry, index) => <div key={index}><strong>{entry.angle}</strong><p className="prose">{entry.summary}</p><List title={t('sources')} items={entry.sources} /></div>)}</div> : null}
       {review ? <div className="section"><div className="label">{t('reviewTitle')} <span className={`badge tone-${review.verdict === 'PASS' ? 'success' : 'danger'}`}>{['PASS', 'REDO', 'BLOCKED'].includes(review.verdict) ? t(`verdict_${review.verdict}` as 'verdict_PASS') : review.verdict}</span></div>
         {review.blocking.length ? <ul>{review.blocking.map((finding, index) => <li key={index}>{finding.file ? <span className="mono">{finding.file}{finding.line ? `:${finding.line}` : ''} </span> : null}{finding.reason}<div className="muted">{finding.evidence}</div></li>)}</ul> : null}
         <Suggestions items={review.optional} onFollowUp={onFollowUp} /></div> : null}
       {report.reviewSkipped ? <p className="muted">{t('reviewSkipped', { reason: report.reviewSkipped })}</p> : null}
-      <List title={t('unverifiedTitle')} items={report.unverified ?? []} />
-      <List title={t('warningsTitle')} items={report.warnings ?? []} />
-      <p className="muted">{report.redo ? t('redoCount', { n: report.redo }) : ''}{report.restorePoint ? ` ${t('restorePoint', { files: report.restorePoint.files })}` : ''}</p>
     </div>
   );
 }
@@ -538,6 +550,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
               const skippedOnly = !entry.failed && !entry.ok && entry.skipped > 0;
               return <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : skippedOnly ? 'neutral' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : skippedOnly ? t('gateSkipped') : t('gateOk')}</span>;
             })}</div> : null}
+            <ReportExtras report={detail?.report ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
             {detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
             {status === 'needs_review' || status === 'failed' ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
             {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
