@@ -56,6 +56,7 @@ const VERIFIER = [
   'Report shape: { "verdict": "PASS" | "REDO" | "BLOCKED", "blocking": [{ "file"?: string, "line"?: number, "reason": string, "evidence": string }], "optional": [strings] }.',
   '- REDO only for: a requirement that is not met, behaviour that is wrong, a report that states something untrue, or a check that was weakened. Every REDO finding needs concrete evidence (file and line, or the observed behaviour).',
   '- Style, naming, structure or "could be better" suggestions go in "optional" and never justify REDO.',
+  '- Each "optional" entry is one concrete improvement the user could ask for next, written as something to do (for example "Clear the old message when the form is submitted empty"). The user can turn them into the next request, so do not put what you checked, how you reviewed, or a summary of the work there.',
   '- A change that no requirement needs (an unrequested refactor, rename, reformat, new dependency or feature) is a blocking finding unless it is needed to meet a requirement: unrequested work is a risk the user did not agree to.',
   '- If the user\'s request contains a requirement that is missing from the requirements list, report it as a blocking finding.',
   '- BLOCKED means you cannot decide (for example something you could not inspect). Put the reason in "blocking" so the user can see what stayed unchecked.',

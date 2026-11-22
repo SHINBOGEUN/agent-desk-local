@@ -566,7 +566,14 @@ function completeBuild(ctx: RunContext, report: BuilderReport, g2: GateResult, g
   ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
   ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'build reported' });
   const note = unverified.length ? ctx.say(` Not verified by the builder: ${unverified.length} item(s), listed in the result.`, ` 빌더가 검증하지 못한 항목 ${unverified.length}개가 결과에 정리되어 있습니다.`) : '';
-  return finish(ctx, 'completed', ctx.say(`Every requirement is done and the gates passed.${note}`, `모든 요구사항이 완료되었고 게이트를 통과했습니다.${note}`), { ...base, ...reviewExtra, builder: report, unverified });
+  // name only the checks that actually ran: "the gates passed" must not cover a test run that never happened
+  const reviewed = review.kind === 'verdict' && review.report.verdict === 'PASS';
+  const passed = ctx.say(
+    ['the changed-files check', ...(g3.skipped ? [] : ['the tests']), ...(reviewed ? ['the review'] : [])].join(', ').replace(/, ([^,]*)$/, ' and $1'),
+    ['변경 파일 확인', ...(g3.skipped ? [] : ['테스트']), ...(reviewed ? ['리뷰'] : [])].join(', '),
+  );
+  const noTests = g3.skipped ? ctx.say(' No tests ran: no verify command is configured.', ' 검증 명령이 없어 테스트는 실행하지 않았습니다.') : '';
+  return finish(ctx, 'completed', ctx.say(`Every requirement is done; passed ${passed}.${noTests}${note}`, `모든 요구사항이 완료되었고 ${passed}을(를) 통과했습니다.${noTests}${note}`), { ...base, ...reviewExtra, builder: report, unverified });
 }
 
 export async function runRequest(request: string, config: RunConfig): Promise<RunResult> {
