@@ -184,7 +184,7 @@ export function RoleLanes({ timeline, runtimes, live }: { timeline: Timeline; ru
         <div className="lane-name"><span className="muted">{t('sceneHarnessChecks')}</span></div>
         <div className="lane-track checks">
           {checkpoints.map((point, index) => (
-            <span key={index} className={`checkpoint ${point.skipped ? 'skip' : point.ok ? 'ok' : 'fail'}`} style={{ left: `${point.at * 100}%` }}>{t(`gate_${point.gate}` as Key)} {point.skipped ? '–' : point.ok ? '✓' : '✗'}</span>
+            <span key={index} className={`checkpoint ${point.skipped ? 'skip' : point.ok ? 'ok' : 'fail'}`} style={{ left: `${point.at * 100}%`, transform: `translateX(${point.at > 0.85 ? -100 : point.at < 0.1 ? 0 : -50}%)` }}>{t(`gate_${point.gate}` as Key)} {point.skipped ? '–' : point.ok ? '✓' : '✗'}</span>
           ))}
         </div>
       </div>

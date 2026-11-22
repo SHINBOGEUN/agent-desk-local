@@ -476,10 +476,12 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
 }) {
   const { t, lang } = useI18n();
   const { detail, timeline, pending } = data;
-  const [view, setView] = useState<'scene' | 'lanes'>(() => (read(STAGE_KEY) === 'lanes' ? 'lanes' : 'scene'));
+  const [view, setView] = useState<'scene' | 'lanes' | 'hidden'>(() => { const saved = read(STAGE_KEY); return saved === 'lanes' || saved === 'hidden' ? saved : 'scene'; });
   const [revertNote, setRevertNote] = useState('');
-  useEffect(() => { setRevertNote(''); }, [run.id]);
-  const pick = (next: 'scene' | 'lanes'): void => { setView(next); write(STAGE_KEY, next); };
+  const [tab, setTab] = useState<'result' | 'review' | 'steps' | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  useEffect(() => { setRevertNote(''); setTab(null); setRequestOpen(false); }, [run.id]);
+  const pick = (next: 'scene' | 'lanes' | 'hidden'): void => { setView(next); write(STAGE_KEY, next); };
   const status = detail?.run.status ?? run.status;
   const running = status === 'running';
   const settings = detail?.settings ?? null;
@@ -487,6 +489,11 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
   const resumable = !running && (status === 'interrupted' || ((status === 'needs_review' || status === 'failed') && detail?.report?.resume !== undefined));
   const current = timeline.steps.at(-1);
   const summary = gateSummary(timeline);
+  const report = detail?.report ?? null;
+  const hasExtras = !!(report && (report.plan || report.research?.length || report.review || report.reviewSkipped));
+  // while running only the steps exist; afterwards the result opens first
+  const shownTab = running ? 'steps' : tab ?? 'result';
+  const longRequest = run.request.length > 160 || run.request.split('\n').length > 3;
   const gateName = useGateName();
   const skills = timeline.skillsRead ?? detail?.report?.skillsRead ?? [];
   const time = new Date(run.startedAt).toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -506,7 +513,8 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
     <section className={`run-pane status-${statusTone(status)}`} aria-label={`#${run.id}`}>
       <header className="run-head">
         <div className="run-line"><span className="run-id">#{run.id}</span><Badge status={status} /><span className="muted">{time}{durationOf(run, lang)}</span>{tokens ? <span className="muted push">{tokens}</span> : null}</div>
-        <h1 className="run-request">{run.request}</h1>
+        <h1 className={`run-request${longRequest && !requestOpen ? ' clamped' : ''}`}>{run.request}</h1>
+        {longRequest ? <button className="link" onClick={() => setRequestOpen(open => !open)}>{requestOpen ? t('showLess') : t('showMore')}</button> : null}
         <div className="team-line">
           {runtimes ? (['lead', 'builder', 'verifier'] as const).map(role => <span key={role} className="team-chip">{role}<RuntimeTag kind={runtimes[role]} /></span>) : null}
           {settings?.review ? <span className="team-chip">{t('reviewPolicy')} {settings.review}</span> : null}
@@ -516,11 +524,12 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
         </div>
         {settings?.fallback ? <p className="msg-meta warn-text">{(() => { const match = /Codex (5-hour|weekly) usage is (\d+)% \(switch at (\d+)%\)/.exec(settings.fallback); return match ? t('fallbackNote', { window: t(match[1] === 'weekly' ? 'fallbackWeekly' : 'fallback5h'), used: match[2]!, at: match[3]! }) : settings.fallback; })()}</p> : null}
       </header>
-      <div className="stage">
+      <div className={`stage${view === 'hidden' ? ' folded' : ''}`}>
         <div className="stage-head">
           <div className="seg" role="group" aria-label={t('viewScene')}>
             <button className={view === 'scene' ? 'on' : ''} aria-pressed={view === 'scene'} onClick={() => pick('scene')}>{t('viewScene')}</button>
             <button className={view === 'lanes' ? 'on' : ''} aria-pressed={view === 'lanes'} onClick={() => pick('lanes')}>{t('viewLanes')}</button>
+            <button className={view === 'hidden' ? 'on' : ''} aria-pressed={view === 'hidden'} onClick={() => pick('hidden')}>{t('stageFold')}</button>
           </div>
           {running ? (
             <div className="live-line">
@@ -531,40 +540,54 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
           ) : null}
           {live && running ? <button className="ghost danger push" onClick={() => { void api.cancel(); }}>{t('stop')}</button> : null}
         </div>
-        {view === 'scene' ? <AgentScene timeline={timeline} runtimes={runtimes} asking={pending !== null && live} live={running} /> : <RoleLanes timeline={timeline} runtimes={runtimes} live={running} />}
-        {view === 'scene' ? <p className="stage-note">{t('sceneNote')} {t('sceneDrag')}</p> : null}
+        {view === 'scene' ? <AgentScene timeline={timeline} runtimes={runtimes} asking={pending !== null && live} live={running} /> : view === 'lanes' ? <RoleLanes timeline={timeline} runtimes={runtimes} live={running} /> : null}
       </div>
       {pending && live ? <QuestionBlock pending={pending} /> : null}
-      {timeline.questions?.filter(question => question.answered).map((question, index) => (
-        <div key={index} className="asked"><span className="msg-meta">{t('agentAsks', { role: question.step })} · {t('answeredTag')}</span><p>{question.question}</p></div>
-      ))}
       {!running ? (
-        <div className="run-grid">
-          <div className="panel-card result-card">
-            {detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
-            <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
-          </div>
-          <div className="panel-card side-card">
+        // the outcome in one strip: what happened, which checks ran, what you can do next
+        <div className={`outcome status-${statusTone(status)}`}>
+          {detail?.run.reason ? <p className="reason">{detail.run.reason}</p> : null}
+          <div className="outcome-row">
             {summary.length ? <div className="chips">{summary.map(entry => {
               // a check that only ever skipped did not pass: say so (no "tests passed" when no test ran)
               const skippedOnly = !entry.failed && !entry.ok && entry.skipped > 0;
               return <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : skippedOnly ? 'neutral' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : skippedOnly ? t('gateSkipped') : t('gateOk')}</span>;
             })}</div> : null}
-            <ReportExtras report={detail?.report ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
-            {detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
-            {status === 'needs_review' || status === 'failed' ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
-            {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}
-            {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
-            {detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
-              targetsFor={cause => feedbackTargets(cause, { skillsRead: skills.map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
+            <div className="outcome-actions">
+              {resumable && canResume ? <button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button> : null}
+              {status === 'needs_review' || status === 'failed' ? <><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></> : null}
+            </div>
           </div>
+          {revertNote ? <p className="msg-meta">{revertNote}</p> : null}
         </div>
       ) : null}
-      {timeline.steps.length ? (
-        <details className="steps-detail">
-          <summary>{t('viewSteps')}</summary>
-          <div className="steps"><TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}</div>
-        </details>
+      {timeline.steps.length || !running ? (
+        <div className="run-tabs">
+          <div className="tab-row" role="tablist">
+            {([['result', t('tabResult'), running], ['review', t('tabReview', { n: report?.review?.optional.length ?? 0 }), running || !hasExtras], ['steps', t('viewSteps'), !timeline.steps.length]] as const).map(([id, label, disabled]) => (
+              <button key={id} role="tab" aria-selected={shownTab === id} className={shownTab === id ? 'on' : ''} disabled={disabled} onClick={() => setTab(id)}>{label}</button>
+            ))}
+          </div>
+          <div className="tab-body" role="tabpanel">
+            {shownTab === 'result' ? (
+              <>
+                <ReportCard report={report} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
+                {report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={report.memorySuggestions} runId={run.id} /> : null}
+                {detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
+                  targetsFor={cause => feedbackTargets(cause, { skillsRead: skills.map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
+              </>
+            ) : shownTab === 'review' ? (
+              <ReportExtras report={report} onFollowUp={items => onFollowUp(run.id, items)} />
+            ) : (
+              <div className="steps">
+                {timeline.questions?.filter(question => question.answered).map((question, index) => (
+                  <div key={index} className="asked"><span className="msg-meta">{t('agentAsks', { role: question.step })} · {t('answeredTag')}</span><p>{question.question}</p></div>
+                ))}
+                <TimelineView timeline={timeline} />{!running ? <RoleTable timeline={timeline} detail={detail} /> : null}
+              </div>
+            )}
+          </div>
+        </div>
       ) : null}
     </section>
   );
