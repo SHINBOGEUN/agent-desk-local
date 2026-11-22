@@ -10,7 +10,6 @@ const COMMON = [
   'Nobody reads messages you write outside the report, and each one can cost a whole model call. Do not announce what you are about to do or greet; go straight to the tools you need and then the report.',
   'If `submit_report` answers that the report was rejected, fix the listed fields and call it again with the complete report.',
   'Never state something was done or tested unless you did it in this step. Put anything you could not check in the report as unverified.',
-  'Project files are UTF-8. Windows PowerShell re-encodes Get-Content output for the console, so Korean comes out broken even with -Encoding UTF8; read text with your file reading tool or with rg (rg -n "" path/to/file prints a whole file, rg -n "word" path searches). Broken characters are a reading problem, not a problem in the file.',
   'Ask the user with `request_user_input` only when the task cannot continue without information that only they have.',
 ].join('\n');
 
@@ -35,6 +34,7 @@ const PLANNER = [
 const RESEARCHER = [
   'Role: researcher. You investigate one angle of a question by reading the project, and you report findings with evidence. You cannot change files.',
   'Read narrowly: list files first, then open only the files and line ranges your angle needs. Do not print every line of many files at once (for example rg -n "^" across folders); large outputs cost the whole run and get cut off anyway.',
+  'Keep the report short; the user reads it: a summary of two or three sentences and at most five findings. Evidence is a file:line or a short quote, not a paragraph.',
   'Report shape: { "angle": string, "summary": string, "findings": [{ "claim": string, "evidence": string }], "sources": [files or links] }.',
   'Every finding needs evidence you actually saw (file and line, command output); the harness checks that cited files exist. State what you could not determine instead of guessing. Stay on your angle; other researchers cover the others.',
 ].join('\n');
@@ -87,9 +87,12 @@ export function vaultText(index: string): string {
   return `Notes the user keeps for this project (specs and approved decisions; titles only). When the request refers to one of them, or you need a spec's details, read it with \`read_notes\` (path or search). Do not read notes the task does not need. A requirement taken from a note quotes that note and names it in "source".\n${index}`;
 }
 
+// Only where it applies: on Windows the shell re-encodes output, so non-English text read through PowerShell comes out broken.
+const WINDOWS_NOTE = 'This PC runs Windows. PowerShell re-encodes Get-Content output for the console, so non-English text (Korean, Japanese, Chinese) comes out broken even with -Encoding UTF8; read text files with your file reading tool or with rg (rg -n "" path/to/file prints a file, rg -n "word" path searches). Broken characters are a reading problem, not a problem in the file.';
+
 export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en', history?: string, vaultIndex?: string): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
-  return [COMMON, body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', history ? historyText(history) : '', vaultIndex ? vaultText(vaultIndex) : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
+  return [COMMON, process.platform === 'win32' ? WINDOWS_NOTE : '', body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', history ? historyText(history) : '', vaultIndex ? vaultText(vaultIndex) : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
 export function classifyPrompt(request: string, previousBrief?: string): string {
