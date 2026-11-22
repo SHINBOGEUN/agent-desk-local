@@ -77,8 +77,13 @@ export function lanesOf(timeline: Timeline, now: number): { lanes: Lane[]; check
     const nested = steps.filter(other => other !== step && startOf(other) > startOf(step) && startOf(other) < endOf(step)).map(startOf);
     const when = nested.length ? Math.min(...nested) : endOf(step);
     step.gates.filter(gate => gate.gate !== 'G1').forEach(gate => {
-      let place = at(when);
-      while (checkpoints.some(point => Math.abs(point.at - place) < 0.03)) place = Math.min(1, place + 0.035);
+      // step clear of earlier chips: right first, then left; bounded, so chips piled at the end cannot loop forever
+      const base = at(when);
+      let place = base;
+      for (let k = 1; k <= 40 && checkpoints.some(point => Math.abs(point.at - place) < 0.03); k++) {
+        const shift = Math.ceil(k / 2) * 0.035 * (k % 2 ? 1 : -1);
+        place = Math.min(1, Math.max(0, base + shift));
+      }
       checkpoints.push({ gate: gate.gate, at: place, ok: gate.ok, skipped: gate.skipped === true });
     });
   }

@@ -102,3 +102,19 @@ test('a step the run never closed ends with the run, so the time axis does not r
   assert.equal(timeline.steps[0]!.finishedAt, at(7));
   assert.equal(lanesOf(timeline, Date.parse(at(7)) + 13 * 3600 * 1000).spanMs, 7000);
 });
+
+test('checks that all happen at the very end of the run are spread out instead of hanging the page', async () => {
+  const { lanesOf } = await import('../src/scene.ts');
+  seq = 0;
+  const timeline = buildTimeline([
+    ev(0, { type: 'step_started', step: 'build', role: 'builder' }),
+    ev(9, { type: 'gate', result: { gate: 'G2', ok: true, detail: '' } }),
+    ev(9, { type: 'gate', result: { gate: 'G3', ok: true, skipped: true, detail: '' } }),
+    ev(9, { type: 'gate', result: { gate: 'G4', ok: false, detail: '' } }),
+    ev(9, { type: 'run_finished', status: 'interrupted', reason: 'x' }),
+  ]);
+  const { checkpoints } = lanesOf(timeline, Date.parse(at(9)));
+  assert.equal(checkpoints.length, 3);
+  assert.ok(checkpoints.every(point => point.at >= 0 && point.at <= 1));
+  assert.equal(new Set(checkpoints.map(point => point.at.toFixed(3))).size, 3);
+});
