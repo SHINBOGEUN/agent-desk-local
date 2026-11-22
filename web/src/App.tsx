@@ -9,6 +9,7 @@ import type { I18n, Key, Lang } from './i18n.ts';
 import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
 import { NotesView } from './notes.tsx';
+import { StartCard, SURVEY_KEY } from './start.tsx';
 import { AgentScene, RoleLanes } from './agent-scene.tsx';
 import { errorText } from './util.ts';
 
@@ -687,9 +688,9 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
     if (files.length) { event.preventDefault(); void addFiles(files); }
   };
   const askNotifications = (): void => { try { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); } catch { /* not supported */ } };
-  const startRun = async (request: string, extra: { resumeOf?: number } = {}): Promise<void> => {
+  const startRun = async (request: string, extra: { resumeOf?: number } = {}): Promise<number> => {
     askNotifications();
-    await api.start({ project, request, ...(mode ? { mode } : {}), ...(review ? { review } : {}), ...(images.length && !extra.resumeOf ? { images: images.map(image => image.dataUrl) } : {}), ...extra, language: lang });
+    return (await api.start({ project, request, ...(mode ? { mode } : {}), ...(review ? { review } : {}), ...(images.length && !extra.resumeOf ? { images: images.map(image => image.dataUrl) } : {}), ...extra, language: lang })).runId;
   };
   const answering = pending !== null && activeHere;
   const submit = async (): Promise<void> => {
@@ -717,6 +718,32 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
     requestAnimationFrame(() => { composer.current?.focus(); composer.current?.scrollIntoView({ block: 'nearest' }); });
   };
   const blocked = (activeHere && !answering) || activeElsewhere || missing.length > 0;
+  // the start card: always for a project without runs, and on demand from the conversation header
+  const [showStart, setShowStart] = useState(false);
+  useEffect(() => { setShowStart(false); }, [project]);
+  const draft = (value: string): void => { setText(value); requestAnimationFrame(() => { composer.current?.focus(); }); };
+  const survey = async (request: string): Promise<void> => {
+    const id = await startRun(request);
+    write(SURVEY_KEY(project), String(id));
+    setShowStart(false);
+    onChanged();
+  };
+  // a finished survey run becomes the "current state" note (once)
+  useEffect(() => {
+    const id = Number(read(SURVEY_KEY(project)) ?? '');
+    if (!id) return;
+    const row = thread.find(run => run.id === id);
+    if (!row || row.status === 'running') return;
+    write(SURVEY_KEY(project), '');
+    if (row.status !== 'completed') return;
+    api.run(id).then(detail => {
+      const answer = detail.report?.answer;
+      if (!answer) return undefined;
+      const title = t('surveyNoteTitle');
+      const text = ['---', 'type: spec', `source-run: ${id}`, `created: ${new Date().toISOString().slice(0, 10)}`, '---', `# ${title}`, '', answer.answer.trim(), '', ...(answer.sources.length ? [`## ${t('sources')}`, ...answer.sources.map(source => `- ${source}`), ''] : []), `_${t('surveyNoteFrom', { id })}_`, ''].join('\n');
+      return api.writeNote({ project, path: `specs/${title}.md`, text });
+    }).catch(() => undefined);
+  }, [thread, project, t]);
   const replyLine = (run: RunRow): string => {
     if (run.id === activeRow?.id) { const step = liveData.timeline.steps.at(-1); return step ? t('workingOn', { role: step.role, step: step.step }) : t('starting'); }
     return run.reason ?? '';
@@ -725,9 +752,10 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
   return (
     <div className="workspace">
       <div className="run-side">
-        {selected ? <RunPane key={selected.id} run={selected} data={selectedData} live={selected.id === activeRow?.id} canResume={active === null} onResume={run => { void resume(run); }}
+        {showStart || !thread.length ? <StartCard project={project} busy={active !== null} onDraft={draft} onSurvey={survey} onClose={thread.length ? () => setShowStart(false) : undefined} />
+          : selected ? <RunPane key={selected.id} run={selected} data={selectedData} live={selected.id === activeRow?.id} canResume={active === null} onResume={run => { void resume(run); }}
           projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} onFollowUp={followUp} />
-          : <div className="run-empty"><h2>{t('chatEmptyTitle', { name: projectName(project) })}</h2><p>{t('chatEmptyHint')}</p><ProjectPanel project={project} /></div>}
+          : null}
       </div>
       <section className="chat" aria-label={t('chatTitle')}>
         <header className="chat-head">
@@ -735,7 +763,8 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
             <h2>{t('chatTitle')}</h2>
             <button className="path" title={t('changeProject')} onClick={onOpen}>{projectName(project)}</button>
           </div>
-          <button className="ghost small push" onClick={() => setSettingsFor({})}>{t('editTeam')}</button>
+          {thread.length ? <button className="ghost small push" onClick={() => setShowStart(true)}>{t('startOpen')}</button> : null}
+          <button className={`ghost small${thread.length ? '' : ' push'}`} onClick={() => setSettingsFor({})}>{t('editTeam')}</button>
         </header>
         <div className="thread" aria-live="polite">
           {thread.length > shown.length ? <p className="thread-note">{t('olderRuns', { n: thread.length - shown.length })}</p> : null}

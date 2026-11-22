@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft } from '#project';
+import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft, projectStart, setVerifyCommands, overviewNote } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
 import { dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
@@ -341,6 +341,35 @@ export function createServer(options: ServerOptions): LocalServer {
       const loaded = loadProject(project);
       const skills = checkSkills(project, loaded.config, loaded.roles);
       return send(res, 200, { config: loaded.config, mode: modeOf(loaded.config), errors: loaded.errors, warnings: loaded.warnings, memory: memoryFacts(loadMemory(project)).map(redactSecrets), skills: skills.skills.map(skill => ({ id: skill.id, description: skill.description })), skillFindings: skills.findings });
+    }
+    if (method === 'GET' && p === '/api/project/start') {
+      const project = projectDir(url.searchParams.get('path'));
+      return send(res, 200, { ...projectStart(project), hasRuns: withStore(store => store.listRuns(project, 1)).length > 0 });
+    }
+    if (method === 'POST' && p === '/api/project/verify') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      if (!Array.isArray(body.commands) || !body.commands.every((command: unknown) => typeof command === 'string')) throw new HttpError(400, 'commands must be a list of strings');
+      const saved = setVerifyCommands(project, body.commands as string[]);
+      return send(res, saved.ok ? 200 : 422, saved.ok ? { ok: true } : { ok: false, errors: saved.errors, error: saved.errors[0] });
+    }
+    if (method === 'POST' && p === '/api/project/overview') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const goal = typeof body.goal === 'string' ? body.goal.trim() : '';
+      if (!goal) throw new HttpError(400, 'goal is required');
+      const rules = Array.isArray(body.rules) ? (body.rules as unknown[]).filter((rule): rule is string => typeof rule === 'string' && rule.trim().length > 0) : [];
+      const lang = body.lang === 'ko' ? 'ko' : 'en';
+      const vault = vaultOf(project);
+      initVault(vault);
+      const note = overviewNote({ goal, stack: typeof body.stack === 'string' ? body.stack : '', rules }, lang, new Date().toISOString().slice(0, 10));
+      const written = writeNote(vault, note.path, note.text);
+      if (!written.ok) throw new HttpError(400, written.error);
+      // the rules also go into memory, so every role sees them from the first run
+      const memory = rules.map(rule => recordDecision(project, vault, rule.trim(), { lang })).filter(result => !result.ok).map(result => ('error' in result ? result.error : ''));
+      return send(res, 200, { ok: true, note: note.path, memoryErrors: memory });
     }
     if (method === 'GET' && p === '/api/project/files') return send(res, 200, projectFiles(projectDir(url.searchParams.get('path'))));
     if (method === 'POST' && p === '/api/project/files') {

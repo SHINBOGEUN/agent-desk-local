@@ -73,6 +73,8 @@ export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: st
 export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; images?: string[]; resumeOf?: number; review?: 'always' | 'auto' | 'never' | 'self'; language?: 'en' | 'ko'; verify?: string[] }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
+export interface ProjectStartInfo { kind: 'new' | 'existing'; entries: number; stack: string[]; verifyCandidates: { command: string; source: string }[]; verify: string[]; hasTests: boolean; git: { repo: boolean; commits: number | null; uncommitted: number | null }; hasRuns: boolean }
+
 export interface FolderEntry { name: string; path: string; isProject: boolean }
 export interface FolderListing { path: string; parent: string | null; home: string; entries: FolderEntry[] }
 
@@ -111,6 +113,9 @@ export const api = {
   answer: (answer: string): Promise<{ ok: boolean }> => request('POST', '/api/runs/active/answer', { answer }),
   files: (project: string): Promise<ProjectFiles> => request('GET', `/api/project/files?path=${encodeURIComponent(project)}`),
   saveFile: (body: { project: string; kind: 'config' | 'role' | 'skill'; id?: string; text?: string; remove?: boolean }): Promise<SaveReply> => request('POST', '/api/project/files', body),
+  projectStart: (path: string): Promise<ProjectStartInfo> => request('GET', `/api/project/start?path=${encodeURIComponent(path)}`),
+  setVerify: (project: string, commands: string[]): Promise<{ ok: boolean }> => request('POST', '/api/project/verify', { project, commands }),
+  writeOverview: (body: { project: string; goal: string; stack: string; rules: string[]; lang: 'en' | 'ko' }): Promise<{ ok: boolean; note: string; memoryErrors: string[] }> => request('POST', '/api/project/overview', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string, runId?: number, lang?: 'en' | 'ko'): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact, ...(runId !== undefined ? { runId } : {}), ...(lang ? { lang } : {}) }),
   notes: (project: string, lang?: 'en' | 'ko'): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}${lang ? `&lang=${lang}` : ''}`),

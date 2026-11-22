@@ -624,3 +624,25 @@ select { padding-right: 28px; }
 .tab-row button.on { color: var(--ink); border-bottom-color: var(--accent); }
 .tab-body { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
 .tab-body .report-extras { border: 0; padding: 0; }
+
+/* ---- start card ---- */
+.start-card { max-width: 820px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 22px 26px 24px; display: flex; flex-direction: column; gap: 18px; }
+.start-head { display: flex; align-items: flex-start; gap: 16px; }
+.start-head > div { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.start-head h2 { font-size: 20px; }
+.start-kind { align-self: flex-start; font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); }
+.start-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.start-steps li { display: flex; flex-direction: column; gap: 6px; }
+.start-steps label { display: flex; flex-direction: column; gap: 2px; }
+.start-steps label .muted { font-size: 12.5px; }
+.start-steps textarea, .start-steps input:not([type=checkbox]) { width: 100%; background: var(--sunk); }
+.start-card .check { display: flex; flex-direction: row; align-items: center; align-self: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+.start-checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.start-checks > li { padding: 10px 14px; border-radius: var(--radius); background: var(--sunk); border-left: 3px solid var(--ok); font-size: 13.5px; }
+.start-checks > li.warn { border-left-color: var(--warn); }
+.start-checks strong { margin-right: 6px; }
+.start-verify { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; align-items: flex-start; }
+.start-block { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.start-block h3 { color: var(--ink); font-size: 15px; }
+.start-done { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: var(--radius); background: var(--ok-bg); }
+.primary { background: var(--accent); color: #121826; border-color: var(--accent); font-weight: 650; }
