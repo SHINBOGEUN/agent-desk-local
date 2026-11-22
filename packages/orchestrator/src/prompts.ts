@@ -89,7 +89,7 @@ export function vaultText(index: string): string {
 }
 
 // Only where it applies: on Windows the shell re-encodes output, so non-English text read through PowerShell comes out broken.
-const WINDOWS_NOTE = 'This PC runs Windows. PowerShell re-encodes Get-Content output for the console, so non-English text (Korean, Japanese, Chinese) comes out broken even with -Encoding UTF8; read text files with your file reading tool or with rg (rg -n "" path/to/file prints a file, rg -n "word" path searches). Broken characters are a reading problem, not a problem in the file.';
+const WINDOWS_NOTE = 'This PC runs Windows PowerShell. It re-encodes text that passes through it, so non-English text (Korean, Japanese, Chinese) comes out broken with Get-Content (even with -Encoding UTF8) and whenever you pipe one command into another (rg ... | rg ..., | Select-Object). Read files with rg alone, never piped: rg -n . path/to/file prints a file; rg -n -C 20 "word" path/to/file shows the part around a word. Do not pass an empty pattern (rg -n "" file): PowerShell drops the empty argument and the command fails. Broken characters are a reading problem, not a problem in the file.';
 
 export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en', history?: string, vaultIndex?: string): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
