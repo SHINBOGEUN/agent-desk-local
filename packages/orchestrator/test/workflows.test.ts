@@ -75,6 +75,16 @@ test('investigate: one read-only researcher per angle, run in parallel, assemble
   assert.equal(runtime.turns.filter(turn => turn.role === 'lead').length, 1);
 });
 
+test('investigate: parallel researchers that report and keep going are each stopped on their own report', { timeout: 10_000 }, async () => {
+  // a researcher's accepted report used to stop whichever turn started last, so another researcher's turn ended early
+  // and its own session ran on: "ended the research step twice without an accepted report"
+  const angles = ['structure', 'how to run', 'what is missing'];
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classifyInvestigate(angles) }])], researcher: angles.map(angle => script([{ report: research(angle) }, { hang: true }])) } });
+  const result = await go(runtime, tmp());
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.research?.length, 3);
+});
+
 test('investigate: no angles uses the request; more than 3 angles are capped with a warning', async () => {
   const none = new FakeRuntime({ scripts: { lead: [script([{ report: classifyInvestigate([]) }])], researcher: [script([{ report: research('do the thing') }])] } });
   const single = await go(none, tmp());

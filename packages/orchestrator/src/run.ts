@@ -31,6 +31,8 @@ interface Collector {
 /** The tools of a session call whatever collector is current, so a session can take several reports (REDO). */
 interface Holder {
   current: Collector;
+  /** The turn this session is playing now. Parallel sessions (researchers) each stop only their own turn. */
+  turn?: { stop: AbortController; endedByReport: boolean } | null;
 }
 
 interface TurnOutcome {
@@ -138,7 +140,7 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
       ctx.emit({ type: 'report', step, kind: role, accepted: result.ok, detail: result.ok ? (result.message.split('\n')[0] ?? '') : result.message.split('\n').slice(0, 6).join('\n').slice(0, 900) });
       if (result.ok && holder.current.done()) {
         // End the turn once the tool answer is on its way back (setImmediate), so the session history stays whole.
-        const turn = ctx.currentTurn;
+        const turn = holder.turn ?? null;
         if (turn) setImmediate(() => { if (!turn.stop.signal.aborted) { turn.endedByReport = true; turn.stop.abort(); } });
       }
       return result;
@@ -172,11 +174,12 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
   };
 }
 
-async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: Session, text: string, images?: string[]): Promise<TurnOutcome> {
+async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: Session, holder: Holder, text: string, images?: string[]): Promise<TurnOutcome> {
   const turn = ctx.nextTurn(step);
   let outcome: TurnOutcome = { status: 'failed', error: 'runtime ended the turn without a result' };
   const current = { stop: new AbortController(), endedByReport: false };
   ctx.currentTurn = current;
+  holder.turn = current;
   const signal = AbortSignal.any([ctx.signal, current.stop.signal]);
   for await (const event of session.runTurn({ text, ...(images?.length ? { images } : {}) }, signal)) {
     ctx.emit({ type: 'runtime', step, role, event });
@@ -193,6 +196,7 @@ async function playTurn(ctx: RunContext, step: StepKind, role: RoleId, session: 
     if (event.type === 'turn_end') outcome = { status: event.status, ...(event.error ? { error: event.error } : {}) };
   }
   if (ctx.currentTurn === current) ctx.currentTurn = null;
+  if (holder.turn === current) holder.turn = null;
   // Stopped by the harness after an accepted report: the step is done, not interrupted (unless the user stopped the run too).
   if (current.endedByReport && !ctx.signal.aborted && outcome.status !== 'completed') {
     outcome = { status: 'completed' };
@@ -224,7 +228,7 @@ async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder
 async function playUntilReport(ctx: RunContext, step: StepKind, role: RoleId, session: Session, holder: Holder, prompt: string, reminder: string): Promise<StepFailure | null> {
   for (const text of [prompt, reminder]) {
     // Images the user attached go with the first prompt of every step that reads the request.
-    const outcome = await playTurn(ctx, step, role, session, text, text === prompt && step !== 'review' ? ctx.config.images : undefined);
+    const outcome = await playTurn(ctx, step, role, session, holder, text, text === prompt && step !== 'review' ? ctx.config.images : undefined);
     if (ctx.budgetHit) return { kind: 'budget', reason: ctx.budgetHit, step };
     if (outcome.status === 'interrupted' || ctx.config.signal?.aborted) return { kind: 'interrupted' };
     if (outcome.status === 'failed') return failedStep(outcome.error ?? 'turn failed', undefined, step);

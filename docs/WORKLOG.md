@@ -328,3 +328,12 @@ v2 재설계 진행 기록입니다. 최신 항목이 위에 옵니다. 단계�
 - 서버 `packages/server/src/clone.ts` + `POST /api/project/clone`: 주소 검사(https·ssh·git@·file만, `--` 뒤에 전달해 옵션 주입 차단), 폴더 이름 검사(경로 탈출 차단), 비어 있지 않은 대상 거부, `GIT_TERMINAL_PROMPT=0`(로그인 없으면 멈추지 않고 실패), 작업 브랜치 `git checkout -b`, 패키지 설치(잠금 파일에 따라 pnpm/yarn/npm ci/npm install, 고정 명령만), 단계별 시간 제한·출력 끝부분, 출력의 비밀값 가림. clone이 되면 뒤 단계가 실패해도 폴더 경로를 돌려줌. 테스트 2개(로컬 저장소 file:// clone + 브랜치 + 거부 경우).
 - 대시보드: 위쪽 막대 "git으로" → 주소·받을 위치(찾아보기, 마지막 위치 기억)·폴더 이름·작업 브랜치(agent-work)·패키지 설치(믿는 저장소만 안내)·받은 뒤 바로 프로젝트 파악하기. 단계별 결과 표시, 성공하면 그 프로젝트를 열고 파악하기 실행을 바로 시작(끝나면 `specs/현재 상태` 노트).
 - 미리보기로 대화창·부분 실패 표시 확인. 테스트 260개.
+
+## 52차 — 프로젝트 파악하기 실패 (병렬 조사) 수정 (2026-11-22)
+- 사용자 실행: 기존 프로젝트(MOYEOGO, Expo 앱) "프로젝트 파악하기" → lead가 조사(investigate)로 분류, researcher 3명이 병렬 → "researcher ended the research step twice without an accepted report"로 실패. 54초, 503k 토큰(새 입력 97k).
+- 원인(하네스 버그): 보고가 받아들여지면 그 세션의 턴을 멈춰야 하는데 `ctx.currentTurn` 하나만 기억해서, 마지막에 시작된 다른 researcher의 턴을 멈춤. 그 researcher는 보고 전에 턴이 끝나 재촉 → 다시 다른 보고에 끊김 → 두 번 다 보고 없음으로 실패. 단일 세션 단계에서는 드러나지 않던 버그.
+- 수정: 세션마다 자기 턴을 기억(`Holder.turn`), 보고는 자기 턴만 멈춤. 회귀 테스트(보고 후 계속 일하는 researcher 3명) 추가 — 수정 전 코드에서는 실패, 수정 후 통과.
+- 함께 본 것:
+  - Windows PowerShell은 `Get-Content -Encoding UTF8`이어도 콘솔로 내보낼 때 다시 인코딩해서 한글이 깨짐(로그에서 확인). 공통 지침을 "rg나 파일 읽기 도구로 읽기"로 바꿈. `[Console]::OutputEncoding` 변경은 이 PC의 제한 언어 모드에서 막힘.
+  - researcher가 `rg -n "^"`으로 여러 파일 전체를 출력(수십만 자) → 토큰 낭비. researcher 지침: 파일 목록 → 필요한 파일·줄만.
+- 테스트 261개.
