@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GATE_AT, OBSTACLES, SPOTS, nextPlan, route, seeded } from '../src/office-life.ts';
+import { GATE_AT, OBSTACLES, SPOTS, nextPlan, route, seeded } from '../office-life.ts';
 
 const clear = (points: { x: number; z: number }[], from: { x: number; z: number }): boolean => {
   let a = from;

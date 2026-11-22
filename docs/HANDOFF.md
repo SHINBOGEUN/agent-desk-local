@@ -281,7 +281,7 @@ Agent Desk v2: 코드가 작업 순서와 완료 판정을 정하고, 모델(Cod
 ## 나중에 검토할 것 (사용자 결정, 2026-11-20)
 지금은 만들지 않고 목록만 둔다. 착수 전에 사용자와 정한다.
 1. **Claude 사용량 게이지**: Codex처럼 조회 API가 없다. 최근 Claude Code가 stream-json 출력에 사용량 한도 이벤트를 섞어 보내는지 PC의 Claude 실행 1회 이벤트 기록으로 확인한 뒤 결정. 오면 런타임 이벤트로 받아 게이지에 표시, 안 오면 Agent Desk가 센 토큰만 표시(현재). (37차 조사: Claude Code는 stream-json에 `rate_limit_event`를 보낸다. status(allowed/allowed_warning/rejected)·resetsAt·rateLimitType은 늘 있고 utilization(사용률)은 경고 구간에서만 오는 것으로 보고됨. 지금은 rejected만 한도 판정에 씀. 게이지는 "정상/경고/한도, 재설정 시각" 정도까지 가능.)
-2. ~~3D 에이전트 장면~~ → 43차에 Three.js + CC0 애니메이션 로봇 모델로 구현(`office3d.ts`, `web/public/models/`). 조정은 사용자 요청대로.
+2. **3D 에이전트 장면**: 43~44차에 Three.js로 구현했다가 50차에 대시보드에서 내리고 `web/archive/scene3d/`에 보관. 사용자가 나중에 다른 캐릭터로 다시 만들어 달라고 할 예정(보관 폴더 README에 다시 켜는 법).
 3. **README·UI 매뉴얼**: 마지막 단계.
 - (36차) 메모 탭, 리뷰 제안 → 다음 요청 초안. PC 확인: `npm run web:build` 후 설정 → 메모 탭에서 고치기·삭제·저장, 실행 결과의 제안 체크 → 입력창 초안.
 - (37·38차) 실행 도중 사용량 한도 → 재시도 없이 이어할 수 있는 중단(`failureType: limit`). 서버 검사 문구 한국어화. PC 확인: 한도에 실제로 걸렸을 때 안내 문구·이어하기 버튼, 설정 저장 오류가 한국어로 나오는지.

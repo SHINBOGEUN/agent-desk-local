@@ -10,7 +10,7 @@ import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
 import { NotesView } from './notes.tsx';
 import { StartCard, SURVEY_KEY } from './start.tsx';
-import { AgentScene, RoleLanes } from './agent-scene.tsx';
+import { RoleLanes } from './agent-scene.tsx';
 import { errorText } from './util.ts';
 
 const PROJECT_KEY = 'agent-desk.project';
@@ -477,12 +477,13 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
 }) {
   const { t, lang } = useI18n();
   const { detail, timeline, pending } = data;
-  const [view, setView] = useState<'scene' | 'lanes' | 'hidden'>(() => { const saved = read(STAGE_KEY); return saved === 'lanes' || saved === 'hidden' ? saved : 'scene'; });
+  // the 3D scene is archived (web/archive/scene3d); a saved "scene" choice opens the timeline
+  const [view, setView] = useState<'lanes' | 'hidden'>(() => (read(STAGE_KEY) === 'hidden' ? 'hidden' : 'lanes'));
   const [revertNote, setRevertNote] = useState('');
   const [tab, setTab] = useState<'result' | 'review' | 'steps' | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   useEffect(() => { setRevertNote(''); setTab(null); setRequestOpen(false); }, [run.id]);
-  const pick = (next: 'scene' | 'lanes' | 'hidden'): void => { setView(next); write(STAGE_KEY, next); };
+  const pick = (next: 'lanes' | 'hidden'): void => { setView(next); write(STAGE_KEY, next); };
   const status = detail?.run.status ?? run.status;
   const running = status === 'running';
   const settings = detail?.settings ?? null;
@@ -527,8 +528,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
       </header>
       <div className={`stage${view === 'hidden' ? ' folded' : ''}`}>
         <div className="stage-head">
-          <div className="seg" role="group" aria-label={t('viewScene')}>
-            <button className={view === 'scene' ? 'on' : ''} aria-pressed={view === 'scene'} onClick={() => pick('scene')}>{t('viewScene')}</button>
+          <div className="seg" role="group" aria-label={t('viewLanes')}>
             <button className={view === 'lanes' ? 'on' : ''} aria-pressed={view === 'lanes'} onClick={() => pick('lanes')}>{t('viewLanes')}</button>
             <button className={view === 'hidden' ? 'on' : ''} aria-pressed={view === 'hidden'} onClick={() => pick('hidden')}>{t('stageFold')}</button>
           </div>
@@ -541,7 +541,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
           ) : null}
           {live && running ? <button className="ghost danger push" onClick={() => { void api.cancel(); }}>{t('stop')}</button> : null}
         </div>
-        {view === 'scene' ? <AgentScene timeline={timeline} runtimes={runtimes} asking={pending !== null && live} live={running} /> : view === 'lanes' ? <RoleLanes timeline={timeline} runtimes={runtimes} live={running} /> : null}
+        {view === 'lanes' ? <RoleLanes timeline={timeline} runtimes={runtimes} live={running} /> : null}
       </div>
       {pending && live ? <QuestionBlock pending={pending} /> : null}
       {!running ? (

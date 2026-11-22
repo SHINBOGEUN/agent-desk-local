@@ -12,7 +12,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import type { LampState, Mood } from './scene.ts';
+import type { LampState, Mood } from '../../src/scene.ts';
 import { GATE_AT, OBSTACLES, SPOTS, nextPlan, route, seeded } from './office-life.ts';
 import type { Circle, Plan } from './office-life.ts';
 
