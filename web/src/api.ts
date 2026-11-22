@@ -75,6 +75,8 @@ export interface RevertPlan { applied: boolean; restore: string[]; remove: strin
 
 export interface ProjectStartInfo { kind: 'new' | 'existing'; entries: number; stack: string[]; verifyCandidates: { command: string; source: string }[]; verify: string[]; hasTests: boolean; git: { repo: boolean; commits: number | null; uncommitted: number | null }; hasRuns: boolean }
 
+export interface CloneReply { ok: boolean; path: string; steps: { step: 'clone' | 'branch' | 'install'; ok: boolean; command: string; output: string; skipped?: string }[]; error?: string }
+
 export interface FolderEntry { name: string; path: string; isProject: boolean }
 export interface FolderListing { path: string; parent: string | null; home: string; entries: FolderEntry[] }
 
@@ -116,6 +118,7 @@ export const api = {
   projectStart: (path: string): Promise<ProjectStartInfo> => request('GET', `/api/project/start?path=${encodeURIComponent(path)}`),
   setVerify: (project: string, commands: string[]): Promise<{ ok: boolean }> => request('POST', '/api/project/verify', { project, commands }),
   writeOverview: (body: { project: string; goal: string; stack: string; rules: string[]; lang: 'en' | 'ko' }): Promise<{ ok: boolean; note: string; memoryErrors: string[] }> => request('POST', '/api/project/overview', body),
+  cloneProject: (body: { url: string; parent: string; name?: string; branch?: string; install: boolean }): Promise<CloneReply> => request('POST', '/api/project/clone', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string, runId?: number, lang?: 'en' | 'ko'): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact, ...(runId !== undefined ? { runId } : {}), ...(lang ? { lang } : {}) }),
   notes: (project: string, lang?: 'en' | 'ko'): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}${lang ? `&lang=${lang}` : ''}`),

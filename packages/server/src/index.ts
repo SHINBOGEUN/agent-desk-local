@@ -21,6 +21,7 @@ import type { PickResult } from './pick-folder.ts';
 import { FEEDBACK_CAUSES, RunStore, redactSecrets } from '#store';
 import type { FeedbackCause, QualityRow } from '#store';
 import { qualityCsv, qualitySummary } from './quality.ts';
+import { cloneProject } from './clone.ts';
 
 export interface ServerOptions {
   env: NodeJS.ProcessEnv;
@@ -465,6 +466,13 @@ export function createServer(options: ServerOptions): LocalServer {
     if (method === 'GET' && p === '/api/project/memory') {
       const project = projectDir(url.searchParams.get('path'));
       return send(res, 200, { facts: memoryFacts(loadMemory(project)), maxChars: MEMORY_MAX_CHARS });
+    }
+    if (method === 'POST' && p === '/api/project/clone') {
+      const body = await readBody(req);
+      if (typeof body.url !== 'string' || typeof body.parent !== 'string') throw new HttpError(400, 'url and parent are required');
+      const result = await cloneProject({ url: body.url, parent: body.parent, ...(typeof body.name === 'string' ? { name: body.name } : {}), ...(typeof body.branch === 'string' ? { branch: body.branch } : {}), install: body.install === true }, options.env);
+      // a clone that succeeded is reported as success even if a later step (branch, install) failed: the folder is usable
+      return send(res, result.path ? 200 : 422, { ...result, steps: result.steps.map(step => ({ ...step, command: redactSecrets(step.command), output: redactSecrets(step.output) })) });
     }
     if (method === 'POST' && p === '/api/pick-folder') {
       const body = await readBody(req);

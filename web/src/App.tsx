@@ -10,6 +10,10 @@ import { SettingsPanel } from './settings.tsx';
 import { FeedbackBar, QualityView } from './quality.tsx';
 import { NotesView } from './notes.tsx';
 import { StartCard, SURVEY_KEY } from './start.tsx';
+import { CloneDialog } from './clone.tsx';
+
+/** Set when a project was just imported with "survey right after": the run view starts the survey once. */
+const AUTO_SURVEY_KEY = (project: string): string => `agent-desk.autoSurvey:${project}`;
 import { RoleLanes } from './agent-scene.tsx';
 import { errorText } from './util.ts';
 
@@ -390,8 +394,8 @@ function UsageInline() {
   );
 }
 
-function TopBar({ projects, current, activeRunId, onSelect, onOpen, onForget, onForgetBench, opening, tab, onTab }: {
-  projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void;
+function TopBar({ projects, current, activeRunId, onSelect, onOpen, onClone, onForget, onForgetBench, opening, tab, onTab }: {
+  projects: ProjectEntry[]; current: string; activeRunId: number | null; onSelect: (path: string) => void; onOpen: () => void; onClone: () => void;
   onForget: (project: ProjectEntry) => Promise<void>; onForgetBench: () => Promise<void>; opening: boolean; tab: Tab; onTab: (tab: Tab) => void;
 }) {
   const { t, lang, setLang } = useI18n();
@@ -421,6 +425,7 @@ function TopBar({ projects, current, activeRunId, onSelect, onOpen, onForget, on
           ) : null}
         </select>
         <button className="ghost small open-btn" disabled={opening} title={t('openProject')} onClick={() => { setConfirm(null); onOpen(); }}>+ {t('openProjectShort')}</button>
+        <button className="ghost small open-btn" title={t('cloneTitle')} onClick={() => { setConfirm(null); onClone(); }}>{t('cloneShort')}</button>
         {entry && !live(entry) ? <button className="icon-btn" title={t('forgetCurrent')} aria-label={t('forgetCurrent')} onClick={() => setConfirm(entry.bench ? 'bench' : 'project')}>×</button> : null}
         {confirm ? (
           <div className="topbar-confirm" role="group">
@@ -728,6 +733,13 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
     setShowStart(false);
     onChanged();
   };
+  // just imported with "survey right after": start it once, as soon as nothing else is running
+  useEffect(() => {
+    if (read(AUTO_SURVEY_KEY(project)) !== '1' || active !== null || thread.length) return;
+    write(AUTO_SURVEY_KEY(project), '');
+    survey(t('startSurveyRequest')).catch(caught => setError(errorText(caught)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, active, thread.length]);
   // a finished survey run becomes the "current state" note (once)
   useEffect(() => {
     const id = Number(read(SURVEY_KEY(project)) ?? '');
@@ -855,6 +867,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('chat');
   const [opening, setOpening] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -918,7 +931,7 @@ export function App() {
   return (
     <I18nContext.Provider value={i18n}>
       <div className="app">
-        <TopBar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} onForget={forget} onForgetBench={forgetBench} opening={opening} tab={tab} onTab={setTab} />
+        <TopBar projects={projects} current={project} activeRunId={active?.runId ?? null} onSelect={choose} onOpen={() => { void open(); }} onClone={() => setCloning(true)} onForget={forget} onForgetBench={forgetBench} opening={opening} tab={tab} onTab={setTab} />
         <main className="main">
           {error ? <p className="banner">{i18n.t('serverDown')}: {error}</p> : null}
           {tab === 'bench' ? <div className="bench-page"><BenchmarkView /></div>
@@ -927,6 +940,8 @@ export function App() {
             : project ? <RunsView key={project} project={project} runs={runs} active={active} installed={installed} onChanged={() => { void refresh(); }} onOpen={() => { void open(); }} />
               : <Welcome onOpen={() => { void open(); }} opening={opening} />}
         </main>
+        {cloning ? <CloneDialog startFolder={project ? project.replace(/[\\/][^\\/]*$/, '') : ''} onClose={() => setCloning(false)}
+          onDone={(path, survey) => { if (survey) write(AUTO_SURVEY_KEY(path), '1'); setCloning(false); choose(path); void refresh(); }} /> : null}
         {browsing ? <FolderPicker start={project} onPick={path => { choose(path); setBrowsing(false); }} onClose={() => setBrowsing(false)} /> : null}
       </div>
     </I18nContext.Provider>
