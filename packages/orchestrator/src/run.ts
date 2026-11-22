@@ -135,7 +135,7 @@ function toolsFor(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder)
   return {
     async submitReport(report) {
       const result = await holder.current.submit(report);
-      ctx.emit({ type: 'report', step, kind: role, accepted: result.ok, detail: result.message.split('\n')[0] ?? '' });
+      ctx.emit({ type: 'report', step, kind: role, accepted: result.ok, detail: result.ok ? (result.message.split('\n')[0] ?? '') : result.message.split('\n').slice(0, 6).join('\n').slice(0, 900) });
       if (result.ok && holder.current.done()) {
         // End the turn once the tool answer is on its way back (setImmediate), so the session history stays whole.
         const turn = ctx.currentTurn;
@@ -259,6 +259,10 @@ function failureResult(ctx: RunContext, failure: StepFailure, extra: Partial<Run
     `Stopped: the usage limit was reached (${failure.reason}). Resume after the limit resets, or pick the other runtime in the team choice and resume now; earlier changes stay in the folder.`,
     `사용량 한도에 도달해 중단되었습니다 (${failure.reason}). 한도가 풀린 뒤 이어하거나, 팀 선택에서 다른 런타임을 골라 지금 이어하세요. 이전 변경은 폴더에 그대로 남아 있습니다.`,
   ), { ...extra, failureType: 'limit', resume: { step: failure.step ?? 'build', redo: ctx.redo, note: ctx.say('Resume with the remaining requirements once a runtime has allowance left.', '사용량이 남은 런타임으로 남은 요구사항을 이어서 진행하세요.') } });
+  if (failure.type === 'auth') return finish(ctx, 'interrupted', ctx.say(
+    `Stopped: a runtime's sign-in expired (${failure.reason}). Sign in again (Claude: run \`claude\` in a terminal and use /login; Codex: \`codex login\`), then resume; or pick the other runtime in the team choice and resume now. Earlier changes stay in the folder.`,
+    `런타임 로그인이 만료되어 중단되었습니다 (${failure.reason}). 다시 로그인한 뒤(Claude: 터미널에서 \`claude\` 실행 후 /login, Codex: \`codex login\`) 이어하기를 누르세요. 팀 선택에서 다른 런타임을 골라 지금 이어해도 됩니다. 이전 변경은 폴더에 그대로 남아 있습니다.`,
+  ), { ...extra, failureType: 'auth', resume: { step: failure.step ?? 'build', redo: ctx.redo, note: ctx.say('Resume after signing in again.', '다시 로그인한 뒤 이어서 진행하세요.') } });
   if (failure.type === 'environment') return finish(ctx, 'failed', ctx.say(`Environment problem: ${failure.reason} Fix it (run \`agent-desk doctor\`), then start the run again.`, `환경 문제: ${failure.reason} \`agent-desk doctor\`로 확인해 고친 뒤 다시 실행하세요.`), { ...extra, failureType: 'environment' });
   return finish(ctx, 'failed', failure.reason, { ...extra, failureType: failure.type });
 }
@@ -534,7 +538,7 @@ async function runReview(ctx: RunContext, input: { request: string; requirements
   if (touched.all.length) { ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: 'read-only step changed files' }); return { kind: 'stop', status: 'needs_review', reason: `The review step is read-only but these files changed: ${touched.all.join(', ')}` }; }
   if (failure) {
     ctx.emit({ type: 'step_finished', step: 'review', ok: false, detail: failure.kind });
-    if (failure.kind === 'failed' && failure.type !== 'environment' && failure.type !== 'limit') return { kind: 'stop', status: 'needs_review', reason: `The review did not produce a verdict: ${failure.reason}` };
+    if (failure.kind === 'failed' && failure.type !== 'environment' && failure.type !== 'limit' && failure.type !== 'auth') return { kind: 'stop', status: 'needs_review', reason: `The review did not produce a verdict: ${failure.reason}` };
     return { kind: 'stop', status: 'failed', reason: '', failure };
   }
   const verdict = collector.report!;

@@ -230,6 +230,9 @@ test('failure types are classified', () => {
   assert.equal(classifyFailure("You've hit your weekly limit · resets Mon 12:00am"), 'limit');
   assert.equal(classifyFailure('API Error: Server is temporarily limiting requests (not your usage limit)'), 'transient');
   assert.equal(classifyFailure('API Error: Rate limit reached'), 'transient');
+  assert.equal(classifyFailure('Failed to authenticate: OAuth session expired and could not be refreshed'), 'auth');
+  assert.equal(classifyFailure('Not logged in · Please run /login'), 'auth');
+  assert.equal(classifyFailure('Invalid API key · Fix external API key'), 'auth');
 });
 
 test('a transient runtime error is retried once per step in a fresh session', async () => {

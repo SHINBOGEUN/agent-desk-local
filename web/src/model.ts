@@ -95,7 +95,8 @@ export function applyEvents(timeline: Timeline, events: StoredEvent[]): Timeline
         else if (inner.type === 'message' && typeof inner.text === 'string' && inner.final === true) step.messages.push(inner.text);
         break;
       }
-      case 'run_finished': finished = { status: event.status, reason: event.reason }; break;
+      // A step the run never closed (for example a build whose review failed) ends with the run, not "now".
+      case 'run_finished': finished = { status: event.status, reason: event.reason }; for (const step of copy()) if (!step.finishedAt) step.finishedAt = stored.at; break;
       case 'run_started': if (event.runtimes) runtimes = { ...event.runtimes }; break;
       case 'skill_read': skillsRead = [...(skillsRead ?? []), { step: event.step, role: event.role, skill: event.skill }]; break;
       case 'user_question': questions = [...(questions ?? []), { step: event.step, question: event.question, answered: event.answered }]; break;

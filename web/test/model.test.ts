@@ -26,7 +26,9 @@ test('buildTimeline groups events by step and counts commands and file changes',
   assert.equal(build.fileChanges, 1);
   assert.equal(build.ok, true);
   assert.equal(stepDurationMs(build), 4000);
-  assert.equal(stepDurationMs(timeline.steps[1]!), null);
+  // the review was never closed: it ends with the run (not left open forever)
+  assert.equal(stepDurationMs(timeline.steps[1]!), 3000);
+  assert.equal(timeline.steps[1]!.ok, null);
   assert.deepEqual(timeline.finished, { status: 'needs_review', reason: 'still failing' });
   assert.equal(timeline.lastSeq, 10);
 });

@@ -533,7 +533,11 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
             <ReportCard report={detail?.report ?? null} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
           </div>
           <div className="panel-card side-card">
-            {summary.length ? <div className="chips">{summary.map(entry => <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : t('gateOk')}</span>)}</div> : null}
+            {summary.length ? <div className="chips">{summary.map(entry => {
+              // a check that only ever skipped did not pass: say so (no "tests passed" when no test ran)
+              const skippedOnly = !entry.failed && !entry.ok && entry.skipped > 0;
+              return <span key={entry.gate} title={gateName.help(entry.gate)} className={`badge tone-${entry.failed ? 'danger' : skippedOnly ? 'neutral' : 'success'}`}>{gateName.name(entry.gate)} {entry.failed ? t('gateFailedTimes', { n: entry.failed }) : skippedOnly ? t('gateSkipped') : t('gateOk')}</span>;
+            })}</div> : null}
             {detail?.report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={detail.report.memorySuggestions} runId={run.id} /> : null}
             {status === 'needs_review' || status === 'failed' ? <div className="row"><button className="ghost" onClick={() => { void revert(false); }}>{t('previewRevert')}</button><button className="ghost" onClick={() => { void revert(true); }}>{t('applyRevert')}</button></div> : null}
             {resumable && canResume ? <div className="row"><button className="ghost" onClick={() => onResume(run)}>{t('resumeRun')}</button></div> : null}

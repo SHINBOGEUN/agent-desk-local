@@ -89,3 +89,16 @@ test('a station shows only what the events recorded: the running step, its time,
   assert.deepEqual(station.checks, [{ gate: 'G2', ok: false }]);
   assert.deepEqual(stationOf(timeline, 'verifier', 0), { step: null, elapsedMs: 0, commands: 0, fileChanges: 0, note: null, checks: [] });
 });
+
+test('a step the run never closed ends with the run, so the time axis does not run on to now', async () => {
+  const { lanesOf } = await import('../src/scene.ts');
+  seq = 0;
+  const timeline = buildTimeline([
+    ev(0, { type: 'step_started', step: 'build', role: 'builder' }),
+    ev(5, { type: 'step_started', step: 'review', role: 'verifier' }),
+    ev(6, { type: 'step_finished', step: 'review', ok: false, detail: 'failed' }),
+    ev(7, { type: 'run_finished', status: 'interrupted', reason: 'sign-in expired' }),
+  ]);
+  assert.equal(timeline.steps[0]!.finishedAt, at(7));
+  assert.equal(lanesOf(timeline, Date.parse(at(7)) + 13 * 3600 * 1000).spanMs, 7000);
+});
