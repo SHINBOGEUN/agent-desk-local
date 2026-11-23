@@ -208,3 +208,20 @@ test('a usage-limit turn keeps the error kind with the message', async () => {
     await runtime.close();
   }
 });
+
+test('closing a session archives its thread, so the Codex app does not list harness steps', async () => {
+  const { mkdtempSync, readFileSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const log = path.join(mkdtempSync(path.join(tmpdir(), 'codex-archive-')), 'archived.txt');
+  process.env.FAKE_CODEX_ARCHIVE_LOG = log;
+  const runtime = runtimeWithFake();
+  try {
+    const session = await runtime.startSession(options(noTools()));
+    await session.close();
+    assert.equal(existsSync(log) ? readFileSync(log, 'utf8').trim() : '', 't1');
+  } finally {
+    delete process.env.FAKE_CODEX_ARCHIVE_LOG;
+    await runtime.close();
+  }
+});

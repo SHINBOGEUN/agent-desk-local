@@ -222,6 +222,9 @@ class CodexSession implements Session {
     if (this.#closed) return;
     this.#closed = true;
     this.#registration.dispose();
+    // Ephemeral threads should not be listed, but some Codex builds still show them in the app's thread list
+    // ("Step: research. User request: ..."). Archive the thread as well; an error (already gone) is ignored.
+    if (process.env.AGENT_DESK_CODEX_KEEP_SESSIONS !== '1') await this.#peer.request('thread/archive', { threadId: this.#threadId }, 5_000).catch(() => {});
     await this.#peer.close();
   }
 }

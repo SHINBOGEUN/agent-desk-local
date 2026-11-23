@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 // A stand-in for `codex app-server --stdio`, driven by the prompt text of each
 // turn. For "report" it starts the real MCP server from the thread config and
 // calls it over stdio, exactly like Codex would.
@@ -82,6 +83,9 @@ createInterface({ input: process.stdin }).on('line', line => {
     send({ id: message.id, result: { turn: { id: turnId } } });
     const text = (message.params.input as { text?: string }[]).map(part => part.text ?? '').join(' ');
     void playTurn(turnId, text);
+  } else if (message.method === 'thread/archive') {
+    if (process.env.FAKE_CODEX_ARCHIVE_LOG) appendFileSync(process.env.FAKE_CODEX_ARCHIVE_LOG, `${message.params.threadId}\n`);
+    send({ id: message.id, result: {} });
   } else if (message.method === 'turn/interrupt') {
     send({ id: message.id, result: {} });
     interruptTurn?.();
