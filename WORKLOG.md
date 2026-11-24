@@ -23,3 +23,27 @@
 - CodexSession.close() now also calls `thread/archive` (5 s limit, errors ignored). It is skipped when AGENT_DESK_CODEX_KEEP_SESSIONS=1, the diagnostic mode that keeps sessions.
 - New test: closing a session archives its thread (the fake app-server logs the archived id).
 - Entries made before this change stay; archive or delete them in the Codex app.
+
+## Round 57 — check/verify scripts count as verify commands; AI team draft
+
+- The user asked whether "초안 만들기" in the team settings reads the project and writes role rules and skills. It did not: it is a rule-based starter (no model call). Role files come out as empty templates. MOYEOGO's `npm run check` was not detected as a verify command, so no verify skill was made either.
+- Detection:
+  - init now lists `check` and `verify` scripts.
+  - When a `check` or `verify` script exists, the draft uses it alone (it usually runs types and tests together).
+  - `detectVerify` (used when no verify command is configured) falls back to `npm run check` / `npm run verify` after `npm test`.
+- AI team draft (`packages/service/src/team-draft.ts`):
+  - One read-only lead session (the project's lead runtime, effort medium) reads the instruction files, docs, task notes and code.
+  - It replies with JSON: up to 8 rules per role, up to 3 project skills (description with when / when not, a "Why:" line, steps, examples, trigger cases), and the sources it used.
+  - It is told not to repeat AGENTS.md / CLAUDE.md (both runtimes read those already), not to invent policies, and to write Korean in the 합니다 style when the UI is Korean.
+  - `parseTeamDraft` drops malformed entries.
+  - `applyTeamDraft` writes only what the user picked:
+    - skills first, through saveProjectFile (skill checks), with triggers.json;
+    - then role files: rules go under "## Project rules", new skills are added to the frontmatter list, and a rule already in the file is not added twice.
+  - Server endpoints: POST /api/project/team-draft and POST /api/project/team-draft/apply (refused while a run is active).
+- UI: the Roles and Skills tabs of the team settings get an "AI 초안 만들기" bar.
+  - The review list shows rules per role and skills with checkboxes; a skill can be expanded to its body; the sources are listed.
+  - A skill that would replace an existing one starts unchecked. "선택한 항목 적용 (n)" writes the checked items.
+  - The old button is renamed "기본 틀 만들기".
+- Tests: 266 passing.
+  - New service tests: parse, run without writing, apply passes the project checks, no duplicate rules, template fill.
+  - A detectVerify `check` case.

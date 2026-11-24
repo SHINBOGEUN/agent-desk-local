@@ -11,9 +11,9 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft, projectStart, setVerifyCommands, overviewNote } from '#project';
+import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft, projectStart, setVerifyCommands, overviewNote, planRuntimes } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
-import { dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
+import { applyTeamDraft, runTeamDraft, dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
@@ -389,6 +389,30 @@ export function createServer(options: ServerOptions): LocalServer {
       const available = (['codex', 'claude'] as const).filter(kind => locate(kind, options.env, options.platform, saved));
       const draft = draftFromInspection(inspectProject(project), available);
       return send(res, 200, { written: writeDraft(project, draft), rationale: draft.rationale });
+    }
+    if (method === 'POST' && p === '/api/project/team-draft') {
+      // AI draft of role rules and project skills: one read-only model session, nothing written.
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const kind = planRuntimes(loadProject(project).config).assignment.lead;
+      let command: string | undefined;
+      if (kind !== 'fake') {
+        const found = locate(kind, options.env, options.platform, readMachineSettings(dir));
+        if (!found) throw new HttpError(422, `${kind === 'codex' ? 'Codex' : 'Claude'} was not found`);
+        command = found.path;
+      }
+      const result = await runTeamDraft({ project, runtime: options.createRuntime(kind, command), language: body.language === 'ko' ? 'ko' : 'en' });
+      return send(res, result.ok ? 200 : 422, { ...result, runtime: kind });
+    }
+    if (method === 'POST' && p === '/api/project/team-draft/apply') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const rules = body.rules && typeof body.rules === 'object' ? body.rules : {};
+      const skills = Array.isArray(body.skills) ? body.skills : [];
+      const result = applyTeamDraft(project, { rules, skills });
+      return send(res, result.errors.length && !result.written.length ? 422 : 200, result);
     }
     if (method === 'POST' && p === '/api/project/memory') {
       const body = await readBody(req);

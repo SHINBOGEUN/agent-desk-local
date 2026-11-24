@@ -91,6 +91,11 @@ export function vaultText(index: string): string {
 // Only where it applies: on Windows the shell re-encodes output, so non-English text read through PowerShell comes out broken.
 const WINDOWS_NOTE = 'This PC runs Windows PowerShell. It re-encodes text that passes through it, so non-English text (Korean, Japanese, Chinese) comes out broken with Get-Content (even with -Encoding UTF8) and whenever you pipe one command into another (rg ... | rg ..., | Select-Object). Read files with rg alone, never piped: rg -n . path/to/file prints a file; rg -n -C 20 "word" path/to/file shows the part around a word. Do not pass an empty pattern (rg -n "" file): PowerShell drops the empty argument and the command fails. Broken characters are a reading problem, not a problem in the file.';
 
+/** The platform note every session gets (empty off Windows), for sessions built outside instructionsFor. */
+export function platformNote(): string {
+  return process.platform === 'win32' ? WINDOWS_NOTE : '';
+}
+
 export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en', history?: string, vaultIndex?: string): string {
   const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
   return [COMMON, process.platform === 'win32' ? WINDOWS_NOTE : '', body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', history ? historyText(history) : '', vaultIndex ? vaultText(vaultIndex) : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');

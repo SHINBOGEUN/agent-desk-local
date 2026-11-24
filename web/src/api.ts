@@ -119,6 +119,8 @@ export const api = {
   setVerify: (project: string, commands: string[]): Promise<{ ok: boolean }> => request('POST', '/api/project/verify', { project, commands }),
   writeOverview: (body: { project: string; goal: string; stack: string; rules: string[]; lang: 'en' | 'ko' }): Promise<{ ok: boolean; note: string; memoryErrors: string[] }> => request('POST', '/api/project/overview', body),
   cloneProject: (body: { url: string; parent: string; name?: string; branch?: string; install: boolean }): Promise<CloneReply> => request('POST', '/api/project/clone', body),
+  teamDraft: (project: string, language: 'en' | 'ko'): Promise<{ ok: boolean; draft?: TeamDraft; error?: string; runtime?: string }> => request('POST', '/api/project/team-draft', { project, language }),
+  applyTeamDraft: (body: { project: string; rules: Record<string, string[]>; skills: TeamDraftSkill[] }): Promise<{ written: string[]; errors: string[] }> => request('POST', '/api/project/team-draft/apply', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
   addMemory: (project: string, fact: string, runId?: number, lang?: 'en' | 'ko'): Promise<{ ok: boolean }> => request('POST', '/api/project/memory', { project, fact, ...(runId !== undefined ? { runId } : {}), ...(lang ? { lang } : {}) }),
   notes: (project: string, lang?: 'en' | 'ko'): Promise<NotesInfo> => request('GET', `/api/notes?path=${encodeURIComponent(project)}${lang ? `&lang=${lang}` : ''}`),
@@ -154,3 +156,6 @@ export function followRun(id: number, handlers: StreamHandlers): () => void {
   source.onerror = () => handlers.onError();
   return () => source.close();
 }
+
+export interface TeamDraftSkill { id: string; role: string; description: string; body: string; should: string[]; shouldNot: string[]; exists: boolean }
+export interface TeamDraft { rules: Partial<Record<string, string[]>>; skills: TeamDraftSkill[]; sources: string[] }

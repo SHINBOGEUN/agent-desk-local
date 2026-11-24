@@ -9,6 +9,7 @@ import { serverLines, useI18n } from './i18n.ts';
 import type { Key } from './i18n.ts';
 import { asList, memoryChars, projectName, readFrontmatter, setFrontmatterValue } from './model.ts';
 import { errorText } from './util.ts';
+import { TeamDraftBar } from './team-draft.tsx';
 
 const ROLES = ['lead', 'builder', 'verifier', 'researcher'] as const;
 type Tab = 'config' | 'roles' | 'skills' | 'memory';
@@ -215,6 +216,7 @@ export function SettingsPanel({ project, runtimes, busy, initialRole, initialSki
         {files && (!files.config.exists || missingRoles.length) ? (
           <div className="drafts"><p>{t('draftsHint')}</p><button disabled={busy} onClick={() => { void drafts(); }}>{t('createDrafts')}</button>{draftNote ? <span className="editor-note">{draftNote}</span> : null}</div>
         ) : null}
+        {tab === 'roles' || tab === 'skills' ? <TeamDraftBar project={project} busy={busy} onApplied={() => { void load(); onSaved(); }} /> : null}
         {tab === 'memory' ? (
           <MemoryTab project={project} busy={busy} onSaved={onSaved} />
         ) : !files ? null : tab === 'config' ? (

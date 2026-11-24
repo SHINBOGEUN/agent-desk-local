@@ -46,7 +46,7 @@ export function inspectProject(project: string): ProjectInspection {
     const deps = { ...(pkg.dependencies as Record<string, string> | undefined), ...(pkg.devDependencies as Record<string, string> | undefined) };
     for (const [name, label] of [['typescript', 'TypeScript'], ['react', 'React'], ['next', 'Next.js'], ['express', 'Express'], ['vue', 'Vue'], ['vite', 'Vite'], ['@supabase/supabase-js', 'Supabase']] as const) if (deps[name]) stack.push(label);
     const scripts = (pkg.scripts ?? {}) as Record<string, string>;
-    for (const name of ['test', 'typecheck', 'lint', 'build']) if (scripts[name]) verifyCandidates.push({ command: name === 'test' ? 'npm test' : `npm run ${name}`, source: `package.json scripts.${name}` });
+    for (const name of ['test', 'check', 'verify', 'typecheck', 'lint', 'build']) if (scripts[name]) verifyCandidates.push({ command: name === 'test' ? 'npm test' : `npm run ${name}`, source: `package.json scripts.${name}` });
     if (scripts.test && /no test specified/.test(scripts.test)) { verifyCandidates.shift(); notes.push('package.json has the default placeholder test script; it checks nothing.'); }
   }
   if (exists(project, 'pyproject.toml') || exists(project, 'requirements.txt')) { stack.push('Python'); if (exists(project, 'pytest.ini') || exists(project, 'tests') || exists(project, 'test')) verifyCandidates.push({ command: 'pytest', source: 'tests folder' }); }
@@ -113,7 +113,9 @@ export function draftFromInspection(inspection: ProjectInspection, available: re
   rationale.push(`mode = ${mode}${available.length ? ` (found on this PC: ${available.join(', ')})` : ' (no runtime found yet; run "agent-desk doctor")'}.${mode === 'codex+claude' ? ' Codex builds and Claude reviews, so the reviewer does not share the builder\'s blind spots.' : ''}`);
 
   const usable = inspection.verifyCandidates.filter(candidate => candidate.command !== 'npm run build' || inspection.verifyCandidates.length === 1);
-  const verify = usable.filter(candidate => /test|typecheck/.test(candidate.command) || candidate.command === 'pytest' || /cargo test|go test|mvn|make test/.test(candidate.command)).map(candidate => candidate.command);
+  // A "check" or "verify" script usually runs everything (types and tests); use it alone rather than twice.
+  const whole = usable.filter(candidate => /^npm run (check|verify)$/.test(candidate.command)).slice(0, 1);
+  const verify = whole.length ? whole.map(candidate => candidate.command) : usable.filter(candidate => /test|typecheck/.test(candidate.command) || candidate.command === 'pytest' || /cargo test|go test|mvn|make test/.test(candidate.command)).map(candidate => candidate.command);
   if (verify.length) { config.verify = verify; rationale.push(`verify = ${verify.join(', ')} (from ${usable.filter(candidate => verify.includes(candidate.command)).map(candidate => candidate.source).join(', ')}). Check that these are fast and need no setup.`); }
   else rationale.push('No test command found. Without verify commands every build ends as needs_review; add one when you have it.');
 

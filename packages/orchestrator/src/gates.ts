@@ -97,8 +97,11 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<Ve
 export function detectVerify(cwd: string): string[] {
   try {
     const pkg = JSON.parse(readFileSync(path.join(cwd, 'package.json'), 'utf8')) as { scripts?: Record<string, unknown> };
-    const test = pkg.scripts?.test;
-    return typeof test === 'string' && test.trim() && !/no test specified/i.test(test) ? ['npm test'] : [];
+    const real = (name: string): boolean => { const script = pkg.scripts?.[name]; return typeof script === 'string' && script.trim() !== '' && !/no test specified/i.test(script); };
+    // npm test first; projects without one often keep their whole check under "check" or "verify" (tsc + tests).
+    if (real('test')) return ['npm test'];
+    for (const name of ['check', 'verify']) if (real(name)) return [`npm run ${name}`];
+    return [];
   } catch {
     return [];
   }

@@ -10,3 +10,5 @@ export { normalizeRateLimits, startUsageGuard, usageSince } from './usage-limits
 export type { Limits, LimitWindow, Reading, UsageGuard } from './usage-limits.ts';
 export { historyLookup, runDetailText, HISTORY_ANSWER_MAX_CHARS } from './history.ts';
 export { findRunNote, importHistory, runNoteIndex, skillUsage, notesLookup, noteTextOf, NOTES_ANSWER_MAX_CHARS, runNoteName, runNoteText, vaultIndexText, writeRunNotes } from './vault-notes.ts';
+export { applyTeamDraft, parseTeamDraft, roleFileWith, runTeamDraft, skillFileText } from './team-draft.ts';
+export type { ApplyChoice, DraftSkill, TeamDraft, TeamDraftResult } from './team-draft.ts';

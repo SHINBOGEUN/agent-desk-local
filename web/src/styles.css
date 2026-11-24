@@ -310,7 +310,7 @@ select { padding-right: 28px; }
 .settings-tabs { display: flex; gap: 2px; background: var(--sunk); border-radius: var(--radius-s); padding: 2px; }
 .settings-tabs button { border: 0; background: transparent; padding: 5px 12px; font-size: 13px; color: var(--muted); }
 .settings-tabs button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
-.settings > .editor, .settings > .split, .settings > .drafts, .settings > .error, .settings > .editor-note { margin: 0 20px; }
+.settings > .editor, .settings > .split, .settings > .drafts, .settings > .team-draft, .settings > .error, .settings > .editor-note { margin: 0 20px; }
 .settings > .editor { flex: 1; padding: 16px 0; min-height: 0; }
 .drafts { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-top: 14px !important; background: var(--accent-bg); border-radius: var(--radius); flex-wrap: wrap; }
 .drafts p { flex: 1; min-width: 240px; font-size: 13px; }
@@ -634,3 +634,12 @@ select { padding-right: 28px; }
 .clone-steps li { padding: 8px 12px; border-radius: var(--radius-s); background: var(--sunk); border-left: 3px solid var(--ok); }
 .clone-steps li.bad { border-left-color: var(--bad); }
 .clone-steps pre { margin: 6px 0 0; white-space: pre-wrap; font-family: var(--mono); font-size: 11.5px; color: var(--muted); max-height: 160px; overflow: auto; }
+
+.team-draft-review { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 12px; max-height: 50vh; overflow: auto; }
+.team-draft-review h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 13px; }
+.draft-item { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; padding: 3px 0; }
+.draft-item input { margin-top: 3px; }
+.draft-skill { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: start; }
+.draft-body { grid-column: 1 / -1; white-space: pre-wrap; font-size: 12px; background: var(--panel-2, rgba(0,0,0,.04)); padding: 10px; border-radius: 6px; margin: 0; }
+.draft-sources { font-size: 12px; }
+.draft-actions { display: flex; gap: 8px; }

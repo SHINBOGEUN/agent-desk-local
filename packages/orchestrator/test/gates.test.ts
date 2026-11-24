@@ -202,6 +202,8 @@ test('with no verify command, the project\'s own test script is used; npm\'s pla
   assert.deepEqual(detectVerify(cwd), []);
   put(cwd, 'package.json', JSON.stringify({ scripts: { test: 'node --test' } }));
   assert.deepEqual(detectVerify(cwd), ['npm test']);
+  put(cwd, 'package.json', JSON.stringify({ scripts: { check: 'node scripts/harness-check.mjs', 'test:auth': 'node --test x' } }));
+  assert.deepEqual(detectVerify(cwd), ['npm run check']);
 });
 
 // ---------- protected paths, read-only, failure types ----------
