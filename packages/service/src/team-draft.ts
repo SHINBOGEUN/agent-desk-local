@@ -41,10 +41,11 @@ const MAX_SKILLS = 3;
 function instructions(language: 'en' | 'ko'): string {
   return [
     'Role: you draft project-specific team settings for Agent Desk, a harness that runs four roles on this project:',
-    '- lead: reads each request, chooses the workflow, writes plans.',
-    '- builder: changes files to meet the requirements.',
-    '- verifier: reviews the builder\'s change independently and gives a verdict.',
-    '- researcher: investigates one angle of a question, read-only.',
+    '- lead: read-only. Chooses one of the harness workflows (answer, build, investigate), turns the request into requirements and writes the plan. It cannot write files, start other agents or add review steps.',
+    '- builder: the only role that changes files. It meets the requirements and reports evidence for each.',
+    '- verifier: read-only. Reviews the builder\'s change independently and gives a verdict.',
+    '- researcher: read-only. Investigates one angle of a question.',
+    'The harness itself already runs the verify commands after every build, always has the verifier review the change, keeps a restore point and records every run. Do not write rules for those, or for anything a role cannot do (a read-only role writing records, the lead routing work to other agents or roles of the project\'s own workflow). If the project\'s documents describe their own agent roles or workflow, translate only the parts that fit these four roles.',
     'Each role already has built-in instructions, and Codex and Claude read AGENTS.md and CLAUDE.md by themselves. Do not repeat what those already say, and do not write general advice ("write clean code", "add tests").',
     'Write only what someone new to this project would get wrong: its real rules, risky areas, conventions, commands and the procedures it repeats. Every rule must come from something you read (a document, a task note, the code); do not invent policies.',
     'Read narrowly: list files first, then open the instruction files, the docs and task notes, and only the code you need to confirm a rule. Do not change any file.',

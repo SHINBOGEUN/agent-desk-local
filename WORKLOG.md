@@ -47,3 +47,12 @@
 - Tests: 266 passing.
   - New service tests: parse, run without writing, apply passes the project checks, no duplicate rules, template fill.
   - A detectVerify `check` case.
+
+## Round 58 — AI team draft knows what each role can do
+
+- The first real draft (MOYEOGO) was grounded in the right files, but some rules did not fit the harness:
+  - the lead was asked to route requests by docs/AI_WORKFLOW.md, split work across roles with a separate review, and write to PRODUCT_HISTORY.md and DECISIONS.md (the lead is read-only and picks only answer, build or investigate);
+  - the verifier was told not to edit files (it is read-only already).
+- The draft instructions now state each role's limits.
+- They also list what the harness already does (verify after every build, an independent review, a restore point, run records), so no rules are written for those.
+- A project's own agent roles and workflow are translated only where they fit the four roles.

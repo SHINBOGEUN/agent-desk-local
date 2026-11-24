@@ -42,6 +42,7 @@ test('runTeamDraft runs one read-only lead session and returns the draft without
   assert.ok(result.ok);
   assert.equal(runtime.turns[0]!.options.access, 'read-only');
   assert.match(runtime.turns[0]!.options.instructions, /Korean/);
+  assert.match(runtime.turns[0]!.options.instructions, /cannot write files/);
   assert.equal(fs.existsSync(path.join(project, '.agent-desk')), false);
   const failed = await runTeamDraft({ project, runtime: new FakeRuntime({ scripts: { lead: [{ turns: [[{ message: 'sorry', final: true }]] }] } }) });
   assert.equal(failed.ok, false);
