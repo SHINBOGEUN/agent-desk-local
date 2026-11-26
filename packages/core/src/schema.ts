@@ -44,6 +44,8 @@ const object = (fields: Record<string, Check>, optional: Record<string, Check> =
 
 const requirementId = string({ min: 1, max: 40 });
 
+const nextStep = object({ title: string({ min: 1, max: 200 }), request: string({ min: 1, max: 2_000 }) });
+
 const schemas: { [K in ReportKind]: Check } = {
   classify: object({
     workflow: oneOf(WORKFLOW_IDS),
@@ -53,7 +55,7 @@ const schemas: { [K in ReportKind]: Check } = {
   answer: object({
     answer: string({ min: 1 }),
     sources: array(string({ min: 1, max: 1_000 }), { max: 50 }),
-  }),
+  }, { headline: string({ max: 2_000 }), next: array(nextStep, { max: 6 }) }),
   builder: object({
     summary: string({ min: 1, max: 4_000 }),
     changedFiles: array(string({ min: 1, max: 1_000 })),
@@ -77,6 +79,10 @@ const schemas: { [K in ReportKind]: Check } = {
     summary: string({ min: 1, max: 6_000 }),
     findings: array(object({ claim: string({ min: 1, max: 1_000 }), evidence: string({ min: 1, max: 2_000 }) }), { max: 50 }),
     sources: array(string({ min: 1, max: 1_000 }), { max: 50 }),
+  }),
+  synthesis: object({
+    headline: string({ min: 1, max: 2_000 }),
+    next: array(nextStep, { max: 6 }),
   }),
 };
 

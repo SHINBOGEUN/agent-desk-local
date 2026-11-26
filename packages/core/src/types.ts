@@ -53,6 +53,18 @@ export interface ClassifyReport {
 export interface AnswerReport {
   answer: string;
   sources: string[];   // files or links the answer is based on
+  /** Investigations: the conclusion in two or three sentences, written after the researchers reported. */
+  headline?: string;
+  /** Investigations: the next requests worth sending, most useful first. */
+  next?: NextStep[];
+}
+
+export interface NextStep { title: string; request: string }
+
+/** The lead's summary of several research reports. */
+export interface SynthesisReport {
+  headline: string;
+  next: NextStep[];
 }
 
 export type RequirementStatus = 'done' | 'not_done' | 'unverified';
@@ -96,7 +108,7 @@ export interface ResearchReport {
   sources: string[];
 }
 
-export type ReportKind = 'classify' | 'answer' | 'builder' | 'verifier' | 'plan' | 'research';
+export type ReportKind = 'classify' | 'answer' | 'builder' | 'verifier' | 'plan' | 'research' | 'synthesis';
 
 export interface ReportByKind {
   classify: ClassifyReport;
@@ -105,6 +117,7 @@ export interface ReportByKind {
   verifier: VerifierReport;
   plan: PlanReport;
   research: ResearchReport;
+  synthesis: SynthesisReport;
 }
 
 // ---------------------------------------------------------------------------

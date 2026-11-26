@@ -12,3 +12,5 @@ export { historyLookup, runDetailText, HISTORY_ANSWER_MAX_CHARS } from './histor
 export { findRunNote, importHistory, runNoteIndex, skillUsage, notesLookup, noteTextOf, NOTES_ANSWER_MAX_CHARS, runNoteName, runNoteText, vaultIndexText, writeRunNotes } from './vault-notes.ts';
 export { applyTeamDraft, parseTeamDraft, roleFileWith, runTeamDraft, skillFileText } from './team-draft.ts';
 export type { ApplyChoice, DraftSkill, TeamDraft, TeamDraftResult } from './team-draft.ts';
+export { parseDesign, runDesign } from './design.ts';
+export type { DesignDraft, DesignResult } from './design.ts';

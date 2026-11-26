@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { api, followRun } from './api.ts';
-import type { ActiveRun, FolderListing, Pending, ProjectInfo, RunDetail, RunReport, RunRow, UsageInfo } from './api.ts';
+import type { ActiveRun, FolderListing, NextStep, Pending, ProjectInfo, RunDetail, RunReport, RunRow, TodoItem, UsageInfo } from './api.ts';
 import { acceptImage, applyEvents, benchSets, isBenchWorkspace, changePercent, emptyTimeline, feedbackTargets, followUpRequest, formatTokens, gateSummary, minutesUntil, modeNeeds, projectList, projectName, roleSummary, RUNTIME_MODES, sameProject, statusTone, stepDurationMs, targetLocation } from './model.ts';
 import type { BenchSet, BenchSummary, GateResult, ProjectEntry, RuntimeMode, Timeline } from './model.ts';
 import { detectLanguage, durationText, I18nContext, remainingText, serverLines, setActiveLang, translate, useI18n } from './i18n.ts';
@@ -11,6 +11,7 @@ import { FeedbackBar, QualityView } from './quality.tsx';
 import { NotesView } from './notes.tsx';
 import { StartCard, SURVEY_KEY } from './start.tsx';
 import { CloneDialog } from './clone.tsx';
+import { TodoPanel, useTodo } from './todo.tsx';
 
 /** Set when a project was just imported with "survey right after": the run view starts the survey once. */
 const AUTO_SURVEY_KEY = (project: string): string => `agent-desk.autoSurvey:${project}`;
@@ -150,7 +151,44 @@ function Suggestions({ items, onFollowUp }: { items: string[]; onFollowUp?: ((it
   );
 }
 
-function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null; workflow: string | null; onFollowUp?: ((items: string[]) => void) | undefined }) {
+/** An investigation: the conclusion and next steps first, the researchers' reports folded below. */
+function Investigation({ answer, research, onDraft, onAddTodo }: { answer: NonNullable<RunReport['answer']>; research: NonNullable<RunReport['research']>; onDraft?: ((text: string) => void) | undefined; onAddTodo?: ((step: NextStep) => Promise<void>) | undefined }) {
+  const { t } = useI18n();
+  const [added, setAdded] = useState<Record<number, boolean>>({});
+  return (
+    <>
+      {answer.headline ? <div className="section"><div className="label">{t('glanceTitle')}</div><p className="prose glance">{answer.headline}</p></div> : null}
+      {answer.next?.length ? (
+        <div className="section"><div className="label">{t('nextTitle')}</div>
+          <ol className="next-steps">{answer.next.map((step, index) => (
+            <li key={index}>
+              <div className="next-text"><strong>{step.title}</strong><span className="muted">{step.request}</span></div>
+              <div className="next-actions">
+                {onDraft ? <button className="small" onClick={() => onDraft(step.request)}>{t('nextAsk')}</button> : null}
+                {onAddTodo ? <button className="ghost small" disabled={added[index]} onClick={() => { void onAddTodo(step).then(() => setAdded(current => ({ ...current, [index]: true }))); }}>{added[index] ? t('nextAdded') : t('nextToTodo')}</button> : null}
+              </div>
+            </li>
+          ))}</ol>
+        </div>
+      ) : null}
+      {research.length ? (
+        <details className="section research-details" open={!answer.headline}>
+          <summary>{t('researchDetails', { n: research.length })}</summary>
+          {research.map((entry, index) => (
+            <div key={index} className="angle">
+              <strong>{entry.angle}</strong>
+              <p className="prose">{entry.summary}</p>
+              {entry.findings.length ? <ul>{entry.findings.map((finding, at) => <li key={at}>{finding.claim}<span className="evidence">{finding.evidence}</span></li>)}</ul> : null}
+            </div>
+          ))}
+        </details>
+      ) : null}
+      {answer.sources.length ? <details className="section"><summary>{t('sources')} ({answer.sources.length})</summary><ul className="mono small">{answer.sources.map(source => <li key={source}>{source}</li>)}</ul></details> : null}
+    </>
+  );
+}
+
+function ReportCard({ report, workflow, onFollowUp, onDraft, onAddTodo }: { report: RunReport | null; workflow: string | null; onFollowUp?: ((items: string[]) => void) | undefined; onDraft?: ((text: string) => void) | undefined; onAddTodo?: ((step: NextStep) => Promise<void>) | undefined }) {
   const { t } = useI18n();
   if (!report) return <p className="msg-meta">{t('reportMissing')}</p>;
   const { answer, builder } = report;
@@ -158,7 +196,8 @@ function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null
   const known = (status: string): boolean => ['done', 'not_done', 'unverified'].includes(status);
   return (
     <div className="report" data-workflow={workflow ?? undefined}>
-      {answer ? <div className="section"><div className="label">{t('answerTitle')}</div><p className="prose">{answer.answer}</p><List title={t('sources')} items={answer.sources} /></div> : null}
+      {answer && (answer.headline || report.research?.length) ? <Investigation answer={answer} research={report.research ?? []} onDraft={onDraft} onAddTodo={onAddTodo} />
+        : answer ? <div className="section"><div className="label">{t('answerTitle')}</div><p className="prose">{answer.answer}</p><List title={t('sources')} items={answer.sources} /></div> : null}
       {builder ? (
         <>
           {report.attempts && report.attempts.length > 1 ? (
@@ -192,12 +231,11 @@ function ReportCard({ report, workflow, onFollowUp }: { report: RunReport | null
 function ReportExtras({ report, onFollowUp }: { report: RunReport | null; onFollowUp?: ((items: string[]) => void) | undefined }) {
   const { t } = useI18n();
   if (!report) return null;
-  const { plan, research, review } = report;
-  if (!plan && !research?.length && !review && !report.reviewSkipped) return null;
+  const { plan, review } = report;
+  if (!plan && !review && !report.reviewSkipped) return null;
   return (
     <div className="report report-extras">
       {plan ? <div className="section"><div className="label">{t('planTitle')}</div><p className="prose">{plan.approach}</p><List title={t('planSteps')} items={plan.steps} /><List title={t('planRisks')} items={plan.risks} /></div> : null}
-      {research?.length ? <div className="section"><div className="label">{t('researchTitle')}</div>{research.map((entry, index) => <div key={index}><strong>{entry.angle}</strong><p className="prose">{entry.summary}</p><List title={t('sources')} items={entry.sources} /></div>)}</div> : null}
       {review ? <div className="section"><div className="label">{t('reviewTitle')} <span className={`badge tone-${review.verdict === 'PASS' ? 'success' : 'danger'}`}>{['PASS', 'REDO', 'BLOCKED'].includes(review.verdict) ? t(`verdict_${review.verdict}` as 'verdict_PASS') : review.verdict}</span></div>
         {review.blocking.length ? <ul>{review.blocking.map((finding, index) => <li key={index}>{finding.file ? <span className="mono">{finding.file}{finding.line ? `:${finding.line}` : ''} </span> : null}{finding.reason}<div className="muted">{finding.evidence}</div></li>)}</ul> : null}
         <Suggestions items={review.optional} onFollowUp={onFollowUp} /></div> : null}
@@ -476,9 +514,10 @@ function useRunFollow(run: RunRow | null, onDone?: () => void): RunData {
 }
 
 /** The selected run: what was asked, the agent scene or role timeline, and the result with its follow-up actions. */
-function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTarget, onFollowUp }: {
+function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTarget, onFollowUp, onDraft, onAddTodo }: {
   run: RunRow; data: RunData; live: boolean; canResume: boolean; onResume: (run: RunRow) => void;
   projectSkills: string[]; onOpenTarget: (target: string) => void; onFollowUp: (runId: number, items: string[]) => void;
+  onDraft: (text: string) => void; onAddTodo: (step: NextStep) => Promise<void>;
 }) {
   const { t, lang } = useI18n();
   const { detail, timeline, pending } = data;
@@ -497,7 +536,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
   const current = timeline.steps.at(-1);
   const summary = gateSummary(timeline);
   const report = detail?.report ?? null;
-  const hasExtras = !!(report && (report.plan || report.research?.length || report.review || report.reviewSkipped));
+  const hasExtras = !!(report && (report.plan || report.review || report.reviewSkipped));
   // while running only the steps exist; afterwards the result opens first
   const shownTab = running ? 'steps' : tab ?? 'result';
   const longRequest = run.request.length > 160 || run.request.split('\n').length > 3;
@@ -577,7 +616,7 @@ function RunPane({ run, data, live, canResume, onResume, projectSkills, onOpenTa
           <div className="tab-body" role="tabpanel">
             {shownTab === 'result' ? (
               <>
-                <ReportCard report={report} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} />
+                <ReportCard report={report} workflow={detail?.run.workflow ?? null} onFollowUp={items => onFollowUp(run.id, items)} onDraft={onDraft} onAddTodo={onAddTodo} />
                 {report?.memorySuggestions?.length ? <MemorySuggestions project={run.project} facts={report.memorySuggestions} runId={run.id} /> : null}
                 {detail ? <FeedbackBar runId={run.id} initial={detail.feedback ?? null} onOpenTarget={onOpenTarget}
                   targetsFor={cause => feedbackTargets(cause, { skillsRead: skills.map(entry => entry.skill), projectSkills, roles: detail.steps.map(step => step.role) })} /> : null}
@@ -641,6 +680,8 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const [images, setImages] = useState<Attachment[]>([]);
   const [settingsFor, setSettingsFor] = useState<{ role?: string; skill?: string } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [todoOpen, setTodoOpen] = useState<{ design: boolean } | null>(null);
+  const { plan: todoPlan, reload: reloadTodo } = useTodo(project);
   const openTarget = (target: string): void => {
     const where = targetLocation(target);
     if (!where) return;
@@ -693,7 +734,7 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
     if (files.length) { event.preventDefault(); void addFiles(files); }
   };
   const askNotifications = (): void => { try { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); } catch { /* not supported */ } };
-  const startRun = async (request: string, extra: { resumeOf?: number } = {}): Promise<number> => {
+  const startRun = async (request: string, extra: { resumeOf?: number; todoId?: string } = {}): Promise<number> => {
     askNotifications();
     return (await api.start({ project, request, ...(mode ? { mode } : {}), ...(review ? { review } : {}), ...(images.length && !extra.resumeOf ? { images: images.map(image => image.dataUrl) } : {}), ...extra, language: lang })).runId;
   };
@@ -727,6 +768,11 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
   const [showStart, setShowStart] = useState(false);
   useEffect(() => { setShowStart(false); }, [project]);
   const draft = (value: string): void => { setText(value); requestAnimationFrame(() => { composer.current?.focus(); }); };
+  const addTodo = async (step: NextStep): Promise<void> => { await api.todoAdd(project, [{ title: step.title, request: step.request }], lang); reloadTodo(); };
+  const startTodo = async (item: TodoItem): Promise<void> => { setError(''); await startRun(item.request, { todoId: item.id }); onChanged(); reloadTodo(); };
+  // a finished run may have checked an item off
+  const activeId = activeHere ? active.runId : null;
+  useEffect(() => { if (activeId === null) reloadTodo(); }, [activeId, reloadTodo]);
   const survey = async (request: string): Promise<void> => {
     const id = await startRun(request);
     write(SURVEY_KEY(project), String(id));
@@ -764,9 +810,9 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
   return (
     <div className="workspace">
       <div className="run-side">
-        {showStart || !thread.length ? <StartCard project={project} busy={active !== null} onDraft={draft} onSurvey={survey} onClose={thread.length ? () => setShowStart(false) : undefined} />
+        {showStart || !thread.length ? <StartCard project={project} busy={active !== null} onDraft={draft} onSurvey={survey} onDesign={() => setTodoOpen({ design: true })} onClose={thread.length ? () => setShowStart(false) : undefined} />
           : selected ? <RunPane key={selected.id} run={selected} data={selectedData} live={selected.id === activeRow?.id} canResume={active === null} onResume={run => { void resume(run); }}
-          projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} onFollowUp={followUp} />
+          projectSkills={info?.skills.map(skill => skill.id) ?? []} onOpenTarget={openTarget} onFollowUp={followUp} onDraft={draft} onAddTodo={addTodo} />
           : null}
       </div>
       <section className="chat" aria-label={t('chatTitle')}>
@@ -775,8 +821,9 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
             <h2>{t('chatTitle')}</h2>
             <button className="path" title={t('changeProject')} onClick={onOpen}>{projectName(project)}</button>
           </div>
-          {thread.length ? <button className="ghost small push" onClick={() => setShowStart(true)}>{t('startOpen')}</button> : null}
-          <button className={`ghost small${thread.length ? '' : ' push'}`} onClick={() => setSettingsFor({})}>{t('editTeam')}</button>
+          <button className="ghost small push todo-open" onClick={() => setTodoOpen({ design: false })}>{t('todoButton')}{todoPlan?.items.length ? <span className="todo-count">{todoPlan.items.filter(item => item.status === 'done').length}/{todoPlan.items.length}</span> : null}</button>
+          {thread.length ? <button className="ghost small" onClick={() => setShowStart(true)}>{t('startOpen')}</button> : null}
+          <button className="ghost small" onClick={() => setSettingsFor({})}>{t('editTeam')}</button>
         </header>
         <div className="thread" aria-live="polite">
           {thread.length > shown.length ? <p className="thread-note">{t('olderRuns', { n: thread.length - shown.length })}</p> : null}
@@ -833,6 +880,7 @@ function RunsView({ project, runs, active, installed, onChanged, onOpen }: { pro
           <p className="composer-hint">{t('sendHint')}</p>
         </div>
       </section>
+      {todoOpen ? <TodoPanel project={project} busy={active !== null} designFirst={todoOpen.design} onStart={startTodo} onClose={() => setTodoOpen(null)} onChanged={reloadTodo} /> : null}
       {settingsFor ? <SettingsPanel project={project} runtimes={teamRuntimes} busy={activeHere} initialRole={settingsFor.role} initialSkill={settingsFor.skill} onClose={() => setSettingsFor(null)} onSaved={() => { api.project(project).then(setInfo).catch(() => undefined); }} /> : null}
     </div>
   );

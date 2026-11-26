@@ -55,7 +55,7 @@ test('plan-build: a planner that changes files ends as needs_review', async () =
   assert.equal(runtime.turns.filter(turn => turn.role === 'builder').length, 0);
 });
 
-test('investigate: one read-only researcher per angle, run in parallel, assembled without another model call', async () => {
+test('investigate: one read-only researcher per angle, run in parallel; without a conclusion the reports stand as they are', async () => {
   const angles = ['where is the port set', 'how is the config loaded'];
   const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classifyInvestigate(angles) }])], researcher: angles.map(angle => script([{ usage: { inputTokens: 90, outputTokens: 10 } }, { report: research(angle) }])) } });
   const cwd = tmp();
@@ -73,6 +73,22 @@ test('investigate: one read-only researcher per angle, run in parallel, assemble
   assert.equal(result.usage.totalTokens, 200);
   assert.deepEqual(fs.readdirSync(cwd), []);
   assert.equal(runtime.turns.filter(turn => turn.role === 'lead').length, 1);
+});
+
+test('investigate: the lead writes a conclusion (headline and next steps) from the reports, without reading files', async () => {
+  const angles = ['what is done', 'what is next'];
+  const conclusion = { headline: 'The core flow is done; sync checks remain.', next: [{ title: 'Two-account check', request: 'Check invite and sync with two accounts' }] };
+  const runtime = new FakeRuntime({ scripts: { lead: [script([{ report: classifyInvestigate(angles) }]), script([{ report: conclusion }])], researcher: angles.map(angle => script([{ report: research(angle) }])) } });
+  const result = await go(runtime, tmp());
+  assert.equal(result.status, 'completed', result.reason);
+  assert.equal(result.answer?.headline, conclusion.headline);
+  assert.deepEqual(result.answer?.next, conclusion.next);
+  assert.match(result.answer?.answer ?? '', /^The core flow is done; sync checks remain\.\n1\. Two-account check: /);
+  const leadTurns = runtime.turns.filter(turn => turn.role === 'lead');
+  assert.equal(leadTurns.length, 2);
+  assert.match(leadTurns[1]!.input.text, /Step: conclusion[\s\S]*claim for what is next/);
+  assert.equal(leadTurns[1]!.options.effort, 'low');
+  assert.match(leadTurns[1]!.options.instructions, /do not open files/);
 });
 
 test('investigate: parallel researchers that report and keep going are each stopped on their own report', { timeout: 10_000 }, async () => {

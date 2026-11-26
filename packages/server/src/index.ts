@@ -11,9 +11,10 @@ import type { AddressInfo } from 'node:net';
 import type { Runtime, UserQuestion } from '#core';
 import { revertToRestorePoint } from '#orchestrator';
 import type { ReviewPolicy } from '#orchestrator';
-import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft, projectStart, setVerifyCommands, overviewNote, planRuntimes } from '#project';
+import { syncTeamNotes, approveProposal, buildGraph, initVault, listNotes, moveNote, readNote, recordDecision, trashNote, vaultRoot, writeNote, addMemory, replaceMemory, MEMORY_MAX_CHARS, checkSkills, draftFromInspection, inspectProject, loadMemory, loadProject, memoryFacts, modeOf, projectFiles, RUNTIME_MODES, saveProjectFile, writeDraft, projectStart, setVerifyCommands, overviewNote, planRuntimes, loadTodo, addTodoItems, replaceTodo, editTodo, linkTodoRun, finishTodoRun, todoNoteText } from '#project';
+import type { NewTodo, TodoPlan, TodoStatus } from '#project';
 import type { RuntimeKind, RuntimeMode } from '#project';
-import { applyTeamDraft, runTeamDraft, dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
+import { applyTeamDraft, runTeamDraft, runDesign, dataDirectory, executeRun, findRunNote, importHistory, skillUsage, locate, normalizeRateLimits, readMachineSettings } from '#service';
 import type { Limits } from '#service';
 import { summarizeBench } from './bench-results.ts';
 import { pickFolderNative } from './pick-folder.ts';
@@ -138,6 +139,7 @@ export function createServer(options: ServerOptions): LocalServer {
     const verify = Array.isArray(body.verify) ? body.verify.filter((item): item is string => typeof item === 'string') : [];
     const resumeOf = body.resumeOf;
     if (resumeOf !== undefined && !(Number.isInteger(resumeOf) && (resumeOf as number) > 0)) throw new HttpError(400, 'resumeOf must be a run id');
+    const todoId = typeof body.todoId === 'string' && body.todoId ? body.todoId : null;
     const images = saveImages(body.images);
     const controller = new AbortController();
     const ask = (question: UserQuestion): Promise<string> => new Promise(resolve => {
@@ -157,13 +159,23 @@ export function createServer(options: ServerOptions): LocalServer {
         ...(images.length ? { images } : {}),
         ...(resumeOf ? { resumeOf: resumeOf as number } : {}),
         verify, ask, signal: controller.signal,
-        onStarted: ({ runId }) => { started = true; active = { runId, project, request, controller, pending: null }; resolveId(runId); },
+        onStarted: ({ runId }) => {
+          started = true; active = { runId, project, request, controller, pending: null };
+          if (todoId) { try { const plan = linkTodoRun(project, todoId, runId); if (plan) writeTodoNote(project, plan, language === 'ko' ? 'ko' : 'en'); } catch { /* the run goes on */ } }
+          resolveId(runId);
+        },
       }).then(outcome => {
+        if (todoId && outcome.ok) { try { if (finishTodoRun(project, outcome.runId, outcome.result.status)) writeTodoNote(project, loadTodo(project), language === 'ko' ? 'ko' : 'en'); } catch { /* the run result stands */ } }
         if (!outcome.ok && !started) rejectId(new HttpError(outcome.code === 64 ? 400 : 500, outcome.message));
       }).catch(error => {
         if (!started) rejectId(error as Error);
       }).finally(() => { active = null; });
     });
+  }
+
+  /** The plan's copy in the vault (specs/), which the roles read as a spec. A vault problem never blocks the list. */
+  function writeTodoNote(project: string, plan: TodoPlan, lang: 'en' | 'ko'): void {
+    try { const note = todoNoteText(plan, lang); writeNote(vaultOf(project), note.path, note.text); } catch { /* the list is the source */ }
   }
 
   /** Writes attached images (data URLs) to the data folder and returns their paths. */
@@ -389,6 +401,42 @@ export function createServer(options: ServerOptions): LocalServer {
       const available = (['codex', 'claude'] as const).filter(kind => locate(kind, options.env, options.platform, saved));
       const draft = draftFromInspection(inspectProject(project), available);
       return send(res, 200, { written: writeDraft(project, draft), rationale: draft.rationale });
+    }
+    if (method === 'GET' && p === '/api/project/todo') {
+      return send(res, 200, loadTodo(projectDir(url.searchParams.get('path'))));
+    }
+    if (method === 'POST' && p === '/api/project/todo') {
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      const lang = body.lang === 'ko' ? 'ko' : 'en';
+      const entries = (value: unknown): NewTodo[] => (Array.isArray(value) ? value.filter((item): item is NewTodo => !!item && typeof item === 'object' && typeof (item as NewTodo).title === 'string') : []);
+      let plan: TodoPlan;
+      try {
+        if (body.op === 'add') plan = addTodoItems(project, entries(body.items));
+        else if (body.op === 'replace') plan = replaceTodo(project, typeof body.goal === 'string' ? body.goal : '', entries(body.items));
+        else if (body.op === 'edit' && typeof body.id === 'string') plan = editTodo(project, { id: body.id, ...(typeof body.status === 'string' ? { status: body.status as TodoStatus } : {}), ...(typeof body.title === 'string' ? { title: body.title } : {}), ...(typeof body.detail === 'string' ? { detail: body.detail } : {}), ...(typeof body.request === 'string' ? { request: body.request } : {}), ...(typeof body.phase === 'string' ? { phase: body.phase } : {}), ...(body.remove === true ? { remove: true } : {}) });
+        else throw new HttpError(400, 'op must be add, replace or edit (with id)');
+      } catch (error) {
+        if (error instanceof HttpError) throw error;
+        throw new HttpError(422, error instanceof Error ? error.message : String(error));
+      }
+      writeTodoNote(project, plan, lang);
+      return send(res, 200, plan);
+    }
+    if (method === 'POST' && p === '/api/project/todo/design') {
+      // A design draft: one read-only model session, nothing written until the user saves it with op "replace".
+      const body = await readBody(req);
+      const project = projectDir(body.project);
+      notWhileRunning(project);
+      const kind = planRuntimes(loadProject(project).config).assignment.lead;
+      let command: string | undefined;
+      if (kind !== 'fake') {
+        const found = locate(kind, options.env, options.platform, readMachineSettings(dir));
+        if (!found) throw new HttpError(422, `${kind === 'codex' ? 'Codex' : 'Claude'} was not found`);
+        command = found.path;
+      }
+      const result = await runDesign({ project, runtime: options.createRuntime(kind, command), brief: typeof body.brief === 'string' ? body.brief : '', language: body.language === 'ko' ? 'ko' : 'en' });
+      return send(res, result.ok ? 200 : 422, result);
     }
     if (method === 'POST' && p === '/api/project/team-draft') {
       // AI draft of role rules and project skills: one read-only model session, nothing written.

@@ -13,7 +13,7 @@ import { renderDiff } from './diff-text.ts';
 import { LeadCollector } from './lead-report.ts';
 import { commandClaimErrors, encodingDamageErrors, findingLocationErrors, missingSourceErrors, skillsTouched, staleFindingErrors } from './evidence.ts';
 import type { ObservedCommand } from './evidence.ts';
-import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt } from './prompts.ts';
+import { buildPrompt, classifyPrompt, freshRedoPrompt, instructionsFor, planPrompt, redoPrompt, reportReminder, researchPrompt, synthesisPrompt } from './prompts.ts';
 import { DEFAULT_AUTO_LIMITS, decideReview, reviewPrompt, selfReviewPrompt } from './review.ts';
 import type { PreviousReview } from './review.ts';
 import { decideApproval } from './approval.ts';
@@ -208,7 +208,7 @@ const failedStep = (reason: string, type: FailureType = classifyFailure(reason),
 
 async function openSession(ctx: RunContext, step: StepKind, role: RoleId, holder: Holder): Promise<Session> {
   const { config } = ctx;
-  const effort = config.effort?.[role] ?? (role === 'lead' && step === 'classify' ? 'low' : undefined);
+  const effort = config.effort?.[role] ?? (role === 'lead' && (step === 'classify' || step === 'report') ? 'low' : undefined);
   const model = config.models?.[role];
   const skills = config.skills?.[role] ?? [];
   return ctx.runtimeFor(role).startSession({
@@ -383,8 +383,28 @@ async function runInvestigate(ctx: RunContext, request: string, requirements: Re
   const reports: ResearchReport[] = collectors.map(collector => collector.report!);
   const text = reports.map((report, index) => [`## ${index + 1}. ${report.angle}`, report.summary, ...report.findings.map(finding => `- ${finding.claim} (${finding.evidence})`)].join('\n')).join('\n\n');
   const answer: AnswerReport = { answer: text, sources: [...new Set(reports.flatMap(report => report.sources))] };
+  // Conclusion: one short lead turn that merges the reports into a headline and next steps. If it fails, the
+  // assembled reports still stand; the run does not fail over a missing summary.
   ctx.emit({ type: 'step_started', step: 'report', role: 'lead' });
-  ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: 'investigation assembled' });
+  const synthesis = new ReportCollector('synthesis');
+  const holder: Holder = { current: { submit: report => synthesis.submit(report), done: () => synthesis.report !== null } };
+  let session: Session | null = null;
+  let note = 'conclusion written';
+  try {
+    session = await openSession(ctx, 'report', 'lead', holder);
+    const failed = await playUntilReport(ctx, 'report', 'lead', session, holder, synthesisPrompt(request, reports), reportReminder('your conclusion (headline and next)'));
+    if (failed || !synthesis.report) note = 'no conclusion; reports shown as they are';
+  } catch (error) {
+    note = `no conclusion: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    await session?.close().catch(() => {});
+  }
+  if (synthesis.report) {
+    answer.headline = synthesis.report.headline;
+    answer.next = synthesis.report.next;
+    answer.answer = [synthesis.report.headline, ...synthesis.report.next.map((step, index) => `${index + 1}. ${step.title}: ${step.request}`), '', text].join('\n');
+  }
+  ctx.emit({ type: 'step_finished', step: 'report', ok: true, detail: note });
   return finish(ctx, 'completed', ctx.say(`Investigated ${reports.length} angle(s). No files were changed.`, `${reports.length}개 관점을 조사했습니다. 변경된 파일은 없습니다.`), { ...base, answer, research: reports });
 }
 

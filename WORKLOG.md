@@ -56,3 +56,50 @@
 - The draft instructions now state each role's limits.
 - They also list what the harness already does (verify after every build, an independent review, a restore point, run records), so no rules are written for those.
 - A project's own agent roles and workflow are translated only where they fit the four roles.
+
+## Round 59 — Investigation conclusion, readable answer, design-first to-do list
+
+User feedback: investigation answers were hard to take in.
+- They were three researchers' reports pasted together, so the same facts appeared in every section.
+- The conclusion was buried, and file:line citations broke every sentence.
+- The user also asked for design first: the harness should draft the plan as a to-do list, keep done and not done with checkboxes while developing, and show it on a page or popup.
+
+**A. Conclusion step**
+- After the researchers, one short lead turn (step "report", effort low) writes a `synthesis` report: `headline` (two or three sentences) and `next` (up to 5 `{title, request}`).
+- It works only from the reports: it is told not to open files and to say each fact once.
+- New report kind `synthesis`; AnswerReport gains optional `headline` and `next`.
+- If the conclusion fails, the assembled reports stand and the run still completes.
+
+**B. Investigation view**
+- The result shows "한눈에 보기" (headline) and "다음에 할 일" (next steps).
+- Each next step has "요청하기" (fills the composer) and "할 일에 추가" (adds it to the to-do list).
+- "관점별 상세" (claims, with evidence in small mono) and "근거 파일" are folded.
+- Research left the 계획·리뷰 tab (no duplicate).
+
+**Design and to-do list**
+- Storage: `packages/project/src/todo.ts` keeps `.agent-desk/todo.json`: goal, and items with id, title, detail (acceptance), request, phase, status todo/doing/done, runs and evidence.
+- Operations:
+  - add (skips duplicate titles), edit, remove;
+  - replace (a re-design keeps status and runs for items with the same title, and keeps started items it dropped);
+  - linkTodoRun (doing);
+  - finishTodoRun (done only for a completed run; anything else stays doing).
+- A copy is written to the vault as `specs/개발 계획.md` with checkboxes by phase, so the lead and builder see the plan in their notes list.
+- Design: `packages/service/src/design.ts` runs one read-only lead session (effort medium).
+  - It reads the goal and planning docs, the notes and the code, and replies with JSON phases and items (at most 6 phases and 40 items).
+  - Each item is one buildable request with an acceptance condition. Items already built come back done with evidence.
+  - It stays within the stated goal; a missing decision becomes its own item.
+- Server:
+  - GET/POST /api/project/todo (add, replace, edit) and POST /api/project/todo/design;
+  - POST /api/runs accepts `todoId`: start links the run, and a completed finish checks the item off;
+  - the note is rewritten on each change.
+- UI:
+  - a "할 일 n/m" button in the conversation header opens the 개발 계획 popup: goal, progress bar, next up, items by phase with a checkbox, a 진행 중 #run badge and 시작 (starts the item's request as a run);
+  - expanding an item shows its request, evidence, runs and 삭제;
+  - items can be added by hand;
+  - "AI로 설계하기" / "다시 설계하기" takes an optional brief, then shows the draft to save or discard;
+  - the start card gets a "설계부터 하기" block.
+- Tests: 274 passing.
+  - Conclusion: workflow test.
+  - to-do: project tests.
+  - design: service tests.
+  - Server: a run from an item ends done, the note is written, edit and errors.

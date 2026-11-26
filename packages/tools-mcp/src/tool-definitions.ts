@@ -37,6 +37,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         files: { type: 'array', items: { type: 'string' } },
         risks: { type: 'array', items: { type: 'string' } },
         findings: { type: 'array', items: { type: 'object' } },
+        headline: { type: 'string' },
+        next: { type: 'array', items: { type: 'object' } },
       },
       additionalProperties: true,
     },

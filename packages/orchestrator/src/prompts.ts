@@ -1,7 +1,7 @@
 // Instructions given to each role. Short on purpose: every token here is paid
 // again on every turn, and the harness (not the prompt) enforces the rules.
 
-import type { PlanReport, Requirement, RoleId, SkillRef, StepKind } from '#core';
+import type { PlanReport, Requirement, ResearchReport, RoleId, SkillRef, StepKind } from '#core';
 
 const COMMON = [
   'You work inside an automated harness. The harness decides what happens next; you only do the step you are given.',
@@ -29,6 +29,14 @@ const PLANNER = [
   'Role: planner (lead). You read the project and write a short plan for a builder who will implement the requirements. You cannot change files.',
   'Report shape: { "approach": string, "steps": [ordered implementation steps], "files": [files expected to change], "risks": [what could go wrong or is unknown] }.',
   'Keep it concrete and short: name the files and functions to touch. Do not write the code. Do not add scope beyond the requirements.',
+].join('\n');
+
+const SYNTHESIZER = [
+  'Role: lead, writing the conclusion of an investigation. Researchers have already read the project; their reports are below. You cannot change files.',
+  'Work only from the reports: do not open files or run commands. Merge what they found; the same fact found twice is said once.',
+  'Report shape: { "headline": string, "next": [{ "title": string, "request": string }] }.',
+  '- "headline": the answer to the user\'s question in two or three sentences: where things stand and what matters most. No file paths here.',
+  '- "next": up to 5 next steps, most useful first, each a short "title" (a few words) and a "request" the user could send as is to have it done (one concrete task, with the files or notes it concerns). Leave it empty when the question asks for nothing to do.',
 ].join('\n');
 
 const RESEARCHER = [
@@ -97,7 +105,7 @@ export function platformNote(): string {
 }
 
 export function instructionsFor(role: RoleId, notes?: string, step?: StepKind, memory?: string, skills: SkillRef[] = [], language: 'en' | 'ko' = 'en', history?: string, vaultIndex?: string): string {
-  const body = role === 'lead' ? (step === 'plan' ? PLANNER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
+  const body = role === 'lead' ? (step === 'plan' ? PLANNER : step === 'report' ? SYNTHESIZER : LEAD) : role === 'builder' ? BUILDER : role === 'verifier' ? VERIFIER : role === 'researcher' ? RESEARCHER : `Role: ${role}.`;
   return [COMMON, process.platform === 'win32' ? WINDOWS_NOTE : '', body, language === 'ko' ? LANGUAGE_NOTE.ko : '', skillsText(skills), memory ? `Project memory (facts the user confirmed; treat as true unless the code shows otherwise):\n${memory}` : '', history ? historyText(history) : '', vaultIndex ? vaultText(vaultIndex) : '', notes ? `Project notes:\n${notes}` : ''].filter(Boolean).join('\n\n');
 }
 
@@ -118,6 +126,11 @@ export function planText(plan: PlanReport, language: 'en' | 'ko' = 'en'): string
 export function planPrompt(request: string, requirements: Requirement[]): string {
   const list = requirements.map(requirement => `- ${requirement.id}: ${requirement.text}`).join('\n');
   return `Step: plan.\nUser request:\n${request}\n\nRequirements:\n${list}\n\nRead the project as needed and submit your plan.`;
+}
+
+export function synthesisPrompt(request: string, reports: ResearchReport[]): string {
+  const text = reports.map((report, index) => [`Report ${index + 1}: ${report.angle}`, report.summary, ...report.findings.map(finding => `- ${finding.claim} (${finding.evidence})`)].join('\n')).join('\n\n');
+  return `Step: conclusion.\nUser request:\n${request}\n\n${text}\n\nWrite the conclusion and submit your report.`;
 }
 
 export function researchPrompt(request: string, angle: string): string {

@@ -12,12 +12,14 @@ import { errorText } from './util.ts';
 
 export const SURVEY_KEY = (project: string): string => `agent-desk.survey:${project}`;
 
-export function StartCard({ project, busy, onDraft, onSurvey, onClose }: {
+export function StartCard({ project, busy, onDraft, onSurvey, onDesign, onClose }: {
   project: string;
   /** A run is going (here or elsewhere): starting the survey or saving settings would wait. */
   busy: boolean;
   onDraft: (text: string) => void;
   onSurvey: (request: string) => Promise<void>;
+  /** Opens the to-do list with the design form. */
+  onDesign?: (() => void) | undefined;
   onClose?: (() => void) | undefined;
 }) {
   const { t, lang } = useI18n();
@@ -39,6 +41,7 @@ export function StartCard({ project, busy, onDraft, onSurvey, onClose }: {
       {info.kind === 'new'
         ? <NewProject project={project} busy={busy} onDraft={onDraft} />
         : <ExistingProject project={project} info={info} busy={busy} onDraft={onDraft} onSurvey={onSurvey} onSaved={load} />}
+      {onDesign ? <div className="start-design"><div><strong>{t('startDesignTitle')}</strong><p className="muted">{t('startDesignHint')}</p></div><button disabled={busy} onClick={onDesign}>{t('todoDesign')}</button></div> : null}
       {error ? <p className="error">{error}</p> : null}
     </section>
   );

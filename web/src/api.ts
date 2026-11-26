@@ -18,7 +18,7 @@ export interface Pending { question: string; options?: string[] }
 export interface ActiveRun { runId: number; project: string; request: string; pending: Pending | null }
 export interface ServerState { csrf: string; active: ActiveRun | null; installed?: { codex: boolean; claude: boolean } }
 export interface RunReport {
-  answer?: { answer: string; sources: string[] };
+  answer?: { answer: string; sources: string[]; headline?: string; next?: NextStep[] };
   builder?: { summary: string; changedFiles: string[]; commandsRun: { command: string; exitCode: number }[]; requirements: { id: string; status: string; evidence: string }[]; unverified: string[] };
   plan?: { approach: string; steps: string[]; files: string[]; risks: string[] };
   research?: { angle: string; summary: string; findings: { claim: string; evidence: string }[]; sources: string[] }[];
@@ -70,7 +70,7 @@ export interface ProjectConfigView { mode?: string; runtimes?: { primary?: strin
 export interface ProjectInfo { config: ProjectConfigView; mode?: string | null; errors: string[]; warnings: string[]; memory: string[]; skills: { id: string; description: string }[]; skillFindings: { level: string; skill: string; message: string }[] }
 export interface LimitWindowView { kind: string; windowDurationMins: number | null; usedPercent: number; remainingPercent: number; resetsAt: number | null }
 export interface UsageInfo { limits: { windows: LimitWindowView[]; checkedAt: string } | null; reason?: string; claude?: { last5h: number; last7d: number; runs5h: number } }
-export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; images?: string[]; resumeOf?: number; review?: 'always' | 'auto' | 'never' | 'self'; language?: 'en' | 'ko'; verify?: string[] }
+export interface StartRequest { project: string; request: string; runtime?: 'codex' | 'claude'; mode?: RuntimeMode; images?: string[]; resumeOf?: number; review?: 'always' | 'auto' | 'never' | 'self'; language?: 'en' | 'ko'; verify?: string[]; todoId?: string }
 export interface RevertPlan { applied: boolean; restore: string[]; remove: string[] }
 
 export interface ProjectStartInfo { kind: 'new' | 'existing'; entries: number; stack: string[]; verifyCandidates: { command: string; source: string }[]; verify: string[]; hasTests: boolean; git: { repo: boolean; commits: number | null; uncommitted: number | null }; hasRuns: boolean }
@@ -119,6 +119,11 @@ export const api = {
   setVerify: (project: string, commands: string[]): Promise<{ ok: boolean }> => request('POST', '/api/project/verify', { project, commands }),
   writeOverview: (body: { project: string; goal: string; stack: string; rules: string[]; lang: 'en' | 'ko' }): Promise<{ ok: boolean; note: string; memoryErrors: string[] }> => request('POST', '/api/project/overview', body),
   cloneProject: (body: { url: string; parent: string; name?: string; branch?: string; install: boolean }): Promise<CloneReply> => request('POST', '/api/project/clone', body),
+  todo: (project: string): Promise<TodoPlan> => request('GET', `/api/project/todo?path=${encodeURIComponent(project)}`),
+  todoAdd: (project: string, items: NewTodo[], lang: 'en' | 'ko'): Promise<TodoPlan> => request('POST', '/api/project/todo', { project, op: 'add', items, lang }),
+  todoReplace: (project: string, goal: string, items: NewTodo[], lang: 'en' | 'ko'): Promise<TodoPlan> => request('POST', '/api/project/todo', { project, op: 'replace', goal, items, lang }),
+  todoEdit: (project: string, edit: { id: string; status?: TodoStatus; title?: string; detail?: string; request?: string; remove?: boolean }, lang: 'en' | 'ko'): Promise<TodoPlan> => request('POST', '/api/project/todo', { project, op: 'edit', ...edit, lang }),
+  todoDesign: (project: string, brief: string, language: 'en' | 'ko'): Promise<{ ok: boolean; draft?: { goal: string; items: NewTodo[] }; error?: string }> => request('POST', '/api/project/todo/design', { project, brief, language }),
   teamDraft: (project: string, language: 'en' | 'ko'): Promise<{ ok: boolean; draft?: TeamDraft; error?: string; runtime?: string }> => request('POST', '/api/project/team-draft', { project, language }),
   applyTeamDraft: (body: { project: string; rules: Record<string, string[]>; skills: TeamDraftSkill[] }): Promise<{ written: string[]; errors: string[] }> => request('POST', '/api/project/team-draft/apply', body),
   initProject: (project: string): Promise<{ written: string[]; rationale: string[] }> => request('POST', '/api/project/init', { project }),
@@ -159,3 +164,9 @@ export function followRun(id: number, handlers: StreamHandlers): () => void {
 
 export interface TeamDraftSkill { id: string; role: string; description: string; body: string; should: string[]; shouldNot: string[]; exists: boolean }
 export interface TeamDraft { rules: Partial<Record<string, string[]>>; skills: TeamDraftSkill[]; sources: string[] }
+
+export interface NextStep { title: string; request: string }
+export type TodoStatus = 'todo' | 'doing' | 'done';
+export interface TodoItem { id: string; title: string; detail?: string; request: string; phase?: string; status: TodoStatus; runs: number[]; evidence?: string }
+export interface TodoPlan { goal: string; items: TodoItem[]; updatedAt: string | null }
+export interface NewTodo { title: string; request: string; detail?: string; phase?: string; status?: TodoStatus; evidence?: string }

@@ -394,3 +394,23 @@ test('notes: list with graph, read with backlinks, write with conflict check, mo
     assert.equal(imported.decisions, 0);
   } finally { await server.close(); }
 });
+
+test('to-do list: add and edit items, a run started from an item marks it doing and then done, the plan note is written', async () => {
+  const project = tmp();
+  const { server, port, token } = await start(new FakeRuntime({ scripts: { lead: [script([{ report: answerReport }])] } }));
+  try {
+    const added = await call(port, 'POST', '/api/project/todo', { token, body: { project, op: 'add', lang: 'ko', items: [{ title: '포트 확인', request: 'Which port?' }] } });
+    assert.equal(added.status, 200);
+    assert.deepEqual((JSON.parse(added.body) as { items: { id: string }[] }).items.map(item => item.id), ['T1']);
+    const started = await call(port, 'POST', '/api/runs', { token, body: { project, request: 'Which port?', runtime: 'fake', todoId: 'T1', language: 'ko' } });
+    const { runId } = JSON.parse(started.body) as { runId: number };
+    await waitFor(async () => (JSON.parse((await call(port, 'GET', `/api/project/todo?path=${encodeURIComponent(project)}`)).body) as { items: { status: string }[] }).items[0]!.status === 'done');
+    const plan = JSON.parse((await call(port, 'GET', `/api/project/todo?path=${encodeURIComponent(project)}`)).body) as { items: { runs: number[] }[] };
+    assert.deepEqual(plan.items[0]!.runs, [runId]);
+    assert.match(fs.readFileSync(path.join(project, '.agent-desk', 'notes', 'specs', '개발 계획.md'), 'utf8'), /- \[x\] T1 포트 확인/);
+    const edited = await call(port, 'POST', '/api/project/todo', { token, body: { project, op: 'edit', id: 'T1', status: 'todo' } });
+    assert.equal((JSON.parse(edited.body) as { items: { status: string }[] }).items[0]!.status, 'todo');
+    assert.equal((await call(port, 'POST', '/api/project/todo', { token, body: { project, op: 'edit', id: 'T9', status: 'done' } })).status, 422);
+    assert.equal((await call(port, 'POST', '/api/project/todo', { token, body: { project, op: 'nope' } })).status, 400);
+  } finally { await server.close(); }
+});
