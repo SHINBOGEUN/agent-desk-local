@@ -32,7 +32,10 @@ export function TodoPanel({ project, busy, designFirst, onStart, onClose, onChan
   const [plan, setPlan] = useState<TodoPlan | null>(null);
   const [error, setError] = useState('');
   const [designOpen, setDesignOpen] = useState(!!designFirst);
-  const [brief, setBrief] = useState('');
+  // the brief is kept per project, so a redesign starts from what the user wrote last time
+  const briefKey = `agent-desk.designBrief:${project}`;
+  const [brief, setBriefState] = useState(() => { try { return localStorage.getItem(briefKey) ?? ''; } catch { return ''; } });
+  const setBrief = (value: string): void => { setBriefState(value); try { localStorage.setItem(briefKey, value); } catch { /* not kept */ } };
   const [designing, setDesigning] = useState(false);
   const [draft, setDraft] = useState<{ goal: string; items: NewTodo[] } | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -86,7 +89,7 @@ export function TodoPanel({ project, busy, designFirst, onStart, onClose, onChan
           {designOpen && !draft ? (
             <div className="todo-design">
               <p>{items.length ? t('todoRedesignHint') : t('todoDesignHint')}</p>
-              <textarea rows={3} value={brief} onChange={event => setBrief(event.target.value)} placeholder={t('todoBriefPlaceholder')} />
+              <textarea rows={5} value={brief} onChange={event => setBrief(event.target.value)} placeholder={t('todoBriefPlaceholder')} />
               <button disabled={busy || designing} onClick={() => { void design(); }}>{designing ? t('todoDesigning') : t('todoDesignRun')}</button>
             </div>
           ) : null}
